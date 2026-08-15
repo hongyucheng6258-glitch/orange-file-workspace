@@ -3,7 +3,7 @@ use std::sync::MutexGuard;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::AppState;
-use crate::db::models::{Page, Resource};
+use crate::db::models::Resource;
 use crate::db::repositories as repo;
 use crate::error::AppError;
 use crate::events::EVENT_RESOURCE_CHANGED;
@@ -118,7 +118,7 @@ pub fn delete_page(state: State<AppState>, resource_id: String) -> CommandResult
 
 /// 供测试使用的辅助函数（验证页面创建逻辑）。
 #[cfg(test)]
-pub fn _page_lifecycle_for_test(conn: &rusqlite::Connection) -> rusqlite::Result<Page> {
+pub fn _page_lifecycle_for_test(conn: &rusqlite::Connection) -> rusqlite::Result<crate::db::models::Page> {
     let (_, page) = page_service::create_page(conn, "测试页", None)?;
     Ok(page)
 }

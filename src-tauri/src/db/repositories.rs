@@ -28,7 +28,7 @@ pub fn list_children(
     };
 
     let mut stmt = conn.prepare(sql)?;
-    let rows = stmt.query_map([parent_id], |row| resource_from_row(row))?;
+    let rows = stmt.query_map([parent_id], resource_from_row)?;
     rows.collect()
 }
 
@@ -95,6 +95,7 @@ pub fn restore(conn: &Connection, id: &str, now: i64) -> SqliteResult<()> {
 }
 
 /// 永久删除（连同级联依赖）。调用方需先删除磁盘文件。
+#[allow(dead_code)] // 备用 API，回收站永久删除目前在命令层直接实现
 pub fn delete_permanently(conn: &Connection, id: &str) -> SqliteResult<()> {
     conn.execute("DELETE FROM resources WHERE id = ?1", [id])?;
     Ok(())
@@ -105,7 +106,7 @@ pub fn list_trash(conn: &Connection) -> SqliteResult<Vec<Resource>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM resources WHERE is_deleted = 1 ORDER BY deleted_at DESC",
     )?;
-    let rows = stmt.query_map([], |row| resource_from_row(row))?;
+    let rows = stmt.query_map([], resource_from_row)?;
     rows.collect()
 }
 
@@ -221,6 +222,7 @@ pub fn set_location_availability(
 }
 
 /// 插入或更新文件元数据。
+#[allow(dead_code)] // 备用 API：批量导入使用手写 SQL 以支持批量事务
 pub fn upsert_file_metadata(conn: &Connection, meta: &FileMetadata) -> SqliteResult<()> {
     conn.execute(
         "INSERT INTO file_metadata (
@@ -258,6 +260,7 @@ pub fn upsert_file_metadata(conn: &Connection, meta: &FileMetadata) -> SqliteRes
 }
 
 /// 获取文件元数据。
+#[allow(dead_code)] // 备用 API：详情面板后续将展示文件元数据
 pub fn get_file_metadata(
     conn: &Connection,
     resource_id: &str,
@@ -376,6 +379,6 @@ pub fn list_favorites(conn: &Connection) -> SqliteResult<Vec<Resource>> {
          WHERE is_favorite = 1 AND is_deleted = 0
          ORDER BY updated_at DESC",
     )?;
-    let rows = stmt.query_map([], |row| resource_from_row(row))?;
+    let rows = stmt.query_map([], resource_from_row)?;
     rows.collect()
 }

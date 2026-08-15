@@ -99,6 +99,6 @@ pub fn list_projects(conn: &Connection) -> SqliteResult<Vec<Resource>> {
         "SELECT * FROM resources WHERE kind = 'project' AND is_deleted = 0
          ORDER BY updated_at DESC",
     )?;
-    let rows = stmt.query_map([], |row| crate::db::models::resource_from_row(row))?;
+    let rows = stmt.query_map([], crate::db::models::resource_from_row)?;
     rows.collect()
 }

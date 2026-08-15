@@ -91,7 +91,11 @@ pub fn run() {
             commands::resources::toggle_favorite,
             commands::resources::list_favorites,
             commands::resources::delete_permanently,
-            commands::search::search_resources
+            commands::search::search_resources,
+            commands::backups::create_backup,
+            commands::backups::list_backups,
+            commands::backups::restore_backup,
+            commands::backups::app_environment
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,3 +1,4 @@
+pub mod backups;
 pub mod editor;
 pub mod import;
 pub mod pages;

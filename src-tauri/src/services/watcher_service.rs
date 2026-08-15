@@ -19,7 +19,6 @@ pub fn start_managed_watcher(app: AppHandle) {
         use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
         let (tx, rx) = std::sync::mpsc::channel::<()>();
-        let tx2 = tx.clone();
 
         let mut watcher = match RecommendedWatcher::new(
             move |res: notify::Result<notify::Event>| {
@@ -47,24 +46,18 @@ pub fn start_managed_watcher(app: AppHandle) {
             return;
         }
 
-        // 去抖：收集信号，500ms 无新事件则广播一次
-        let mut pending = false;
+        // 去抖：等待信号，500ms 无新事件则广播一次
         loop {
-            match rx.recv() {
-                Ok(()) => pending = true,
-                Err(_) => break,
+            if rx.recv().is_err() {
+                break;
             }
-            while let Ok(()) = rx.try_recv() {
-                pending = true;
+            // 收集合并窗口内的所有信号
+            while rx.try_recv().is_ok() {}
+            std::thread::sleep(Duration::from_millis(500));
+            while rx.try_recv().is_ok() {
+                // 合并窗口内新到达的事件
             }
-            if pending {
-                std::thread::sleep(Duration::from_millis(500));
-                while let Ok(()) = rx.try_recv() {
-                    // 合并窗口内的新事件
-                }
-                let _ = app.emit(EVENT_RESOURCE_CHANGED, serde_json::json!({ "source": "watcher" }));
-                pending = false;
-            }
+            let _ = app.emit(EVENT_RESOURCE_CHANGED, serde_json::json!({ "source": "watcher" }));
         }
     });
 }

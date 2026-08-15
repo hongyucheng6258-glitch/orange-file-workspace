@@ -5,8 +5,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::AppState;
 use crate::db::connection::now_unix;
-use crate::db::models::{new_id, FileMetadata, ResourceKind, ResourceLocation, SourceType};
-use crate::db::repositories as repo;
+use crate::db::models::{new_id, SourceType};
 use crate::error::AppError;
 use crate::events::EVENT_TASK_PROGRESS;
 use crate::services::file_service as fsutil;
@@ -114,7 +113,7 @@ fn run_import(
             }
         }
 
-        match import_one(&state, &managed_root, file, req.mode, req.parent_id.as_deref()) {
+        match import_one(&managed_root, file, req.mode, req.parent_id.as_deref()) {
             Ok(pending) => {
                 batch.push(pending);
                 completed += 1;
@@ -165,7 +164,6 @@ fn run_import(
 
 /// 单文件导入：复制文件（managed 模式），暂不写库。
 fn import_one(
-    state: &AppState,
     managed_root: &Path,
     src: &Path,
     mode: SourceType,

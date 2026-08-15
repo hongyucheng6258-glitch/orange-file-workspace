@@ -69,20 +69,6 @@ pub fn list_pages(conn: &Connection, parent_id: Option<&str>) -> SqliteResult<Ve
     rows.collect()
 }
 
-/// 读取页面的全部顶层块（按顺序）。
-pub fn list_top_blocks(
-    conn: &Connection,
-    page_id: &str,
-) -> SqliteResult<Vec<PageBlock>> {
-    let mut stmt = conn.prepare(
-        "SELECT * FROM page_blocks
-         WHERE page_id = ?1 AND parent_block_id IS NULL
-         ORDER BY block_order ASC",
-    )?;
-    let rows = stmt.query_map([page_id], page_block_from_row)?;
-    rows.collect()
-}
-
 /// 读取页面的全部块（含子块）。
 pub fn list_all_blocks(conn: &Connection, page_id: &str) -> SqliteResult<Vec<PageBlock>> {
     let mut stmt = conn.prepare(

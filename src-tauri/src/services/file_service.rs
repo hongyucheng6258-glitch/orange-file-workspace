@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::error::AppError;
 
@@ -15,17 +15,6 @@ pub fn normalize_path(path: &Path) -> Result<String, AppError> {
 /// 生成路径去重键：Windows 下大小写不敏感，统一小写。
 pub fn canonical_path_key(path: &str) -> String {
     path.to_lowercase()
-}
-
-/// 解析为绝对 PathBuf，未规范化不抛错。
-pub fn to_absolute(path: &Path) -> PathBuf {
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        std::env::current_dir()
-            .map(|cwd| cwd.join(path))
-            .unwrap_or_else(|_| path.to_path_buf())
-    }
 }
 
 /// 从扩展名推断 MIME 类型。返回 None 表示未知。
@@ -78,6 +67,7 @@ pub fn infer_mime(path: &Path) -> Option<String> {
 }
 
 /// 判断是否可安全读取为 UTF-8 文本。
+#[allow(dead_code)] // 设计 API：外部导入时用于文本/二进制判断，有单元测试覆盖
 pub fn is_likely_text(path: &Path) -> bool {
     matches!(
         infer_mime(path).as_deref(),
@@ -101,24 +91,6 @@ pub fn stat_basic(path: &Path) -> Result<(i64, Option<i64>), AppError> {
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|d| d.as_secs() as i64);
     Ok((size, modified))
-}
-
-/// 目标目录存在且是目录。
-pub fn ensure_dir(path: &Path) -> Result<(), AppError> {
-    if path.is_dir() {
-        Ok(())
-    } else {
-        Err(AppError::new("not_a_directory", format!("{} 不是目录", path.display())))
-    }
-}
-
-/// 目标路径尚不存在（用于创建、重命名冲突检查）。
-pub fn ensure_not_exists(path: &Path) -> Result<(), AppError> {
-    if path.exists() {
-        Err(AppError::new("path_exists", format!("{} 已存在", path.display())))
-    } else {
-        Ok(())
-    }
 }
 
 #[cfg(test)]

@@ -72,7 +72,7 @@ pub fn get_text_preview(
     if !path.exists() {
         return Err(AppError::new("path_missing", "文件路径不可用"));
     }
-    Ok(preview_service::read_text_preview(&path)?)
+    preview_service::read_text_preview(&path)
 }
 
 /// 为指定资源计算并保存内容哈希。

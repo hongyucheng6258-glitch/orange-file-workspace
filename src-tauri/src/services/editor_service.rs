@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use rusqlite::{params, Connection, OptionalExtension, Result as SqliteResult};
 
@@ -24,7 +24,7 @@ pub enum SaveOutcome {
 pub fn open_session(
     conn: &Connection,
     resource_id: &str,
-    path: &PathBuf,
+    path: &Path,
 ) -> Result<(String, EditorSession), AppError> {
     if !path.exists() {
         return Err(AppError::new("path_missing", "文件路径不可用"));
@@ -49,7 +49,7 @@ pub fn open_session(
 pub fn save_session(
     conn: &Connection,
     resource_id: &str,
-    path: &PathBuf,
+    path: &Path,
     content: &str,
     force: bool,
 ) -> Result<SaveOutcome, AppError> {
@@ -135,7 +135,7 @@ fn get_session(
 fn upsert_session(
     conn: &Connection,
     resource_id: &str,
-    path: &PathBuf,
+    path: &Path,
     size: i64,
     modified: Option<i64>,
     content: &str,

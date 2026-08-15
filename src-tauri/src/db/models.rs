@@ -1,3 +1,5 @@
+#![allow(dead_code)] // 领域模型完整定义，部分模型将在后续功能中接入
+
 use rusqlite::{params, Connection, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 

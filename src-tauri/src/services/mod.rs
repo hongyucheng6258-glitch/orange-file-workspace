@@ -1,3 +1,4 @@
+pub mod backup_service;
 pub mod editor_service;
 pub mod file_service;
 pub mod hash_service;
