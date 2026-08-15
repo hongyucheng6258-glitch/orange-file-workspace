@@ -87,7 +87,11 @@ pub fn run() {
             commands::editor::open_file,
             commands::editor::save_file,
             commands::editor::save_file_force,
-            commands::editor::discard_session
+            commands::editor::discard_session,
+            commands::resources::toggle_favorite,
+            commands::resources::list_favorites,
+            commands::resources::delete_permanently,
+            commands::search::search_resources
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

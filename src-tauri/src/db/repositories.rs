@@ -350,3 +350,32 @@ pub fn update_location_stat(
     )?;
     Ok(())
 }
+
+/// 切换收藏状态，返回切换后的状态。
+pub fn toggle_favorite(conn: &Connection, id: &str, now: i64) -> SqliteResult<bool> {
+    let current: bool = conn
+        .query_row(
+            "SELECT is_favorite = 1 FROM resources WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )
+        .optional()?
+        .unwrap_or(false);
+    let next = !current;
+    conn.execute(
+        "UPDATE resources SET is_favorite = ?2, updated_at = ?3 WHERE id = ?1",
+        params![id, next as i64, now],
+    )?;
+    Ok(next)
+}
+
+/// 列出全部收藏资源。
+pub fn list_favorites(conn: &Connection) -> SqliteResult<Vec<Resource>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM resources
+         WHERE is_favorite = 1 AND is_deleted = 0
+         ORDER BY updated_at DESC",
+    )?;
+    let rows = stmt.query_map([], |row| resource_from_row(row))?;
+    rows.collect()
+}

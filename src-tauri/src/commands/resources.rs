@@ -282,6 +282,50 @@ pub fn list_trash(state: State<AppState>) -> CommandResult<Vec<Resource>> {
     Ok(repo::list_trash(&conn)?)
 }
 
+/// 切换资源收藏状态，返回新状态。
+#[tauri::command]
+pub fn toggle_favorite(state: State<AppState>, id: String) -> CommandResult<bool> {
+    let conn = lock_db(&state);
+    Ok(repo::toggle_favorite(&conn, &id, now_unix())?)
+}
+
+/// 列出全部收藏资源。
+#[tauri::command]
+pub fn list_favorites(state: State<AppState>) -> CommandResult<Vec<Resource>> {
+    let conn = lock_db(&state);
+    Ok(repo::list_favorites(&conn)?)
+}
+
+/// 永久删除（先删磁盘文件/目录，再删除数据库记录）。
+#[tauri::command]
+pub fn delete_permanently(
+    state: State<AppState>,
+    app: AppHandle,
+    ids: Vec<String>,
+) -> CommandResult<usize> {
+    let mut conn = lock_db(&state);
+    let tx = conn.transaction()?;
+    let mut count = 0;
+    for id in &ids {
+        let locations = repo::list_locations(&tx, id)?;
+        for loc in &locations {
+            let path = PathBuf::from(&loc.path);
+            if path.exists() {
+                if path.is_dir() {
+                    let _ = std::fs::remove_dir_all(&path);
+                } else {
+                    let _ = std::fs::remove_file(&path);
+                }
+            }
+        }
+        tx.execute("DELETE FROM resources WHERE id = ?1", [id])?;
+        count += 1;
+    }
+    tx.commit()?;
+    emit_trash_updated(&app);
+    Ok(count)
+}
+
 /// 验证资源所有物理位置是否可用，并更新数据库状态。
 #[tauri::command]
 pub fn verify_location(state: State<AppState>, id: String) -> CommandResult<serde_json::Value> {
