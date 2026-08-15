@@ -15,8 +15,10 @@ interface FileState {
   viewMode: ViewMode;
   sortKey: SortKey;
   sortAsc: boolean;
+  importPickerOpen: boolean;
 
   loadChildren: (parentId: string | null) => Promise<void>;
+  setImportPickerOpen: (open: boolean) => void;
   setViewMode: (mode: ViewMode) => void;
   setSort: (key: SortKey) => void;
   toggleSelect: (id: string) => void;
@@ -25,6 +27,7 @@ interface FileState {
   createFolder: (name: string) => Promise<void>;
   rename: (id: string, name: string) => Promise<void>;
   trash: (ids: string[]) => Promise<void>;
+  toggleFavorite: (id: string) => Promise<void>;
 }
 
 function sortResources(list: Resource[], key: SortKey, asc: boolean): Resource[] {
@@ -48,6 +51,7 @@ export const useFileStore = create<FileState>((set, get) => ({
   viewMode: "list",
   sortKey: "name",
   sortAsc: true,
+  importPickerOpen: false,
 
   loadChildren: async (parentId) => {
     set({ loading: true, error: null, parentId, selection: new Set() });
@@ -62,6 +66,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     }
   },
 
+  setImportPickerOpen: (importPickerOpen) => set({ importPickerOpen }),
   setViewMode: (viewMode) => set({ viewMode }),
   setSort: (sortKey) => {
     const { sortAsc, resources } = get();
@@ -97,6 +102,11 @@ export const useFileStore = create<FileState>((set, get) => ({
     await call<number>("trash_resources", { ids });
     await get().loadChildren(get().parentId);
   },
+
+  toggleFavorite: async (id) => {
+    await call<boolean>("toggle_favorite", { id });
+    await get().loadChildren(get().parentId);
+  },
 }));
 
 /** 加载单个资源详情（供详情面板使用）。 */
@@ -106,4 +116,9 @@ export async function fetchResourceDetail(id: string): Promise<ResourceDetail | 
   } catch {
     return null;
   }
+}
+
+/** 切换收藏状态，返回最新状态（供详情面板使用）。 */
+export async function toggleFavoriteResource(id: string): Promise<boolean> {
+  return await call<boolean>("toggle_favorite", { id });
 }

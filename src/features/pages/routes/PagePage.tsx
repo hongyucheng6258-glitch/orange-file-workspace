@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { FileText, Plus } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { FileText, Plus, Trash2 } from "lucide-react";
 import { usePageStore } from "../stores/pageStore";
 import { PageEditor } from "../components/PageEditor";
 
@@ -7,9 +8,23 @@ export function PagePage() {
   const { tree, loadTree, openPage, createPage, currentPageId } = usePageStore();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadTree();
+  }, []);
+
+  // 从收藏跳转打开指定页面。
+  useEffect(() => {
+    const openId = (location.state as { openId?: string } | null)?.openId;
+    if (openId) {
+      openPage(openId);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // 仅挂载时处理一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCreate = async () => {
@@ -36,10 +51,31 @@ export function PagePage() {
             <div
               key={r.id}
               className={`page-tree-item ${r.id === currentPageId ? "active" : ""}`}
-              onClick={() => openPage(r.id)}
+              onClick={() => {
+                setConfirmDeleteId(null);
+                openPage(r.id);
+              }}
             >
               <FileText size={13} />
               <span className="page-tree-name">{r.name}</span>
+              <button
+                className={`page-tree-del ${confirmDeleteId === r.id ? "confirming" : ""}`}
+                title={confirmDeleteId === r.id ? "再次点击确认删除" : "删除页面"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirmDeleteId === r.id) {
+                    setConfirmDeleteId(null);
+                    usePageStore.getState().deletePage(r.id);
+                  } else {
+                    setConfirmDeleteId(r.id);
+                    setTimeout(() => {
+                      setConfirmDeleteId((cur) => (cur === r.id ? null : cur));
+                    }, 3000);
+                  }
+                }}
+              >
+                <Trash2 size={13} />
+              </button>
             </div>
           ))}
         </div>

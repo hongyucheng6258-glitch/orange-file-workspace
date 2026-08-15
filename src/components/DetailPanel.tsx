@@ -11,17 +11,34 @@ import {
   FileCode2,
   FileArchive,
   Image as ImageIcon,
+  ExternalLink,
 } from "lucide-react";
-import { fetchResourceDetail } from "../features/files/stores/fileStore";
+import { fetchResourceDetail, toggleFavoriteResource } from "../features/files/stores/fileStore";
 import type { ResourceDetail } from "../lib/types";
 import { fileTypeName, formatSize, formatTime } from "../lib/tauri";
 import { Thumbnail } from "./Thumbnail";
+import { openResourceExternally } from "../lib/openResource";
+import { FileIconThumb } from "./FileIconThumb";
 
-function typeIcon(kind: string, name: string) {
+/** 从托管副本路径中提取盘符用于友好显示（如 "C 盘"）。 */
+function managedDirLabel(path: string): string {
+  const m = /^([A-Za-z]):/.exec(path);
+  return m ? `${m[1].toUpperCase()} 盘` : "C 盘";
+}
+
+function typeIcon(resourceId: string, kind: string, name: string) {
   if (kind === "folder") return <Folder size={36} color="var(--folder)" />;
   const n = name.toLowerCase();
   if (/\.(png|jpe?g|gif|webp|svg)$/.test(n))
     return <ImageIcon size={36} color="var(--image)" />;
+  if (/\.(exe|lnk|msi|bat|cmd|url)$/.test(n))
+    return (
+      <FileIconThumb
+        resourceId={resourceId}
+        size={36}
+        fallback={<FileIcon size={36} color="var(--file)" />}
+      />
+    );
   if (/\.(zip|rar|7z|tar|gz)$/.test(n))
     return <FileArchive size={36} color="var(--archive)" />;
   if (/\.(rs|py|js|ts|go|java|c|json|md|toml|yaml)$/.test(n))
@@ -47,6 +64,19 @@ export function DetailPanel({ resourceId }: { resourceId: string | null }) {
     });
   }, [resourceId]);
 
+  const handleToggleFavorite = async () => {
+    if (!detail) return;
+    try {
+      const isFavorite = await toggleFavoriteResource(detail.resource.id);
+      setDetail({
+        ...detail,
+        resource: { ...detail.resource, is_favorite: isFavorite },
+      });
+    } catch {
+      // 忽略收藏失败
+    }
+  };
+
   return (
     <aside className="detail-panel">
       {!resourceId ? (
@@ -62,7 +92,22 @@ export function DetailPanel({ resourceId }: { resourceId: string | null }) {
           <div className="detail-header">
             <span className="detail-title">详细信息</span>
             <div className="detail-header-actions">
-              <button className="icon-btn" title="收藏">
+              {detail.resource.kind !== "folder" && (
+                <button
+                  className="icon-btn"
+                  title="用系统默认程序打开"
+                  onClick={() => {
+                    openResourceExternally(detail.resource.id);
+                  }}
+                >
+                  <ExternalLink size={14} />
+                </button>
+              )}
+              <button
+                className="icon-btn"
+                title={detail.resource.is_favorite ? "取消收藏" : "收藏"}
+                onClick={handleToggleFavorite}
+              >
                 {detail.resource.is_favorite ? (
                   <Star size={14} color="var(--warning)" />
                 ) : (
@@ -76,7 +121,7 @@ export function DetailPanel({ resourceId }: { resourceId: string | null }) {
             {/\.(png|jpe?g|gif|webp|bmp)$/i.test(detail.resource.name) ? (
               <Thumbnail resourceId={detail.resource.id} name={detail.resource.name} size={120} />
             ) : (
-              typeIcon(detail.resource.kind, detail.resource.name)
+              typeIcon(detail.resource.id, detail.resource.kind, detail.resource.name)
             )}
             <span className="detail-preview-name">{detail.resource.name}</span>
             <span className="detail-preview-type">
@@ -121,7 +166,9 @@ export function DetailPanel({ resourceId }: { resourceId: string | null }) {
                   )}
                 </span>
                 <span className="detail-loc-path" title={loc.path}>
-                  {loc.path}
+                  {loc.source_type === "managed"
+                    ? `应用数据目录（${managedDirLabel(loc.path)}）中的托管副本`
+                    : loc.path}
                 </span>
                 <span
                   className={`tag ${loc.is_available ? "" : "tag-warning"}`}

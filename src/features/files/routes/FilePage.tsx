@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   ChevronRight,
   FolderPlus,
@@ -13,7 +15,8 @@ import { useFileStore } from "../stores/fileStore";
 import { FileTable } from "../components/FileTable";
 import { FileGrid } from "../components/FileGrid";
 import { DetailPanel } from "../../../components/DetailPanel";
-import { ImportDropzone } from "../../tasks/components/ImportDropzone";
+import { fetchResourceDetail } from "../stores/fileStore";
+import { call } from "../../../lib/tauri";
 import type { Resource } from "../../../lib/types";
 
 export function FilePage() {
@@ -28,6 +31,7 @@ export function FilePage() {
     rename,
     trash,
     selection,
+    setImportPickerOpen,
   } = useFileStore();
 
   const [crumbs, setCrumbs] = useState<Resource[]>([]);
@@ -40,10 +44,79 @@ export function FilePage() {
 
   const currentParentId = crumbs.length > 0 ? crumbs[crumbs.length - 1].id : null;
 
+  // 从收藏/搜索结果跳转打开指定资源。
+  const location = useLocation();
+  const navigate = useNavigate();
+  const openId = (location.state as { openId?: string } | null)?.openId;
+
+  useEffect(() => {
+    if (!openId) return;
+    (async () => {
+      try {
+        const [ancestors, detail] = await Promise.all([
+          call<Resource[]>("get_ancestors", { id: openId }),
+          fetchResourceDetail(openId),
+        ]);
+        if (!detail) return;
+        if (detail.resource.kind === "folder") {
+          setCrumbs([...ancestors, detail.resource]);
+          setSelectedId(null);
+        } else {
+          setCrumbs(ancestors);
+          // 等 currentParentId 变更引起的列表加载完成后再选中，避免被清空
+          setTimeout(() => setSelectedId(openId), 0);
+        }
+      } catch {
+        // ignore
+      } finally {
+        navigate(location.pathname, { replace: true, state: null });
+      }
+    })();
+  }, [openId]);
+
   useEffect(() => {
     loadChildren(currentParentId);
     setSelectedId(null);
   }, [currentParentId]);
+
+  // 导入/后台任务完成后由 Rust 广播，自动刷新当前列表。
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen<{ parent_id: string | null }>("resource-changed", (event) => {
+      if (event.payload.parent_id === currentParentId) {
+        loadChildren(currentParentId);
+      }
+    }).then((u) => {
+      unlisten = u;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [currentParentId, loadChildren]);
+
+  // 双保险：导入任务结束（成功/失败）时刷新列表；导入进行中每 2 秒节流刷新，
+  // 让正在写入的文件夹内容逐渐显示出来。
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let lastRefresh = 0;
+    listen<{ status: string }>("task-progress", (e) => {
+      const now = Date.now();
+      if (
+        e.payload.status === "completed" ||
+        e.payload.status === "failed" ||
+        e.payload.status === "cancelled" ||
+        (e.payload.status === "running" && now - lastRefresh > 2000)
+      ) {
+        lastRefresh = now;
+        loadChildren(currentParentId);
+      }
+    }).then((u) => {
+      unlisten = u;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [currentParentId, loadChildren]);
 
   const openFolder = (r: Resource) => {
     setCrumbs((prev) => [...prev, r]);
@@ -145,7 +218,10 @@ export function FilePage() {
             <button className="btn" onClick={() => setCreating(true)}>
               <FolderPlus size={14} /> 新建文件夹
             </button>
-            <button className="btn btn-primary">
+            <button
+              className="btn btn-primary"
+              onClick={() => setImportPickerOpen(true)}
+            >
               <Upload size={14} /> 导入
             </button>
           </div>
@@ -247,7 +323,6 @@ export function FilePage() {
 
       {/* 右侧详情栏 */}
       <DetailPanel resourceId={selectedId ?? (selection.size === 1 ? [...selection][0] : null)} />
-      <ImportDropzone />
     </div>
   );
 }

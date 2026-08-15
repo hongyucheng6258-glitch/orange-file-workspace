@@ -1,18 +1,13 @@
 import { create } from "zustand";
+import type { JSONContent } from "@tiptap/core";
 import type { Resource } from "../../../lib/types";
 import { call } from "../../../lib/tauri";
 
-export interface PageBlock {
-  id: string;
-  page_id: string;
-  parent_block_id: string | null;
-  block_type: string;
-  block_order: number;
-  content_json: string;
-  plain_text: string | null;
-  created_at: number;
-  updated_at: number;
-}
+/** TipTap 文档节点。 */
+export type DocNode = JSONContent;
+
+/** 空文档。 */
+export const EMPTY_DOC: DocNode = { type: "doc", content: [] };
 
 export interface PageDetail {
   resource: Resource;
@@ -21,33 +16,58 @@ export interface PageDetail {
     summary: string | null;
     content_version: number;
     save_state: string;
+    content_json?: string | null;
   };
-  blocks: PageBlock[];
 }
 
 interface PageState {
   tree: Resource[];
   currentPageId: string | null;
   detail: PageDetail | null;
-  blocks: PageBlock[];
+  document: DocNode;
   dirty: boolean;
   loading: boolean;
+  saving: boolean;
 
   loadTree: () => Promise<void>;
   openPage: (id: string) => Promise<void>;
   createPage: (name: string, parentId?: string | null) => Promise<void>;
   renamePage: (id: string, name: string) => Promise<void>;
-  setBlocks: (blocks: PageBlock[]) => void;
+  deletePage: (id: string) => Promise<void>;
+  setDocument: (doc: DocNode) => void;
   save: () => Promise<void>;
+}
+
+/** 解析页面内容 JSON，失败时返回空文档。 */
+function parseDocument(raw: string | null | undefined): DocNode {
+  if (!raw) return EMPTY_DOC;
+  try {
+    const parsed = JSON.parse(raw) as DocNode;
+    if (parsed && parsed.type === "doc") return parsed;
+    return EMPTY_DOC;
+  } catch {
+    return EMPTY_DOC;
+  }
+}
+
+/** 递归提取文档纯文本，用于摘要。 */
+export function extractPlainText(node: DocNode | null | undefined): string {
+  if (!node) return "";
+  if (typeof node.text === "string") return node.text;
+  if (Array.isArray(node.content)) {
+    return node.content.map(extractPlainText).join("\n");
+  }
+  return "";
 }
 
 export const usePageStore = create<PageState>((set, get) => ({
   tree: [],
   currentPageId: null,
   detail: null,
-  blocks: [],
+  document: EMPTY_DOC,
   dirty: false,
   loading: false,
+  saving: false,
 
   loadTree: async () => {
     const tree = await call<Resource[]>("list_pages", { parentId: null });
@@ -58,7 +78,12 @@ export const usePageStore = create<PageState>((set, get) => ({
     set({ loading: true, currentPageId: id });
     try {
       const detail = await call<PageDetail>("get_page", { resourceId: id });
-      set({ detail, blocks: detail.blocks, dirty: false, loading: false });
+      set({
+        detail,
+        document: parseDocument(detail.page.content_json),
+        dirty: false,
+        loading: false,
+      });
     } catch (e) {
       set({ loading: false });
       throw e;
@@ -78,31 +103,29 @@ export const usePageStore = create<PageState>((set, get) => ({
     }
   },
 
-  setBlocks: (blocks) => set({ blocks, dirty: true }),
-
-  save: async () => {
-    const { currentPageId, blocks, dirty } = get();
-    if (!currentPageId || !dirty) return;
-    await call("save_page_blocks", {
-      resourceId: currentPageId,
-      blocks: blocks.map((b) => ({
-        parent_block_id: b.parent_block_id,
-        block_type: b.block_type,
-        content_json: b.content_json,
-        plain_text: b.plain_text,
-      })),
-    });
-    set({ dirty: false });
+  deletePage: async (id) => {
+    await call("delete_page", { resourceId: id });
+    if (get().currentPageId === id) {
+      set({ detail: null, document: EMPTY_DOC, currentPageId: null, dirty: false });
+    }
     await get().loadTree();
   },
-}));
 
-/** 解析块的文本内容。 */
-export function blockText(b: PageBlock): string {
-  try {
-    const data = JSON.parse(b.content_json) as { text?: string };
-    return data.text ?? "";
-  } catch {
-    return "";
-  }
-}
+  setDocument: (document) => set({ document, dirty: true }),
+
+  save: async () => {
+    const { currentPageId, document, dirty } = get();
+    if (!currentPageId || !dirty) return;
+    set({ saving: true });
+    try {
+      await call("save_page_document", {
+        resourceId: currentPageId,
+        contentJson: JSON.stringify(document),
+        plainText: extractPlainText(document),
+      });
+      set({ dirty: false });
+    } finally {
+      set({ saving: false });
+    }
+  },
+}));

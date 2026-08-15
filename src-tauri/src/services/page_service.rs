@@ -19,9 +19,9 @@ pub fn create_page(
         now,
     )?;
     conn.execute(
-        "INSERT INTO pages (resource_id, content_version, save_state, editor_mode)
-         VALUES (?1, 1, 'saved', 'blocks')",
-        [&resource.id],
+        "INSERT INTO pages (resource_id, content_version, save_state, editor_mode, content_json)
+         VALUES (?1, 1, 'saved', 'blocks', ?2)",
+        [&resource.id, EMPTY_DOC],
     )?;
     let page = Page {
         resource_id: resource.id.clone(),
@@ -31,9 +31,13 @@ pub fn create_page(
         content_version: 1,
         save_state: "saved".to_string(),
         editor_mode: "blocks".to_string(),
+        content_json: Some(EMPTY_DOC.to_string()),
     };
     Ok((resource, page))
 }
+
+/// 空文档 JSON（TipTap doc 结构）。
+pub const EMPTY_DOC: &str = r#"{"type":"doc","content":[]}"#;
 
 /// 获取页面扩展记录。
 pub fn get_page(conn: &Connection, resource_id: &str) -> SqliteResult<Option<Page>> {
@@ -49,10 +53,47 @@ pub fn get_page(conn: &Connection, resource_id: &str) -> SqliteResult<Option<Pag
                 content_version: row.get("content_version")?,
                 save_state: row.get("save_state")?,
                 editor_mode: row.get("editor_mode")?,
+                content_json: row.get("content_json")?,
             })
         },
     )
     .optional()
+}
+
+/// 保存页面富文本文档（全量替换 content_json）。
+pub fn save_page_document(
+    conn: &Connection,
+    page_id: &str,
+    content_json: &str,
+    plain_text: &str,
+) -> SqliteResult<()> {
+    let now = now_unix();
+    let summary = summarize_plain_text(plain_text);
+    conn.execute(
+        "UPDATE pages SET content_json = ?2, content_version = content_version + 1,
+         save_state = 'saved', summary = ?3
+         WHERE resource_id = ?1",
+        params![page_id, content_json, summary],
+    )?;
+    conn.execute(
+        "UPDATE resources SET updated_at = ?2 WHERE id = ?1",
+        params![page_id, now],
+    )?;
+    Ok(())
+}
+
+/// 由纯文本生成摘要（最多 200 字）。
+fn summarize_plain_text(plain_text: &str) -> Option<String> {
+    let joined: String = plain_text
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .take(200)
+        .collect();
+    if joined.trim().is_empty() {
+        None
+    } else {
+        Some(plain_text.chars().take(200).collect())
+    }
 }
 
 /// 列出某父目录下的页面资源（页面树节点）。

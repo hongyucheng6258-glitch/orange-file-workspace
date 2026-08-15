@@ -8,14 +8,15 @@ import { SearchPage } from "../features/search/routes/SearchPage";
 import { FavoritesPage } from "../features/favorites/routes/FavoritesPage";
 import { TrashPage } from "../features/trash/routes/TrashPage";
 import { SettingsPage } from "../features/settings/routes/SettingsPage";
-import { PlaceholderPage } from "./PlaceholderPage";
+import { HomePage } from "../features/home/routes/HomePage";
+import { SystemPage } from "../features/system/routes/SystemPage";
 
 export default function App() {
   return (
     <HashRouter>
       <Routes>
         <Route element={<AppShell />}>
-          <Route path="/" element={<PlaceholderPage title="首页" />} />
+          <Route path="/" element={<HomePage />} />
           <Route path="/files" element={<FilePage />} />
           <Route path="/pages" element={<PagePage />} />
           <Route path="/projects" element={<ProjectPage />} />
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/trash" element={<TrashPage />} />
           <Route path="/tasks" element={<TaskCenterPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/system" element={<SystemPage />} />
           <Route path="/search" element={<SearchPage />} />
         </Route>
       </Routes>

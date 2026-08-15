@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import { Sidebar } from "../components/Sidebar";
 import { Topbar } from "../components/Topbar";
 import { TaskBar } from "../features/tasks/components/TaskCenter";
+import { ImportDropzone } from "../features/tasks/components/ImportDropzone";
 import { useTaskStore } from "../features/tasks/stores/taskStore";
 
 export function AppShell() {
@@ -28,6 +29,8 @@ export function AppShell() {
         </div>
         <TaskBar />
       </div>
+      {/* 全局拖拽导入：任意页面均可拖入文件/文件夹 */}
+      <ImportDropzone />
     </div>
   );
 }

@@ -68,7 +68,13 @@ pub fn save_page_blocks(
                 .and_then(|v| v.as_str())
                 .unwrap_or("paragraph")
                 .to_string(),
-            content_json: b.get("content_json").map(|v| v.to_string()).unwrap_or_else(|| "{}".into()),
+            // 前端传来的 content_json 已经是 JSON 字符串，必须原样取回，
+            // 不能再 to_string()（否则会再包一层引号导致双重编码）。
+            content_json: b
+                .get("content_json")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+                .unwrap_or_else(|| "{}".into()),
             plain_text: b
                 .get("plain_text")
                 .and_then(|v| v.as_str())
@@ -78,6 +84,19 @@ pub fn save_page_blocks(
 
     let mut conn = lock_db(&state);
     page_service::replace_blocks(&mut conn, &resource_id, &inputs)?;
+    Ok(())
+}
+
+/// 保存页面富文本文档（TipTap 文档 JSON 全量保存）。
+#[tauri::command]
+pub fn save_page_document(
+    state: State<AppState>,
+    resource_id: String,
+    content_json: String,
+    plain_text: String,
+) -> CommandResult<()> {
+    let conn = lock_db(&state);
+    page_service::save_page_document(&conn, &resource_id, &content_json, &plain_text)?;
     Ok(())
 }
 

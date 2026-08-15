@@ -20,6 +20,9 @@ import {
 import { useFileStore } from "../stores/fileStore";
 import type { Resource } from "../../../lib/types";
 import { fileTypeName, formatSize, formatTime } from "../../../lib/tauri";
+import { startDragOut } from "../../../lib/dragOut";
+import { openResourceExternally } from "../../../lib/openResource";
+import { FileIconThumb } from "../../../components/FileIconThumb";
 
 interface FileTableProps {
   onOpen: (r: Resource) => void;
@@ -33,6 +36,14 @@ function kindIcon(r: Resource) {
   const name = r.name.toLowerCase();
   if (/\.(png|jpe?g|gif|webp|svg|bmp|ico)$/.test(name))
     return <ImageIcon size={16} color="var(--image)" />;
+  if (/\.(exe|lnk|msi|bat|cmd|url)$/.test(name))
+    return (
+      <FileIconThumb
+        resourceId={r.id}
+        size={16}
+        fallback={<FileIcon size={16} color="var(--file)" />}
+      />
+    );
   if (/\.(mp4|webm|mov|avi|mkv)$/.test(name))
     return <Film size={16} color="var(--video)" />;
   if (/\.(mp3|wav|ogg|flac|m4a)$/.test(name))
@@ -47,7 +58,7 @@ function kindIcon(r: Resource) {
 }
 
 export function FileTable({ onOpen, onSelect, onRename, onTrash }: FileTableProps) {
-  const { resources, selection, toggleSelect, clearSelection, selectMany, sortKey, sortAsc, setSort } =
+  const { resources, selection, toggleSelect, clearSelection, selectMany, sortKey, sortAsc, setSort, toggleFavorite } =
     useFileStore();
   const [menu, setMenu] = useState<{ x: number; y: number; resource: Resource } | null>(null);
 
@@ -72,6 +83,7 @@ export function FileTable({ onOpen, onSelect, onRename, onTrash }: FileTableProp
 
   const onDoubleClick = (r: Resource) => {
     if (r.kind === "folder") onOpen(r);
+    else openResourceExternally(r.id);
   };
 
   const onContext = (e: React.MouseEvent, r: Resource) => {
@@ -117,10 +129,15 @@ export function FileTable({ onOpen, onSelect, onRename, onTrash }: FileTableProp
               <div
                 key={r.id}
                 role="row"
+                draggable
                 className={`file-row ${selected ? "selected" : ""}`}
                 onClick={(e) => onRowClick(r, e)}
                 onDoubleClick={() => onDoubleClick(r)}
                 onContextMenu={(e) => onContext(e, r)}
+                onDragStart={(e) => {
+                  e.preventDefault();
+                  startDragOut(selection.has(r.id) ? [...selection] : [r.id]);
+                }}
               >
                 <span className="col-name">
                   <span className="row-icon">{kindIcon(r)}</span>
@@ -141,6 +158,7 @@ export function FileTable({ onOpen, onSelect, onRename, onTrash }: FileTableProp
                     title={r.is_favorite ? "取消收藏" : "收藏"}
                     onClick={(e) => {
                       e.stopPropagation();
+                      toggleFavorite(r.id);
                     }}
                   >
                     {r.is_favorite ? (
@@ -177,7 +195,11 @@ export function FileTable({ onOpen, onSelect, onRename, onTrash }: FileTableProp
           <button
             className="menu-item"
             onClick={() => {
-              onOpen(menu.resource);
+              if (menu.resource.kind === "folder") {
+                onOpen(menu.resource);
+              } else {
+                openResourceExternally(menu.resource.id);
+              }
               setMenu(null);
             }}
           >

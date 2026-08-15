@@ -12,6 +12,9 @@ import { useFileStore } from "../stores/fileStore";
 import type { Resource } from "../../../lib/types";
 import { formatTime } from "../../../lib/tauri";
 import { Thumbnail } from "../../../components/Thumbnail";
+import { FileIconThumb } from "../../../components/FileIconThumb";
+import { startDragOut } from "../../../lib/dragOut";
+import { openResourceExternally } from "../../../lib/openResource";
 
 interface FileGridProps {
   onOpen: (r: Resource) => void;
@@ -23,6 +26,14 @@ function gridThumb(r: Resource) {
   const name = r.name.toLowerCase();
   if (/\.(png|jpe?g|gif|webp|svg|bmp)$/.test(name))
     return <ImageIcon size={28} color="var(--image)" />;
+  if (/\.(exe|lnk|msi|bat|cmd|url)$/.test(name))
+    return (
+      <FileIconThumb
+        resourceId={r.id}
+        size={28}
+        fallback={<FileIcon size={28} color="var(--file)" />}
+      />
+    );
   if (/\.(mp4|webm|mov|avi)$/.test(name))
     return <Film size={28} color="var(--video)" />;
   if (/\.(mp3|wav|ogg|flac)$/.test(name))
@@ -54,9 +65,17 @@ export function FileGrid({ onOpen, onSelect }: FileGridProps) {
       {resources.map((r) => (
         <div
           key={r.id}
+          draggable
           className={`grid-card ${selection.has(r.id) ? "selected" : ""}`}
           onClick={(e) => onClick(r, e)}
-          onDoubleClick={() => r.kind === "folder" && onOpen(r)}
+          onDoubleClick={() => {
+            if (r.kind === "folder") onOpen(r);
+            else openResourceExternally(r.id);
+          }}
+          onDragStart={(e) => {
+            e.preventDefault();
+            startDragOut(selection.has(r.id) ? [...selection] : [r.id]);
+          }}
         >
           <div className="grid-thumb">
             {r.kind === "folder" ? (

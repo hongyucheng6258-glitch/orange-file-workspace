@@ -28,7 +28,11 @@ pub fn list_children(
     };
 
     let mut stmt = conn.prepare(sql)?;
-    let rows = stmt.query_map([parent_id], resource_from_row)?;
+    let rows = if parent_id.is_some() {
+        stmt.query_map([parent_id], resource_from_row)?
+    } else {
+        stmt.query_map([], resource_from_row)?
+    };
     rows.collect()
 }
 
@@ -336,6 +340,26 @@ pub fn update_location_hash(
     conn.execute(
         "UPDATE resource_locations SET content_hash = ?2, hash_algorithm = ?3 WHERE id = ?1",
         params![location_id, content_hash, algorithm],
+    )?;
+    Ok(())
+}
+
+/// 读取应用设置（value_json 原样返回）。
+pub fn get_setting(conn: &Connection, key: &str) -> SqliteResult<Option<String>> {
+    conn.query_row(
+        "SELECT value_json FROM app_settings WHERE key = ?1",
+        [key],
+        |row| row.get(0),
+    )
+    .optional()
+}
+
+/// 写入应用设置（value_json 需调用方自行 JSON 序列化）。
+pub fn set_setting(conn: &Connection, key: &str, value_json: &str) -> SqliteResult<()> {
+    conn.execute(
+        "INSERT INTO app_settings (key, value_json, updated_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at",
+        params![key, value_json, crate::db::connection::now_unix()],
     )?;
     Ok(())
 }

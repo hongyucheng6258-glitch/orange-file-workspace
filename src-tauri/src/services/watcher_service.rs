@@ -9,7 +9,7 @@ use crate::events::EVENT_RESOURCE_CHANGED;
 /// 事件先做 500ms 去抖合并，避免高频写文件时刷屏。
 pub fn start_managed_watcher(app: AppHandle) {
     let state = app.state::<AppState>();
-    let watch_dir = state.data_dir.join("managed-files");
+    let watch_dir = state.managed_dir.lock().expect("dir lock").clone();
 
     if !watch_dir.exists() {
         return;

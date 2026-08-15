@@ -73,6 +73,45 @@ pub fn list_projects(state: State<AppState>) -> CommandResult<Vec<Resource>> {
     Ok(project_service::list_projects(&conn)?)
 }
 
+/// 删除代码项目：软删除项目资源及其全部后代（进入回收站，可恢复）。
+#[tauri::command]
+pub fn delete_project(state: State<AppState>, project_id: String) -> CommandResult<()> {
+    use crate::db::connection::now_unix;
+
+    let conn = lock_db(&state);
+    let now = now_unix();
+
+    // 收集项目资源及其所有后代（递归）。
+    let mut stmt = conn.prepare(
+        "WITH RECURSIVE descendants(id) AS (
+             SELECT id FROM resources WHERE id = ?1
+             UNION ALL
+             SELECT r.id FROM resources r
+             JOIN descendants d ON r.parent_id = d.id
+         )
+         SELECT id FROM descendants",
+    )?;
+    let ids: Vec<String> = stmt
+        .query_map([&project_id], |r| r.get(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    if ids.is_empty() {
+        return Err(AppError::new("not_found", format!("项目 {project_id} 不存在")));
+    }
+
+    let placeholders = vec!["?"; ids.len()].join(",");
+    let args: Vec<&dyn rusqlite::ToSql> = std::iter::once(&now as &dyn rusqlite::ToSql)
+        .chain(ids.iter().map(|s| s as &dyn rusqlite::ToSql))
+        .collect();
+    conn.execute(
+        &format!(
+            "UPDATE resources SET is_deleted = 1, deleted_at = ?1
+             WHERE id IN ({placeholders})"
+        ),
+        rusqlite::params_from_iter(args),
+    )?;
+    Ok(())
+}
+
 /// 获取项目详情（资源 + 扩展记录 + 根目录路径）。
 #[tauri::command]
 pub fn get_project(

@@ -8,7 +8,7 @@ import {
   Trash2,
   ListTodo,
   Settings,
-  Boxes,
+  MonitorSmartphone,
 } from "lucide-react";
 
 const NAV = [
@@ -19,6 +19,7 @@ const NAV = [
   { to: "/favorites", label: "收藏", icon: Star },
   { to: "/trash", label: "回收站", icon: Trash2 },
   { to: "/tasks", label: "任务中心", icon: ListTodo },
+  { to: "/system", label: "电脑信息", icon: MonitorSmartphone },
   { to: "/settings", label: "设置", icon: Settings },
 ];
 
@@ -27,9 +28,9 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="sidebar-brand">
         <span className="brand-mark">
-          <Boxes size={18} />
+          <img src="/icon.png" alt="" aria-hidden="true" />
         </span>
-        <span className="brand-name">NexusFile</span>
+        <span className="brand-name">Orange</span>
       </div>
       <nav className="sidebar-nav">
         {NAV.map(({ to, label, icon: Icon, end }) => (

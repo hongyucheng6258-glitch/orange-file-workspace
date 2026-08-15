@@ -4,10 +4,12 @@ use crate::AppState;
 use crate::db::models::{new_id, SourceType, Task};
 use crate::error::AppError;
 use crate::ipc::CommandResult;
-use crate::services::import_service::{start_import, ImportRequest};
+use crate::services::import_service::{resolve_shortcut, start_import, ImportRequest};
+use crate::services::migration_service::KEY_INFLIGHT;
 use crate::services::task_service as tasks;
 
 /// 导入文件/文件夹。mode: "managed" 复制到仓库，或 "external" 仅引用路径。
+/// 传入的 Windows 快捷方式（.lnk）会先解析为目标路径再导入。
 #[tauri::command]
 pub fn import_paths(
     app: AppHandle,
@@ -19,6 +21,21 @@ pub fn import_paths(
     if paths.is_empty() {
         return Err(AppError::new("empty_paths", "没有可导入的文件"));
     }
+    // 目录迁移进行中拒绝导入
+    {
+        let conn = state.conn.lock().expect("db lock");
+        if crate::db::repositories::get_setting(&conn, KEY_INFLIGHT)?.is_some() {
+            return Err(AppError::new(
+                "migration_running",
+                "目录迁移进行中，请稍后再导入",
+            ));
+        }
+    }
+    // 解析快捷方式：.lnk 指向文件夹时按文件夹导入其内容
+    let resolved_paths: Vec<String> = paths
+        .iter()
+        .map(|p| resolve_shortcut(std::path::Path::new(p)).to_string_lossy().to_string())
+        .collect();
     let source_type = match mode.as_str() {
         "managed" => SourceType::Managed,
         "external" => SourceType::External,
@@ -36,12 +53,12 @@ pub fn import_paths(
         "import",
         &format!("导入 {} 个路径", paths.len()),
         None,
-        Some(&serde_json::json!({ "paths": paths, "mode": mode }).to_string()),
+        Some(&serde_json::json!({ "paths": resolved_paths, "mode": mode }).to_string()),
     )?;
     drop(conn);
 
     let req = ImportRequest {
-        paths,
+        paths: resolved_paths,
         mode: source_type,
         parent_id,
     };

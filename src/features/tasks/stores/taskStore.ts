@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
 import { call } from "../../../lib/tauri";
@@ -28,6 +29,7 @@ interface TaskProgressEvent {
 
 interface TaskState {
   tasks: TaskRecord[];
+  addTask: (task: TaskRecord) => void;
   refresh: () => Promise<void>;
   cancel: (id: string) => Promise<void>;
   startListening: () => Promise<() => void>;
@@ -35,6 +37,12 @@ interface TaskState {
 
 export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
+
+  addTask: (task) => {
+    set((state) => ({
+      tasks: [task, ...state.tasks.filter((item) => item.id !== task.id)],
+    }));
+  },
 
   refresh: async () => {
     try {
@@ -78,7 +86,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
 /** 活跃任务（进行中），用于底部任务条。 */
 export function useActiveTasks() {
-  return useTaskStore((s) =>
-    s.tasks.filter((t) => t.status === "queued" || t.status === "running" || t.status === "paused"),
+  const tasks = useTaskStore((s) => s.tasks);
+  return useMemo(
+    () => tasks.filter((t) => t.status === "queued" || t.status === "running" || t.status === "paused"),
+    [tasks],
   );
 }

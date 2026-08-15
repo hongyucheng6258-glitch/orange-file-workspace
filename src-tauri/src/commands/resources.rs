@@ -25,6 +25,7 @@ fn emit_trash_updated(app: &AppHandle) {
 }
 
 /// 列出某目录下的资源。parent_id 为空时列出根目录。
+/// 正常浏览时过滤「代码项目」和「页面」资源，保持文件、项目、页面三个空间分开。
 #[tauri::command]
 pub fn list_children(
     state: State<AppState>,
@@ -32,11 +33,15 @@ pub fn list_children(
     include_deleted: Option<bool>,
 ) -> CommandResult<Vec<Resource>> {
     let conn = lock_db(&state);
-    Ok(repo::list_children(
+    let mut items = repo::list_children(
         &conn,
         parent_id.as_deref(),
         include_deleted.unwrap_or(false),
-    )?)
+    )?;
+    if !include_deleted.unwrap_or(false) {
+        items.retain(|r| r.kind != ResourceKind::Project && r.kind != ResourceKind::Page);
+    }
+    Ok(items)
 }
 
 /// 获取单个资源及其位置。
@@ -275,6 +280,37 @@ pub fn restore_resource(state: State<AppState>, app: AppHandle, id: String) -> C
     Ok(updated)
 }
 
+/// 从回收站批量恢复。原父目录不存在时恢复到根目录。
+#[tauri::command]
+pub fn restore_resources(
+    state: State<AppState>,
+    app: AppHandle,
+    ids: Vec<String>,
+) -> CommandResult<usize> {
+    let conn = lock_db(&state);
+    let now = now_unix();
+    let mut count = 0;
+    for id in &ids {
+        let Some(resource) = repo::get_resource(&conn, id)? else {
+            continue;
+        };
+        let mut target_parent = resource.parent_id.clone();
+        if let Some(pid) = &resource.parent_id {
+            if let Ok(Some(parent)) = repo::get_resource(&conn, pid) {
+                if parent.is_deleted {
+                    target_parent = None;
+                }
+            }
+        }
+        repo::move_resource(&conn, id, target_parent.as_deref(), now)?;
+        repo::restore(&conn, id, now)?;
+        count += 1;
+    }
+    emit_trash_updated(&app);
+    emit_resource_changed(&app, &serde_json::json!({ "parent_id": null }));
+    Ok(count)
+}
+
 /// 列出回收站资源。
 #[tauri::command]
 pub fn list_trash(state: State<AppState>) -> CommandResult<Vec<Resource>> {
@@ -294,6 +330,23 @@ pub fn toggle_favorite(state: State<AppState>, id: String) -> CommandResult<bool
 pub fn list_favorites(state: State<AppState>) -> CommandResult<Vec<Resource>> {
     let conn = lock_db(&state);
     Ok(repo::list_favorites(&conn)?)
+}
+
+/// 获取资源从根到父级的祖先链（不含资源自身），用于跨页面跳转定位目录。
+#[tauri::command]
+pub fn get_ancestors(state: State<AppState>, id: String) -> CommandResult<Vec<Resource>> {
+    let conn = lock_db(&state);
+    let mut chain: Vec<Resource> = Vec::new();
+    let mut cursor: Option<String> = repo::get_resource(&conn, &id)?.and_then(|r| r.parent_id);
+    while let Some(pid) = cursor {
+        let parent = repo::get_resource(&conn, &pid)?.ok_or_else(|| {
+            AppError::new("parent_missing", format!("父资源 {pid} 不存在"))
+        })?;
+        cursor = parent.parent_id.clone();
+        chain.push(parent);
+    }
+    chain.reverse();
+    Ok(chain)
 }
 
 /// 永久删除（先删磁盘文件/目录，再删除数据库记录）。
@@ -318,6 +371,8 @@ pub fn delete_permanently(
                 }
             }
         }
+        tx.execute("DELETE FROM file_metadata WHERE resource_id = ?1", [id])?;
+        tx.execute("DELETE FROM resource_locations WHERE resource_id = ?1", [id])?;
         tx.execute("DELETE FROM resources WHERE id = ?1", [id])?;
         count += 1;
     }
@@ -368,7 +423,7 @@ fn resolve_parent_dir(
         ));
     }
 
-    let root = state.data_dir.join("managed-files");
+    let root = state.managed_dir.lock().expect("dir lock").clone();
     std::fs::create_dir_all(&root)?;
     Ok(root)
 }

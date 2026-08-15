@@ -22,6 +22,31 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "editor_sessions_unique",
         sql: include_str!("../../migrations/0002_editor_sessions_unique.sql"),
     },
+    Migration {
+        version: 3,
+        name: "cleanup_orphan_locations",
+        sql: include_str!("../../migrations/0003_cleanup_orphan_locations.sql"),
+    },
+    Migration {
+        version: 4,
+        name: "page_document_content",
+        sql: include_str!("../../migrations/0004_page_document_content.sql"),
+    },
+    Migration {
+        version: 5,
+        name: "split_multiline_paragraphs",
+        sql: include_str!("../../migrations/0005_split_multiline_paragraphs.sql"),
+    },
+    Migration {
+        version: 6,
+        name: "global_search_indexes",
+        sql: include_str!("../../migrations/0006_global_search.sql"),
+    },
+    Migration {
+        version: 7,
+        name: "backup_source",
+        sql: include_str!("../../migrations/0007_backup_source.sql"),
+    },
 ];
 
 /// 应用所有未执行的迁移。每个迁移在独立事务中执行，失败即回滚。
@@ -210,5 +235,55 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM resources", [], |r| r.get(0))
             .expect("count");
         assert_eq!(count, 0, "partial inserts must be rolled back");
+    }
+
+    #[test]
+    fn global_search_tables_exist() {
+        let mut conn = in_memory_conn();
+        run_migrations(&mut conn).expect("migrations");
+        for table in ["system_search_entries", "system_search_apps", "system_search_scan_state"] {
+            let ok: bool = conn
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
+                    [table],
+                    |r| r.get(0),
+                )
+                .expect("query");
+            assert!(ok, "table {table} should exist");
+        }
+    }
+
+    #[test]
+    fn global_search_key_constraints_apply() {
+        let mut conn = in_memory_conn();
+        run_migrations(&mut conn).expect("migrations");
+        // canonical_path UNIQUE 且大小写不敏感
+        conn.execute(
+            "INSERT INTO system_search_entries
+             (canonical_path, display_name, entry_kind, volume_id, scan_generation, indexed_at)
+             VALUES ('c:\\Docs\\a.txt', 'a.txt', 'file', 'v1', 1, 1)",
+            [],
+        )
+        .expect("insert");
+        let dup = conn.execute(
+            "INSERT INTO system_search_entries
+             (canonical_path, display_name, entry_kind, volume_id, scan_generation, indexed_at)
+             VALUES ('C:\\DOCS\\A.TXT', 'a.txt', 'file', 'v1', 1, 1)",
+            [],
+        );
+        assert!(dup.is_err(), "大小写不同的同一路径应被 UNIQUE COLLATE NOCASE 拒绝");
+        // CHECK 约束拒绝非法类型与状态
+        let bad_kind = conn.execute(
+            "INSERT INTO system_search_entries
+             (canonical_path, display_name, entry_kind, volume_id, scan_generation, indexed_at)
+             VALUES ('c:\\x\\b.txt', 'b.txt', 'link', 'v1', 1, 1)",
+            [],
+        );
+        assert!(bad_kind.is_err(), "非法 entry_kind 应被 CHECK 拒绝");
+        let bad_status = conn.execute(
+            "INSERT INTO system_search_scan_state (volume_id, root_path, status) VALUES ('v1', 'C:\\', 'weird')",
+            [],
+        );
+        assert!(bad_status.is_err(), "非法 status 应被 CHECK 拒绝");
     }
 }

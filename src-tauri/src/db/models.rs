@@ -104,6 +104,8 @@ pub struct Page {
     pub content_version: i64,
     pub save_state: String,
     pub editor_mode: String,
+    /// 富文本文档内容（TipTap 文档 JSON）。
+    pub content_json: Option<String>,
 }
 
 /// 页面块。
@@ -220,6 +222,7 @@ pub struct BackupRecord {
     pub created_at: i64,
     pub status: String,
     pub error_message: Option<String>,
+    pub source: String,
 }
 
 /// 插入资源并返回实体。由文件、页面、项目服务统一调用。

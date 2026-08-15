@@ -1,8 +1,13 @@
 pub mod backups;
+pub mod dashboard;
+pub mod drag;
 pub mod editor;
 pub mod import;
+pub mod migration;
 pub mod pages;
 pub mod previews;
 pub mod projects;
 pub mod resources;
 pub mod search;
+pub mod settings;
+pub mod system;

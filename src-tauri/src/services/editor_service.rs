@@ -29,7 +29,7 @@ pub fn open_session(
     if !path.exists() {
         return Err(AppError::new("path_missing", "文件路径不可用"));
     }
-    let content = preview_service::read_text_preview(path)?;
+    let content = preview_service::read_text_preview(path, 256 * 1024)?;
     let (size, modified) = fsutil::stat_basic(path)?;
     let now = now_unix();
 

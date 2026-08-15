@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Search, FileText, Folder, Code2, Star } from "lucide-react";
-import { call } from "../../../lib/tauri";
-import { formatTime } from "../../../lib/tauri";
+import { Search, FileText, Folder, Code2, Star, Loader2 } from "lucide-react";
+import { call, formatTime } from "../../../lib/tauri";
 
 interface SearchHit {
   id: string;
@@ -23,45 +22,102 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 export function SearchPage() {
-  const [params] = useSearchParams();
-  const [query, setQuery] = useState(params.get("q") ?? "");
-  const [kind, setKind] = useState<string>("");
+  const [params, setParams] = useSearchParams();
+  const urlQ = params.get("q") ?? "";
+  const [query, setQuery] = useState(urlQ);
+  const [kind, setKind] = useState("");
   const [results, setResults] = useState<SearchHit[]>([]);
   const [searched, setSearched] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  // 请求序号：只采纳最后一次搜索的响应，避免旧结果覆盖新结果。
+  const seqRef = useRef(0);
 
-  const doSearch = async (q: string, k: string) => {
-    const hits = await call<SearchHit[]>("search_resources", {
-      query: q,
-      kinds: k ? [k] : null,
-      favoriteOnly: false,
-      limit: 100,
-      offset: 0,
-    });
-    setResults(hits);
-    setSearched(true);
+  const doSearch = useCallback(async (q: string, k: string) => {
+    const trimmed = q.trim();
+    const seq = ++seqRef.current;
+    if (!trimmed) {
+      setResults([]);
+      setSearched(true);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const hits = await call<SearchHit[]>("search_resources", {
+        query: trimmed,
+        kinds: k ? [k] : null,
+        favoriteOnly: false,
+        limit: 100,
+        offset: 0,
+      });
+      if (seq === seqRef.current) {
+        setResults(hits);
+        setSearched(true);
+      }
+    } catch (e) {
+      if (seq === seqRef.current) {
+        setError((e as Error).message);
+        setResults([]);
+        setSearched(true);
+      }
+    } finally {
+      if (seq === seqRef.current) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  // URL 关键词变化 → 同步输入框并触发搜索（支持顶部栏二次搜索与刷新保留）。
+  useEffect(() => {
+    setQuery(urlQ);
+    if (urlQ) {
+      doSearch(urlQ, "");
+    }
+  }, [urlQ, doSearch]);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = query.trim();
+    if (!trimmed) {
+      seqRef.current += 1;
+      setResults([]);
+      setSearched(true);
+      setError(null);
+      return;
+    }
+    if (urlQ === trimmed) {
+      // 关键词未变：直接按当前类型筛选重新搜索。
+      doSearch(trimmed, kind);
+    } else {
+      setParams({ q: trimmed }, { replace: true });
+    }
   };
 
-  useEffect(() => {
-    const q = params.get("q") ?? "";
-    if (q) doSearch(q, "");
-  }, [params]);
+  const pickKind = (v: string) => {
+    setKind(v);
+    const q = urlQ || query.trim();
+    if (q) doSearch(q, v);
+  };
 
   return (
     <div className="search-page">
       <div className="search-head">
-        <div className="search-input-wrap">
+        <form className="search-input-wrap" onSubmit={submit}>
           <Search size={15} />
           <input
             value={query}
             placeholder="搜索名称或路径…"
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && doSearch(query, kind)}
             autoFocus
           />
-          <button className="btn btn-primary" onClick={() => doSearch(query, kind)}>
-            搜索
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? <Loader2 size={13} className="spin" /> : <Search size={13} />}
+            {loading ? "搜索中…" : "搜索"}
           </button>
-        </div>
+        </form>
         <div className="search-filters">
           {[
             { value: "", label: "全部" },
@@ -73,10 +129,7 @@ export function SearchPage() {
             <button
               key={f.value}
               className={`filter-chip ${kind === f.value ? "active" : ""}`}
-              onClick={() => {
-                setKind(f.value);
-                if (query) doSearch(query, f.value);
-              }}
+              onClick={() => pickKind(f.value)}
             >
               {f.label}
             </button>
@@ -84,8 +137,10 @@ export function SearchPage() {
         </div>
       </div>
 
+      {error && <div className="system-error">{error}</div>}
+
       <div className="search-results">
-        {searched && results.length === 0 && (
+        {searched && results.length === 0 && !loading && (
           <div className="empty-state">
             <span>没有找到匹配的结果</span>
           </div>

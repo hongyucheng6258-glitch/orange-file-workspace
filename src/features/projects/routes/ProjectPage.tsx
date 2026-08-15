@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Code2, Folder, File as FileIcon, FolderOpen, ChevronRight, ChevronDown, Plus } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Code2, Folder, File as FileIcon, FolderOpen, ChevronRight, ChevronDown, Plus, Trash2 } from "lucide-react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { Resource } from "../../../lib/types";
 import { call } from "../../../lib/tauri";
@@ -86,6 +87,8 @@ export function ProjectPage() {
   const [tree, setTree] = useState<Resource[]>([]);
   const [importing, setImporting] = useState(false);
   const openFile = useEditorStore((s) => s.open);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const loadProjects = useCallback(async () => {
     const list = await call<Resource[]>("list_projects", {});
@@ -105,6 +108,16 @@ export function ProjectPage() {
     setTree(items);
   }, []);
 
+  // 从收藏跳转打开指定项目。
+  useEffect(() => {
+    const openId = (location.state as { openId?: string } | null)?.openId;
+    if (openId && projects.length > 0) {
+      const p = projects.find((x) => x.id === openId);
+      if (p) selectProject(p);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [projects, location.state, location.pathname, navigate, selectProject]);
+
   const importProject = useCallback(async () => {
     setImporting(true);
     try {
@@ -117,6 +130,25 @@ export function ProjectPage() {
       setImporting(false);
     }
   }, [loadProjects]);
+
+  const deleteProject = useCallback(
+    async (p: Resource) => {
+      if (!window.confirm(`删除代码项目「${p.name}」？其下的文件记录将移入回收站，可在回收站恢复。`)) {
+        return;
+      }
+      try {
+        await call("delete_project", { projectId: p.id });
+        if (current?.id === p.id) {
+          setCurrent(null);
+          setTree([]);
+        }
+        await loadProjects();
+      } catch {
+        // 忽略删除失败
+      }
+    },
+    [current, loadProjects],
+  );
 
   return (
     <div className="project-page">
@@ -132,14 +164,22 @@ export function ProjectPage() {
             <div className="page-tree-empty">暂无项目，点击 + 导入</div>
           )}
           {projects.map((p) => (
-            <button
+            <div
               key={p.id}
-              className={`project-item ${current?.id === p.id ? "active" : ""}`}
-              onClick={() => selectProject(p)}
+              className={`project-item-row ${current?.id === p.id ? "active" : ""}`}
             >
-              <Code2 size={14} color="var(--primary)" />
-              <span className="project-item-name">{p.name}</span>
-            </button>
+              <button className="project-item" onClick={() => selectProject(p)}>
+                <Code2 size={14} color="var(--primary)" />
+                <span className="project-item-name">{p.name}</span>
+              </button>
+              <button
+                className="icon-btn project-item-delete"
+                title="删除项目"
+                onClick={() => deleteProject(p)}
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
           ))}
         </div>
       </aside>
