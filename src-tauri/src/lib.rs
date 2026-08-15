@@ -1,8 +1,12 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+mod commands;
 mod db;
 mod error;
+mod events;
 mod ipc;
+mod services;
 
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use tauri::Manager;
@@ -11,8 +15,11 @@ use db::connection::open;
 use db::migrations::run_migrations;
 use ipc::CommandResult;
 
-/// 全局数据库状态。Tauri 命令通过 `State<Db>` 访问。
-pub struct Db(pub Mutex<rusqlite::Connection>);
+/// 全局应用状态：数据目录与数据库连接。
+pub struct AppState {
+    pub data_dir: PathBuf,
+    pub conn: Mutex<rusqlite::Connection>,
+}
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -41,10 +48,25 @@ pub fn run() {
             let conn = open(&db_path)?;
             let mut conn = conn;
             run_migrations(&mut conn)?;
-            app.manage(Db(Mutex::new(conn)));
+            app.manage(AppState {
+                data_dir,
+                conn: Mutex::new(conn),
+            });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, app_info])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            app_info,
+            commands::resources::list_children,
+            commands::resources::get_resource,
+            commands::resources::create_folder,
+            commands::resources::rename_resource,
+            commands::resources::move_resource,
+            commands::resources::trash_resources,
+            commands::resources::restore_resource,
+            commands::resources::list_trash,
+            commands::resources::verify_location
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
