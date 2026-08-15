@@ -1,6 +1,7 @@
 import { HashRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "../layouts/AppShell";
 import { FilePage } from "../features/files/routes/FilePage";
+import { TaskCenterPage } from "../features/tasks/components/TaskCenter";
 import { PlaceholderPage } from "./PlaceholderPage";
 
 export default function App() {
@@ -14,7 +15,7 @@ export default function App() {
           <Route path="/projects" element={<PlaceholderPage title="代码项目" />} />
           <Route path="/favorites" element={<PlaceholderPage title="收藏" />} />
           <Route path="/trash" element={<PlaceholderPage title="回收站" />} />
-          <Route path="/tasks" element={<PlaceholderPage title="任务中心" />} />
+          <Route path="/tasks" element={<TaskCenterPage />} />
           <Route path="/settings" element={<PlaceholderPage title="设置" />} />
           <Route path="/search" element={<PlaceholderPage title="搜索" />} />
         </Route>

@@ -819,3 +819,222 @@ input {
   gap: 8px;
 }
 
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-head h3 {
+  font-size: 15px;
+}
+
+/* ===== 拖拽导入 ===== */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  border: 2px dashed var(--primary);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.drop-overlay-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 56px;
+  background: var(--surface);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-md);
+  color: var(--primary-text);
+  font-weight: 550;
+}
+
+.import-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.import-mode {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  text-align: left;
+  transition: border-color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease);
+}
+
+.import-mode > svg {
+  grid-row: 1 / 3;
+  color: var(--text-tertiary);
+}
+
+.import-mode:hover {
+  background: var(--surface-hover);
+}
+
+.import-mode.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.import-mode.active > svg {
+  color: var(--primary);
+}
+
+.import-mode-name {
+  font-weight: 550;
+  font-size: 13.5px;
+}
+
+.import-mode-desc {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* ===== 任务中心 ===== */
+.task-center {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.task-center h2 {
+  margin: 0 0 16px;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 720px;
+}
+
+.task-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  padding: 14px 16px;
+}
+
+.task-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.task-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 550;
+  font-size: 13.5px;
+}
+
+.task-status-completed {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.task-status-failed {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.task-status-cancelled {
+  background: var(--surface-hover);
+  color: var(--text-tertiary);
+}
+
+.task-status-running,
+.task-status-queued {
+  background: var(--primary-soft);
+  color: var(--primary-text);
+}
+
+.task-progress {
+  height: 4px;
+  background: var(--bg);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.task-progress-bar {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 2px;
+  transition: width var(--dur-normal) var(--ease);
+}
+
+.task-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+/* ===== 底部任务条 ===== */
+.task-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.task-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.task-bar-title {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-bar-count {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===== 任务中心空态 ===== */
+.task-center .empty-state {
+  height: 300px;
+}
+

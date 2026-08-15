@@ -13,6 +13,7 @@ import { useFileStore } from "../stores/fileStore";
 import { FileTable } from "../components/FileTable";
 import { FileGrid } from "../components/FileGrid";
 import { DetailPanel } from "../../../components/DetailPanel";
+import { ImportDropzone } from "../../tasks/components/ImportDropzone";
 import type { Resource } from "../../../lib/types";
 
 export function FilePage() {
@@ -246,6 +247,7 @@ export function FilePage() {
 
       {/* 右侧详情栏 */}
       <DetailPanel resourceId={selectedId ?? (selection.size === 1 ? [...selection][0] : null)} />
+      <ImportDropzone />
     </div>
   );
 }

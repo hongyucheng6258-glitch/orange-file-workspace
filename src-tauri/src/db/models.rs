@@ -1,6 +1,11 @@
 use rusqlite::{params, Connection, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 
+/// 生成新的 UUID v4 字符串 ID。
+pub fn new_id() -> String {
+    uuid::Uuid::new_v4().to_string()
+}
+
 /// 资源类型。页面与项目也统一为资源，支持统一收藏、回收站和关联。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

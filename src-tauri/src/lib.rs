@@ -65,7 +65,10 @@ pub fn run() {
             commands::resources::trash_resources,
             commands::resources::restore_resource,
             commands::resources::list_trash,
-            commands::resources::verify_location
+            commands::resources::verify_location,
+            commands::import::import_paths,
+            commands::import::cancel_task,
+            commands::import::list_tasks
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
