@@ -1,0 +1,209 @@
+import { useState } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  File as FileIcon,
+  Folder,
+  Image as ImageIcon,
+  FileText,
+  FileCode2,
+  FileArchive,
+  Film,
+  Music,
+  MoreHorizontal,
+  Star,
+  StarOff,
+  Trash2,
+  Pencil,
+  FolderInput,
+} from "lucide-react";
+import { useFileStore } from "../stores/fileStore";
+import type { Resource } from "../../../lib/types";
+import { fileTypeName, formatSize, formatTime } from "../../../lib/tauri";
+
+interface FileTableProps {
+  onOpen: (r: Resource) => void;
+  onSelect: (r: Resource | null) => void;
+  onRename: (r: Resource) => void;
+  onTrash: (rs: Resource[]) => void;
+}
+
+function kindIcon(r: Resource) {
+  if (r.kind === "folder") return <Folder size={16} color="var(--folder)" />;
+  const name = r.name.toLowerCase();
+  if (/\.(png|jpe?g|gif|webp|svg|bmp|ico)$/.test(name))
+    return <ImageIcon size={16} color="var(--image)" />;
+  if (/\.(mp4|webm|mov|avi|mkv)$/.test(name))
+    return <Film size={16} color="var(--video)" />;
+  if (/\.(mp3|wav|ogg|flac|m4a)$/.test(name))
+    return <Music size={16} color="var(--audio)" />;
+  if (/\.(zip|rar|7z|tar|gz)$/.test(name))
+    return <FileArchive size={16} color="var(--archive)" />;
+  if (/\.(rs|py|js|ts|tsx|jsx|go|java|c|h|cpp|cs|rb|php|json|xml|toml|yaml|yml|sh|sql|md)$/.test(name))
+    return <FileCode2 size={16} color="var(--code)" />;
+  if (/\.(txt|md|log|docx|pdf|csv)$/.test(name))
+    return <FileText size={16} color="var(--file)" />;
+  return <FileIcon size={16} color="var(--file)" />;
+}
+
+export function FileTable({ onOpen, onSelect, onRename, onTrash }: FileTableProps) {
+  const { resources, selection, toggleSelect, clearSelection, selectMany, sortKey, sortAsc, setSort } =
+    useFileStore();
+  const [menu, setMenu] = useState<{ x: number; y: number; resource: Resource } | null>(null);
+
+  const onRowClick = (r: Resource, e: React.MouseEvent) => {
+    if (e.shiftKey && selection.size > 0) {
+      const idx = resources.findIndex((x) => x.id === r.id);
+      const firstIdx = resources.findIndex((x) => selection.has(x.id));
+      if (idx >= 0 && firstIdx >= 0) {
+        const [lo, hi] = [Math.min(idx, firstIdx), Math.max(idx, firstIdx)];
+        selectMany(resources.slice(lo, hi + 1).map((x) => x.id));
+        return;
+      }
+    }
+    if (e.ctrlKey || e.metaKey) {
+      toggleSelect(r.id);
+    } else {
+      clearSelection();
+      toggleSelect(r.id);
+    }
+    onSelect(r);
+  };
+
+  const onDoubleClick = (r: Resource) => {
+    if (r.kind === "folder") onOpen(r);
+  };
+
+  const onContext = (e: React.MouseEvent, r: Resource) => {
+    e.preventDefault();
+    if (!selection.has(r.id)) {
+      clearSelection();
+      toggleSelect(r.id);
+      onSelect(r);
+    }
+    setMenu({ x: e.clientX, y: e.clientY, resource: r });
+  };
+
+  const sortHeader = (key: "name" | "kind" | "updated_at", label: string) => (
+    <button
+      className="th-btn"
+      onClick={() => setSort(key)}
+      title={`按${label}排序`}
+    >
+      {label}
+      {sortKey === key &&
+        (sortAsc ? (
+          <ChevronDown size={12} strokeWidth={2.5} />
+        ) : (
+          <ChevronRight size={12} strokeWidth={2.5} className="sort-rotated" />
+        ))}
+    </button>
+  );
+
+  return (
+    <div className="file-table-wrap">
+      <div className="file-table" role="grid">
+        <div className="file-table-head" role="row">
+          <span className="col-name">{sortHeader("name", "名称")}</span>
+          <span className="col-kind">{sortHeader("kind", "类型")}</span>
+          <span className="col-size">大小</span>
+          <span className="col-time">{sortHeader("updated_at", "修改时间")}</span>
+          <span className="col-actions" />
+        </div>
+        <div className="file-table-body" role="rowgroup">
+          {resources.map((r) => {
+            const selected = selection.has(r.id);
+            return (
+              <div
+                key={r.id}
+                role="row"
+                className={`file-row ${selected ? "selected" : ""}`}
+                onClick={(e) => onRowClick(r, e)}
+                onDoubleClick={() => onDoubleClick(r)}
+                onContextMenu={(e) => onContext(e, r)}
+              >
+                <span className="col-name">
+                  <span className="row-icon">{kindIcon(r)}</span>
+                  <span className="row-name" title={r.name}>
+                    {r.name}
+                  </span>
+                </span>
+                <span className="col-kind">
+                  {r.kind === "folder" ? "文件夹" : fileTypeName(r.name)}
+                </span>
+                <span className="col-size">
+                  {r.kind === "folder" ? "-" : formatSize(undefined)}
+                </span>
+                <span className="col-time">{formatTime(r.updated_at)}</span>
+                <span className="col-actions">
+                  <button
+                    className="icon-btn"
+                    title={r.is_favorite ? "取消收藏" : "收藏"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
+                    {r.is_favorite ? (
+                      <Star size={14} color="var(--warning)" />
+                    ) : (
+                      <StarOff size={14} />
+                    )}
+                  </button>
+                  <button
+                    className="icon-btn"
+                    title="更多"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      setMenu({ x: rect.left - 160, y: rect.bottom + 4, resource: r });
+                    }}
+                  >
+                    <MoreHorizontal size={15} />
+                  </button>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {menu && (
+        <div
+          className="context-menu"
+          style={{ left: menu.x, top: menu.y }}
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <button
+            className="menu-item"
+            onClick={() => {
+              onOpen(menu.resource);
+              setMenu(null);
+            }}
+          >
+            <FolderInput size={14} /> 打开
+          </button>
+          <button
+            className="menu-item"
+            onClick={() => {
+              onRename(menu.resource);
+              setMenu(null);
+            }}
+          >
+            <Pencil size={14} /> 重命名
+          </button>
+          <div className="menu-sep" />
+          <button
+            className="menu-item danger"
+            onClick={() => {
+              onTrash([menu.resource]);
+              setMenu(null);
+            }}
+          >
+            <Trash2 size={14} /> 移入回收站
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

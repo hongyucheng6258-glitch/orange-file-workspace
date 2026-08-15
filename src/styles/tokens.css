@@ -1,0 +1,93 @@
+/* NexusFile 设计令牌 - 浅色简约科技风 */
+:root {
+  /* 颜色 */
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-hover: #f2f4f7;
+  --surface-active: #e8ecf3;
+  --border: #e2e6ec;
+  --border-strong: #c9d1dc;
+
+  --text: #16202e;
+  --text-secondary: #5c6b7f;
+  --text-tertiary: #8b98a9;
+  --text-inverse: #ffffff;
+
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-soft: #eff6ff;
+  --primary-border: #bfdbfe;
+  --primary-text: #1e3a8a;
+
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
+  --warning: #d97706;
+  --warning-soft: #fffbeb;
+  --success: #16a34a;
+  --success-soft: #f0fdf4;
+
+  --folder: #2563eb;
+  --file: #8b98a9;
+  --image: #0ea5e9;
+  --video: #8b5cf6;
+  --audio: #f59e0b;
+  --archive: #d97706;
+  --code: #0d9488;
+
+  /* 布局 */
+  --radius-s: 6px;
+  --radius-m: 8px;
+  --radius-l: 12px;
+  --shadow-xs: 0 1px 2px rgba(22, 32, 46, 0.04);
+  --shadow-sm: 0 1px 3px rgba(22, 32, 46, 0.06), 0 1px 2px rgba(22, 32, 46, 0.04);
+  --shadow-md: 0 4px 12px rgba(22, 32, 46, 0.08);
+
+  /* 尺寸 */
+  --sidebar-w: 216px;
+  --topbar-h: 52px;
+  --detail-w: 320px;
+  --spacing-xs: 4px;
+  --spacing-s: 8px;
+  --spacing-m: 12px;
+  --spacing-l: 16px;
+  --spacing-xl: 24px;
+
+  /* 字体 */
+  --font-sans: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI",
+    "PingFang SC", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+
+  /* 动效 */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 120ms;
+  --dur-normal: 200ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #10151d;
+    --surface: #171d27;
+    --surface-hover: #1e2632;
+    --surface-active: #253042;
+    --border: #2a3442;
+    --border-strong: #3b4759;
+
+    --text: #e6ebf2;
+    --text-secondary: #9aa7b8;
+    --text-tertiary: #6b7889;
+    --text-inverse: #ffffff;
+
+    --primary: #3b82f6;
+    --primary-hover: #60a5fa;
+    --primary-soft: #17243f;
+    --primary-border: #2b3a5c;
+    --primary-text: #bfdbfe;
+
+    --danger: #f87171;
+    --danger-soft: #3a1f24;
+    --warning: #fbbf24;
+    --warning-soft: #3a2f1a;
+    --success: #4ade80;
+    --success-soft: #17301f;
+  }
+}
