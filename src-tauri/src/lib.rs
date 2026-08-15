@@ -44,6 +44,7 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
+            std::fs::create_dir_all(data_dir.join("thumbnails"))?;
             let db_path = data_dir.join("workspace.db");
             let conn = open(&db_path)?;
             let mut conn = conn;
@@ -52,6 +53,7 @@ pub fn run() {
                 data_dir,
                 conn: Mutex::new(conn),
             });
+            services::watcher_service::start_managed_watcher(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -68,7 +70,10 @@ pub fn run() {
             commands::resources::verify_location,
             commands::import::import_paths,
             commands::import::cancel_task,
-            commands::import::list_tasks
+            commands::import::list_tasks,
+            commands::previews::get_thumbnail,
+            commands::previews::get_text_preview,
+            commands::previews::hash_resources
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

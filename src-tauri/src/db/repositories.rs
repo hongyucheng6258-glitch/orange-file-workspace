@@ -284,3 +284,69 @@ pub fn get_file_metadata(
     )
     .optional()
 }
+
+/// 查询缩略图缓存路径。
+pub fn get_thumbnail_path(
+    conn: &Connection,
+    resource_id: &str,
+) -> SqliteResult<Option<String>> {
+    conn.query_row(
+        "SELECT cache_path FROM thumbnails WHERE resource_id = ?1",
+        [resource_id],
+        |row| row.get(0),
+    )
+    .optional()
+}
+
+/// 插入或更新缩略图记录。
+pub fn upsert_thumbnail(
+    conn: &Connection,
+    resource_id: &str,
+    cache_path: &str,
+    width: i64,
+    height: i64,
+    source_hash: Option<&str>,
+    now: i64,
+) -> SqliteResult<()> {
+    conn.execute(
+        "INSERT INTO thumbnails (resource_id, cache_path, width, height, source_hash, generated_at, status)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'ready')
+         ON CONFLICT(resource_id) DO UPDATE SET
+            cache_path = excluded.cache_path,
+            width = excluded.width,
+            height = excluded.height,
+            source_hash = excluded.source_hash,
+            generated_at = excluded.generated_at,
+            status = 'ready'",
+        params![resource_id, cache_path, width, height, source_hash, now],
+    )?;
+    Ok(())
+}
+
+/// 更新文件位置的内容哈希。
+pub fn update_location_hash(
+    conn: &Connection,
+    location_id: &str,
+    content_hash: &str,
+    algorithm: &str,
+) -> SqliteResult<()> {
+    conn.execute(
+        "UPDATE resource_locations SET content_hash = ?2, hash_algorithm = ?3 WHERE id = ?1",
+        params![location_id, content_hash, algorithm],
+    )?;
+    Ok(())
+}
+
+/// 更新文件位置的尺寸/时间信息（外部变化后同步）。
+pub fn update_location_stat(
+    conn: &Connection,
+    location_id: &str,
+    file_size: i64,
+    modified_at: Option<i64>,
+) -> SqliteResult<()> {
+    conn.execute(
+        "UPDATE resource_locations SET file_size = ?2, modified_at = ?3 WHERE id = ?1",
+        params![location_id, file_size, modified_at],
+    )?;
+    Ok(())
+}

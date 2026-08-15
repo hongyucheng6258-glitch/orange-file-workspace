@@ -11,6 +11,7 @@ import {
 import { useFileStore } from "../stores/fileStore";
 import type { Resource } from "../../../lib/types";
 import { formatTime } from "../../../lib/tauri";
+import { Thumbnail } from "../../../components/Thumbnail";
 
 interface FileGridProps {
   onOpen: (r: Resource) => void;
@@ -57,7 +58,15 @@ export function FileGrid({ onOpen, onSelect }: FileGridProps) {
           onClick={(e) => onClick(r, e)}
           onDoubleClick={() => r.kind === "folder" && onOpen(r)}
         >
-          <div className="grid-thumb">{gridThumb(r)}</div>
+          <div className="grid-thumb">
+            {r.kind === "folder" ? (
+              <Folder size={28} color="var(--folder)" />
+            ) : /\.(png|jpe?g|gif|webp|bmp)$/i.test(r.name) ? (
+              <Thumbnail resourceId={r.id} name={r.name} size={52} />
+            ) : (
+              gridThumb(r)
+            )}
+          </div>
           <div className="grid-name" title={r.name}>
             {r.name}
           </div>

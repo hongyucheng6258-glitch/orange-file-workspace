@@ -15,6 +15,7 @@ import {
 import { fetchResourceDetail } from "../features/files/stores/fileStore";
 import type { ResourceDetail } from "../lib/types";
 import { fileTypeName, formatSize, formatTime } from "../lib/tauri";
+import { Thumbnail } from "./Thumbnail";
 
 function typeIcon(kind: string, name: string) {
   if (kind === "folder") return <Folder size={36} color="var(--folder)" />;
@@ -72,7 +73,11 @@ export function DetailPanel({ resourceId }: { resourceId: string | null }) {
           </div>
 
           <div className="detail-preview">
-            {typeIcon(detail.resource.kind, detail.resource.name)}
+            {/\.(png|jpe?g|gif|webp|bmp)$/i.test(detail.resource.name) ? (
+              <Thumbnail resourceId={detail.resource.id} name={detail.resource.name} size={120} />
+            ) : (
+              typeIcon(detail.resource.kind, detail.resource.name)
+            )}
             <span className="detail-preview-name">{detail.resource.name}</span>
             <span className="detail-preview-type">
               {detail.resource.kind === "folder"

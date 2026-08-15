@@ -26,4 +26,8 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 tauri-plugin-dialog = "2.7.2"
 tauri-plugin-fs = "2.5.1"
 uuid = { version = "1.24.1", features = ["v4"] }
+notify = "8.2.0"
+sha2 = "0.11.0"
+hex = "0.4.3"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 

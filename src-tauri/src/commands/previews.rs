@@ -1,0 +1,96 @@
+use std::path::PathBuf;
+
+use tauri::State;
+
+use crate::AppState;
+use crate::db::connection::now_unix;
+use crate::db::repositories as repo;
+use crate::error::AppError;
+use crate::ipc::CommandResult;
+use crate::services::hash_service;
+use crate::services::preview_service;
+use crate::services::thumbnail_service;
+
+fn lock_db<'a>(state: &'a AppState) -> std::sync::MutexGuard<'a, rusqlite::Connection> {
+    state.conn.lock().expect("db lock poisoned")
+}
+
+/// 获取资源的缩略图缓存路径（不存在时按需生成）。
+/// 非图片或路径失效返回 None。
+#[tauri::command]
+pub fn get_thumbnail(
+    state: State<AppState>,
+    resource_id: String,
+) -> CommandResult<Option<String>> {
+    let conn = lock_db(&state);
+    let locations = repo::list_locations(&conn, &resource_id)?;
+    let Some(loc) = locations.first() else {
+        return Ok(None);
+    };
+
+    let path = PathBuf::from(&loc.path);
+    if !thumbnail_service::is_image(&path) || !path.exists() {
+        return Ok(None);
+    }
+
+    // 命中缓存
+    if let Some(cached) = repo::get_thumbnail_path(&conn, &resource_id)? {
+        if PathBuf::from(&cached).exists() {
+            return Ok(Some(cached));
+        }
+    }
+
+    // 生成缩略图
+    let cache_dir = state.data_dir.join("thumbnails");
+    std::fs::create_dir_all(&cache_dir)?;
+    let (dest, w, h) = thumbnail_service::generate_thumbnail(&path, &cache_dir)?;
+    let dest_str = dest.to_string_lossy().to_string();
+    repo::upsert_thumbnail(
+        &conn,
+        &resource_id,
+        &dest_str,
+        w as i64,
+        h as i64,
+        loc.content_hash.as_deref(),
+        now_unix(),
+    )?;
+    Ok(Some(dest_str))
+}
+
+/// 读取文本文件的预览内容（最多 256KB）。
+#[tauri::command]
+pub fn get_text_preview(
+    state: State<AppState>,
+    resource_id: String,
+) -> CommandResult<String> {
+    let conn = lock_db(&state);
+    let locations = repo::list_locations(&conn, &resource_id)?;
+    let Some(loc) = locations.first() else {
+        return Err(AppError::new("location_missing", "资源缺少物理位置"));
+    };
+    let path = PathBuf::from(&loc.path);
+    if !path.exists() {
+        return Err(AppError::new("path_missing", "文件路径不可用"));
+    }
+    Ok(preview_service::read_text_preview(&path)?)
+}
+
+/// 为指定资源计算并保存内容哈希。
+#[tauri::command]
+pub fn hash_resources(state: State<AppState>, ids: Vec<String>) -> CommandResult<usize> {
+    let conn = lock_db(&state);
+    let mut hashed = 0;
+    for id in &ids {
+        let locations = repo::list_locations(&conn, id)?;
+        if let Some(loc) = locations.first() {
+            let path = PathBuf::from(&loc.path);
+            if path.exists() && path.is_file() {
+                if let Ok(h) = hash_service::sha256_file(&path) {
+                    repo::update_location_hash(&conn, &loc.id, &h, "sha256")?;
+                    hashed += 1;
+                }
+            }
+        }
+    }
+    Ok(hashed)
+}

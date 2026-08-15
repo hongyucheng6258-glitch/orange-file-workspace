@@ -65,3 +65,9 @@ impl From<tauri::Error> for AppError {
         Self::new("tauri_error", e.to_string())
     }
 }
+
+impl From<image::ImageError> for AppError {
+    fn from(e: image::ImageError) -> Self {
+        Self::new("image_error", e.to_string())
+    }
+}
