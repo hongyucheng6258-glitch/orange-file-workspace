@@ -1,0 +1,98 @@
+use std::sync::MutexGuard;
+
+use tauri::State;
+
+use crate::AppState;
+use crate::error::AppError;
+use crate::ipc::CommandResult;
+use crate::services::editor_service;
+use crate::services::file_service;
+
+fn lock_db<'a>(state: &'a AppState) -> MutexGuard<'a, rusqlite::Connection> {
+    state.conn.lock().expect("db lock poisoned")
+}
+
+/// 打开代码文件：读取内容并建立编辑会话。
+#[tauri::command]
+pub fn open_file(
+    state: State<AppState>,
+    resource_id: String,
+) -> CommandResult<serde_json::Value> {
+    let conn = lock_db(&state);
+    let resource = crate::db::repositories::get_resource(&conn, &resource_id)?.ok_or_else(|| {
+        AppError::new("not_found", format!("资源 {resource_id} 不存在"))
+    })?;
+    let locations = crate::db::repositories::list_locations(&conn, &resource_id)?;
+    let Some(loc) = locations.first() else {
+        return Err(AppError::new("location_missing", "资源缺少物理位置"));
+    };
+    let path = std::path::PathBuf::from(&loc.path);
+    if !path.is_file() {
+        return Err(AppError::new("not_file", "该资源不是文件"));
+    }
+
+    let (content, session) = editor_service::open_session(&conn, &resource_id, &path)?;
+    Ok(serde_json::json!({
+        "resource": resource,
+        "content": content,
+        "session": session,
+        "path": loc.path,
+    }))
+}
+
+/// 保存文件。磁盘指纹未变化则写回，变化时返回 conflict。
+#[tauri::command]
+pub fn save_file(
+    state: State<AppState>,
+    resource_id: String,
+    content: String,
+) -> CommandResult<serde_json::Value> {
+    save_impl(&state, &resource_id, &content, false)
+}
+
+/// 强制覆盖保存（用户确认冲突后）。
+#[tauri::command]
+pub fn save_file_force(
+    state: State<AppState>,
+    resource_id: String,
+    content: String,
+) -> CommandResult<serde_json::Value> {
+    save_impl(&state, &resource_id, &content, true)
+}
+
+fn save_impl(
+    state: &AppState,
+    resource_id: &str,
+    content: &str,
+    force: bool,
+) -> CommandResult<serde_json::Value> {
+    let conn = lock_db(state);
+    let locations = crate::db::repositories::list_locations(&conn, resource_id)?;
+    let Some(loc) = locations.first() else {
+        return Err(AppError::new("location_missing", "资源缺少物理位置"));
+    };
+    let path = std::path::PathBuf::from(&loc.path);
+
+    match editor_service::save_session(&conn, resource_id, &path, content, force)? {
+        editor_service::SaveOutcome::Saved => {
+            let (size, modified) = file_service::stat_basic(&path)?;
+            crate::db::repositories::update_location_stat(&conn, &loc.id, size, modified)?;
+            Ok(serde_json::json!({ "status": "saved" }))
+        }
+        editor_service::SaveOutcome::Conflict { message, current_size } => {
+            Ok(serde_json::json!({
+                "status": "conflict",
+                "message": message,
+                "current_size": current_size,
+            }))
+        }
+    }
+}
+
+/// 放弃当前编辑会话（丢弃未保存内容）。
+#[tauri::command]
+pub fn discard_session(state: State<AppState>, resource_id: String) -> CommandResult<()> {
+    let conn = lock_db(&state);
+    editor_service::discard_session(&conn, &resource_id)?;
+    Ok(())
+}

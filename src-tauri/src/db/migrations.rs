@@ -11,11 +11,18 @@ pub struct Migration {
     pub sql: &'static str,
 }
 
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial",
-    sql: include_str!("../../migrations/0001_initial.sql"),
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial",
+        sql: include_str!("../../migrations/0001_initial.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "editor_sessions_unique",
+        sql: include_str!("../../migrations/0002_editor_sessions_unique.sql"),
+    },
+];
 
 /// 应用所有未执行的迁移。每个迁移在独立事务中执行，失败即回滚。
 pub fn run_migrations(conn: &mut Connection) -> Result<(), AppError> {
@@ -68,7 +75,7 @@ mod tests {
         let version: i64 = conn
             .query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get(0))
             .expect("max version");
-        assert_eq!(version, 1);
+        assert_eq!(version, MIGRATIONS.last().expect("migrations").version);
     }
 
     #[test]

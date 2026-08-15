@@ -1256,3 +1256,174 @@ input {
   line-height: 1.6;
 }
 
+/* ===== 代码项目 ===== */
+.project-page {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.project-list {
+  width: 220px;
+  flex: 0 0 auto;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+}
+
+.project-list-head,
+.project-tree-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.project-list-body,
+.project-tree-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.project-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-m);
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+.project-item:hover {
+  background: var(--surface-hover);
+}
+
+.project-item.active {
+  background: var(--primary-soft);
+  color: var(--primary-text);
+  font-weight: 550;
+}
+
+.project-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-tree {
+  width: 260px;
+  flex: 0 0 auto;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+}
+
+.project-editor {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.tree-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--radius-s);
+  font-size: 12.5px;
+  color: var(--text);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tree-node:hover {
+  background: var(--surface-hover);
+}
+
+.tree-node.file {
+  color: var(--text-secondary);
+}
+
+.tree-arrow {
+  color: var(--text-tertiary);
+  flex: 0 0 auto;
+}
+
+.tree-file-icon {
+  color: var(--text-tertiary);
+  flex: 0 0 auto;
+}
+
+.tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.code-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.editor-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex: 0 0 auto;
+}
+
+.tab-file {
+  font-size: 13px;
+  font-weight: 550;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dirty-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+  flex: 0 0 auto;
+}
+
+.tab-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.code-mirror-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.code-mirror-wrap .cm-editor {
+  height: 100%;
+  font-size: 13px;
+}
+
+.code-mirror-wrap .cm-scroller {
+  font-family: var(--font-mono);
+}
+

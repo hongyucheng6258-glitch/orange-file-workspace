@@ -79,7 +79,15 @@ pub fn run() {
             commands::pages::save_page_blocks,
             commands::pages::list_pages,
             commands::pages::rename_page,
-            commands::pages::delete_page
+            commands::pages::delete_page,
+            commands::projects::import_project,
+            commands::projects::list_projects,
+            commands::projects::get_project,
+            commands::projects::list_project_files,
+            commands::editor::open_file,
+            commands::editor::save_file,
+            commands::editor::save_file_force,
+            commands::editor::discard_session
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
