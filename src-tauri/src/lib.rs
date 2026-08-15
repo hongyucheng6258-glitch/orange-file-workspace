@@ -73,7 +73,13 @@ pub fn run() {
             commands::import::list_tasks,
             commands::previews::get_thumbnail,
             commands::previews::get_text_preview,
-            commands::previews::hash_resources
+            commands::previews::hash_resources,
+            commands::pages::create_page,
+            commands::pages::get_page,
+            commands::pages::save_page_blocks,
+            commands::pages::list_pages,
+            commands::pages::rename_page,
+            commands::pages::delete_page
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
