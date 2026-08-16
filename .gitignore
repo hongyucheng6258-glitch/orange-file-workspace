@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# 包管理器：仅使用 npm，忽略其他生态的锁文件
+bun.lock
+bun.lockb
+pnpm-lock.yaml
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
