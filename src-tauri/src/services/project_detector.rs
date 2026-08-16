@@ -415,7 +415,7 @@ fn resolve_maven(fs: &dyn ProjectFs, root: &Path) -> Option<PathBuf> {
         let bin = PathBuf::from(home).join("bin");
         for name in ["mvn.cmd", "mvn.bat", "mvn.exe", "mvn"] {
             let p = bin.join(name);
-            if p.is_file() {
+            if fs.is_file(&p) {
                 return Some(p);
             }
         }
@@ -427,7 +427,7 @@ fn resolve_maven(fs: &dyn ProjectFs, root: &Path) -> Option<PathBuf> {
 fn resolve_java(fs: &dyn ProjectFs) -> Option<PathBuf> {
     if let Some(home) = fs.env_var("JAVA_HOME") {
         let p = PathBuf::from(home).join("bin").join("java.exe");
-        if p.is_file() {
+        if fs.is_file(&p) {
             return Some(p);
         }
     }
@@ -504,7 +504,7 @@ fn detect_java(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) {
         let gradle = fs.resolve_on_path("gradle").or_else(|| {
             fs.env_var("GRADLE_HOME")
                 .map(|home| PathBuf::from(home).join("bin").join("gradle"))
-                .filter(|p| p.is_file())
+                .filter(|p| fs.is_file(p))
         });
         if let Some(gradle) = gradle {
             if has_boot {
