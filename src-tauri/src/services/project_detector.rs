@@ -27,6 +27,9 @@ pub struct RuntimeCandidate {
     pub args: Vec<String>,
     /// 0-100，用于前端排序推荐。
     pub confidence: u8,
+    /// 相对项目根的工作目录（None = 项目根）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
 }
 
 /// 识别结果。
@@ -45,11 +48,24 @@ impl DetectionResult {
         args: Vec<String>,
         confidence: u8,
     ) {
+        self.push_candidate_in(label, executable, args, confidence, None);
+    }
+
+    /// 指定子目录工作目录的候选（子项目探测使用）。
+    fn push_candidate_in(
+        &mut self,
+        label: impl Into<String>,
+        executable: impl Into<String>,
+        args: Vec<String>,
+        confidence: u8,
+        cwd: Option<String>,
+    ) {
         self.candidates.push(RuntimeCandidate {
             label: label.into(),
             executable: executable.into(),
             args,
             confidence,
+            cwd,
         });
     }
 
@@ -67,6 +83,8 @@ pub trait ProjectFs: Send + Sync {
     fn cargo_metadata_json(&self, root: &Path) -> Option<String>;
     /// 在 PATH 中解析可执行文件。
     fn resolve_on_path(&self, name: &str) -> Option<PathBuf>;
+    /// 列出根目录直接子目录（1 层，不递归；噪音目录由调用方过滤）。
+    fn list_child_dirs(&self, root: &Path) -> Vec<PathBuf>;
 }
 
 /// 磁盘生产实现。
@@ -125,6 +143,19 @@ impl ProjectFs for DiskProjectFs {
             }
         }
         None
+    }
+
+    fn list_child_dirs(&self, root: &Path) -> Vec<PathBuf> {
+        let Ok(entries) = std::fs::read_dir(root) else {
+            return Vec::new();
+        };
+        let mut dirs: Vec<PathBuf> = entries
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .collect();
+        dirs.sort();
+        dirs
     }
 }
 
@@ -420,11 +451,8 @@ fn detect_docker(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) 
     }
 }
 
-/// 主入口：检测项目根目录下的运行时并生成候选命令。
-pub fn detect(fs: &dyn ProjectFs, root: &Path) -> DetectionResult {
-    let root = normalize_lexical(root);
-    let mut result = DetectionResult::default();
-
+/// 识别根目录直接配置文件；返回是否识别到任何支持的 marker。
+fn detect_into(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) -> bool {
     let mut kinds: Vec<RuntimeKind> = Vec::new();
     if fs.exists(&root.join("package.json")) {
         kinds.push(RuntimeKind::Node);
@@ -432,7 +460,7 @@ pub fn detect(fs: &dyn ProjectFs, root: &Path) -> DetectionResult {
     if fs.exists(&root.join("Cargo.toml")) {
         kinds.push(RuntimeKind::Rust);
     }
-    if has_python_marker(fs, &root) {
+    if has_python_marker(fs, root) {
         kinds.push(RuntimeKind::Python);
     }
     if fs.exists(&root.join("pom.xml"))
@@ -455,24 +483,90 @@ pub fn detect(fs: &dyn ProjectFs, root: &Path) -> DetectionResult {
         kinds.push(RuntimeKind::Docker);
     }
     if kinds.is_empty() {
-        result.diagnostics.push(
-            "未识别到受支持的运行时配置文件（package.json / Cargo.toml / pyproject.toml / requirements.txt / Python 入口 / pom.xml / build.gradle / Makefile / Dockerfile）"
-                .to_string(),
-        );
-        return result;
+        return false;
     }
 
     result.runtime_kind = kinds.first().copied();
     for kind in kinds {
         match kind {
-            RuntimeKind::Node => detect_node(fs, &root, &mut result),
-            RuntimeKind::Rust => detect_rust(fs, &root, &mut result),
-            RuntimeKind::Python => detect_python(fs, &root, &mut result),
-            RuntimeKind::Java => detect_java(fs, &root, &mut result),
-            RuntimeKind::Makefile => detect_makefile(fs, &root, &mut result),
-            RuntimeKind::Docker => detect_docker(fs, &root, &mut result),
+            RuntimeKind::Node => detect_node(fs, root, result),
+            RuntimeKind::Rust => detect_rust(fs, root, result),
+            RuntimeKind::Python => detect_python(fs, root, result),
+            RuntimeKind::Java => detect_java(fs, root, result),
+            RuntimeKind::Makefile => detect_makefile(fs, root, result),
+            RuntimeKind::Docker => detect_docker(fs, root, result),
         }
     }
+    true
+}
+
+/// 子项目探测跳过的一层噪音目录。
+const SKIP_SUBDIR_NAMES: &[&str] = &[
+    "node_modules",
+    ".git",
+    "target",
+    ".venv",
+    "dist",
+    "build",
+    "__pycache__",
+    ".idea",
+    ".vscode",
+];
+
+/// 仅当根目录没有直接配置文件时，扫描一层子目录识别子项目（backend/frontend 等）。
+/// 不递归更深层；候选工作目录设为对应子目录。
+fn detect_subprojects(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) {
+    let mut found = 0usize;
+    for dir in fs.list_child_dirs(root) {
+        let Some(name) = dir.file_name().map(|n| n.to_string_lossy().to_string()) else {
+            continue;
+        };
+        if SKIP_SUBDIR_NAMES.contains(&name.as_str()) {
+            continue;
+        }
+        let mut sub = DetectionResult::default();
+        if !detect_into(fs, &dir, &mut sub) {
+            continue;
+        }
+        found += 1;
+        if result.runtime_kind.is_none() {
+            result.runtime_kind = sub.runtime_kind;
+        }
+        for cand in sub.candidates {
+            let label = format!("{name}: {}", cand.label);
+            result.push_candidate_in(
+                label,
+                cand.executable,
+                cand.args,
+                cand.confidence,
+                Some(name.clone()),
+            );
+        }
+        for d in sub.diagnostics {
+            result.push_diag(format!("{name}: {d}"));
+        }
+    }
+    if found == 0 {
+        result.push_diag(
+            "未识别到受支持的运行时配置文件（package.json / Cargo.toml / pyproject.toml / requirements.txt / Python 入口 / pom.xml / build.gradle / Makefile / Dockerfile），子目录中也未发现受支持的项目"
+                .to_string(),
+        );
+    } else {
+        result.push_diag(format!(
+            "在子目录中发现 {found} 个可运行项目，候选的工作目录已设为对应子目录"
+        ));
+    }
+}
+
+/// 主入口：检测项目根目录下的运行时并生成候选命令。
+pub fn detect(fs: &dyn ProjectFs, root: &Path) -> DetectionResult {
+    let root = normalize_lexical(root);
+    let mut result = DetectionResult::default();
+    if detect_into(fs, &root, &mut result) {
+        return result;
+    }
+    // 根目录无直接配置：一层子目录探测（backend / frontend 等分离结构）。
+    detect_subprojects(fs, &root, &mut result);
     result
 }
 
@@ -550,6 +644,17 @@ mod tests {
                 .iter()
                 .find(|p| p.as_str() == name)
                 .map(|_| PathBuf::from(format!("C:\\tools\\{name}.exe")))
+        }
+
+        fn list_child_dirs(&self, root: &Path) -> Vec<PathBuf> {
+            let mut out: Vec<PathBuf> = self
+                .dirs
+                .iter()
+                .filter(|d| d.parent().map(|p| p == root).unwrap_or(false))
+                .cloned()
+                .collect();
+            out.sort();
+            out
         }
     }
 
@@ -882,5 +987,148 @@ cli = "demo.cli:main"
         let r = detect(&fs, &root());
         assert_eq!(r.runtime_kind, Some(RuntimeKind::Node));
         assert!(r.candidates.iter().any(|c| c.label.contains("npm run dev")));
+    }
+
+    // ---- 子项目探测 ----
+
+    #[test]
+    fn subproject_spring_backend_and_vue_frontend() {
+        let fs = FakeFs::new()
+            .dir(root().join("backend"))
+            .file(
+                root().join("backend").join("pom.xml"),
+                "<project><build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>",
+            )
+            .path_exe("mvn")
+            .dir(root().join("frontend"))
+            .file(
+                root().join("frontend").join("package.json"),
+                node_pkg(r#"{"dev":"vite"}"#),
+            )
+            .path_exe("npm");
+        let r = detect(&fs, &root());
+        assert_eq!(r.runtime_kind, Some(RuntimeKind::Java));
+        let labels: Vec<&str> = r.candidates.iter().map(|c| c.label.as_str()).collect();
+        assert!(
+            labels.contains(&"backend: mvn spring-boot:run"),
+            "实际: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"frontend: npm run dev"),
+            "实际: {labels:?}"
+        );
+        let backend = r
+            .candidates
+            .iter()
+            .find(|c| c.label == "backend: mvn spring-boot:run")
+            .unwrap();
+        assert_eq!(backend.cwd.as_deref(), Some("backend"));
+        let frontend = r
+            .candidates
+            .iter()
+            .find(|c| c.label == "frontend: npm run dev")
+            .unwrap();
+        assert_eq!(frontend.cwd.as_deref(), Some("frontend"));
+        assert!(r.diagnostics.iter().any(|d| d.contains("2 个可运行项目")));
+    }
+
+    #[test]
+    fn subproject_skips_noise_dirs() {
+        let fs = FakeFs::new()
+            .dir(root().join("node_modules"))
+            .file(
+                root().join("node_modules").join("package.json"),
+                node_pkg(r#"{"dev":"vite"}"#),
+            )
+            .dir(root().join("target"))
+            .file(root().join("target").join("Cargo.toml"), "[package]")
+            .dir(root().join(".git"))
+            .dir(root().join(".venv"))
+            .dir(root().join("build"))
+            .dir(root().join("dist"));
+        let r = detect(&fs, &root());
+        assert!(r.candidates.is_empty(), "噪音目录不应产生候选");
+        assert!(r.runtime_kind.is_none());
+        assert!(r.diagnostics.iter().any(|d| d.contains("子目录中也未发现")));
+    }
+
+    #[test]
+    fn root_config_skips_subproject_scan() {
+        let fs = FakeFs::new()
+            .file(root().join("package.json"), node_pkg(r#"{"dev":"vite"}"#))
+            .dir(root().join("backend"))
+            .file(
+                root().join("backend").join("pom.xml"),
+                "<project><build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>",
+            )
+            .path_exe("mvn");
+        let r = detect(&fs, &root());
+        assert_eq!(r.runtime_kind, Some(RuntimeKind::Node));
+        assert!(
+            r.candidates
+                .iter()
+                .all(|c| !c.label.starts_with("backend:")),
+            "根目录有配置时不应触发子项目探测"
+        );
+        assert!(r.candidates.iter().all(|c| c.cwd.is_none()));
+    }
+
+    #[test]
+    fn subproject_without_mvn_diag_is_prefixed() {
+        let fs = FakeFs::new()
+            .dir(root().join("backend"))
+            .file(root().join("backend").join("pom.xml"), "<project/>");
+        let r = detect(&fs, &root());
+        assert!(r.candidates.is_empty());
+        assert!(
+            r.diagnostics.iter().any(|d| d.starts_with("backend:")),
+            "子项目诊断应带子目录前缀"
+        );
+    }
+
+    #[test]
+    fn subproject_never_reads_source_files() {
+        let fs = FakeFs::new()
+            .dir(root().join("backend"))
+            .file(root().join("backend").join("pom.xml"), "<project/>")
+            .file(
+                root()
+                    .join("backend")
+                    .join("src")
+                    .join("main")
+                    .join("java")
+                    .join("App.java"),
+                "class App {}",
+            )
+            .dir(root().join("frontend"))
+            .file(
+                root().join("frontend").join("package.json"),
+                node_pkg(r#"{"dev":"vite"}"#),
+            )
+            .file(
+                root().join("frontend").join("src").join("App.vue"),
+                "<template/>",
+            );
+        let _ = detect(&fs, &root());
+        let reads = fs.read_log();
+        for p in &reads {
+            let rel = p.strip_prefix(&root()).unwrap();
+            let parts: Vec<String> = rel
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().to_string())
+                .collect();
+            if parts.first().map(|d| d.as_str()) == Some("backend") {
+                assert!(
+                    parts.iter().any(|c| c == "pom.xml"),
+                    "backend 只允许读取 pom.xml: {p:?}"
+                );
+            }
+            if parts.first().map(|d| d.as_str()) == Some("frontend") {
+                assert!(
+                    parts.iter().any(|c| c == "package.json"),
+                    "frontend 只允许读取 package.json: {p:?}"
+                );
+            }
+        }
     }
 }
