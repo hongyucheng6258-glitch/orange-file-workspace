@@ -19,6 +19,7 @@ const NAV = [
   { to: "/favorites", label: "收藏", icon: Star },
   { to: "/trash", label: "回收站", icon: Trash2 },
   { to: "/tasks", label: "任务中心", icon: ListTodo },
+  { to: "/runs", label: "运行中心", icon: Activity },
   { to: "/system", label: "电脑信息", icon: MonitorSmartphone },
   { to: "/settings", label: "设置", icon: Settings },
 ];
