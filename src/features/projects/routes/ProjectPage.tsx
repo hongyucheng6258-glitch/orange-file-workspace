@@ -9,6 +9,7 @@ import { useEditorStore } from "../stores/editorStore";
 import { useProjectRuntimeStore } from "../stores/projectRuntimeStore";
 import { CodeEditor } from "../components/CodeEditor";
 import { ProjectRuntimePanel } from "../components/ProjectRuntimePanel";
+import { ConfirmDialog } from "../../../components/ConfirmDialog";
 
 /** 文件树节点：懒加载子目录。 */
 function TreeNode({
@@ -97,7 +98,10 @@ export function ProjectPage() {
   const [current, setCurrent] = useState<Resource | null>(null);
   const [tree, setTree] = useState<Resource[]>([]);
   const [importing, setImporting] = useState(false);
+  const [showUnsaved, setShowUnsaved] = useState(false);
   const openFile = useEditorStore((s) => s.open);
+  const resolveOpen = useEditorStore((s) => s.resolveOpen);
+  const cancelPending = useEditorStore((s) => s.cancelPending);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -121,6 +125,15 @@ export function ProjectPage() {
     // 加载运行识别、状态与事件订阅。
     void useProjectRuntimeStore.getState().load(p.id);
   }, []);
+
+  // 打开文件：dirty 时进入确认流程，等待用户选择保存/放弃/取消。
+  const handleOpenFile = useCallback(
+    async (id: string) => {
+      const res = await openFile(id);
+      if (res === "confirm") setShowUnsaved(true);
+    },
+    [openFile],
+  );
 
   // 从收藏跳转打开指定项目。
   useEffect(() => {
@@ -164,6 +177,8 @@ export function ProjectPage() {
         if (current?.id === p.id) {
           setCurrent(null);
           setTree([]);
+          // 解绑运行与预览上下文：页面不再展示/控制已删除项目的运行状态。
+          useProjectRuntimeStore.getState().reset();
         }
         await loadProjects();
       } catch {
@@ -225,7 +240,7 @@ export function ProjectPage() {
             projectId={current?.id ?? ""}
             resource={r}
             depth={0}
-            onOpenFile={openFile}
+            onOpenFile={handleOpenFile}
           />
         ))}
       </div>
@@ -233,11 +248,28 @@ export function ProjectPage() {
 
     <main className="project-editor">
       <CodeEditor />
+      {/* 运行面板以浮层覆盖在编辑器上方，默认收起不占空间。 */}
+      <div className="project-runtime">
+        <ProjectRuntimePanel />
+      </div>
     </main>
 
-    <aside className="project-runtime">
-      <ProjectRuntimePanel />
-    </aside>
+    {showUnsaved && (
+      <ConfirmDialog
+        title="未保存的修改"
+        message="当前文件有未保存的修改，切换前是否保存？"
+        onSave={() => {
+          void resolveOpen(true).then(() => setShowUnsaved(false));
+        }}
+        onDiscard={() => {
+          void resolveOpen(false).then(() => setShowUnsaved(false));
+        }}
+        onCancel={() => {
+          cancelPending();
+          setShowUnsaved(false);
+        }}
+      />
+    )}
   </div>
 );
 }

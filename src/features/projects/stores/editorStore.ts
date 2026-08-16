@@ -15,13 +15,19 @@ interface EditorState {
   saving: boolean;
   conflict: { message: string; current_size: number } | null;
   openError: string | null;
+  pendingOpenId: string | null;
+  pendingClose: boolean;
 
-  open: (resourceId: string) => Promise<void>;
+  open: (resourceId: string) => Promise<"opened" | "confirm">;
   setContent: (content: string) => void;
   save: () => Promise<"saved" | "conflict">;
   forceSave: () => Promise<void>;
-  close: () => Promise<void>;
+  close: () => Promise<"closed" | "confirm">;
+  resolveOpen: (save: boolean) => Promise<void>;
+  resolveClose: (save: boolean) => Promise<void>;
+  cancelPending: () => void;
   clearError: () => void;
+  discardSession: () => Promise<void>;
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -31,8 +37,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   saving: false,
   conflict: null,
   openError: null,
+  pendingOpenId: null,
+  pendingClose: false,
 
   open: async (resourceId) => {
+    const { dirty } = get();
+    if (dirty) {
+      set({ pendingOpenId: resourceId });
+      return "confirm";
+    }
     set({ openError: null });
     try {
       const data = await call<OpenFile & { session: unknown }>("open_file", { resourceId });
@@ -41,16 +54,36 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         content: data.content,
         dirty: false,
         conflict: null,
+        pendingOpenId: null,
       });
+      return "opened";
     } catch (e) {
       const err = e as { code?: string; message?: string };
       if (err.code === "file_too_large") {
         set({ openError: err.message ?? "文件过大，仅支持预览" });
-        return;
+        return "opened";
       }
       throw e;
     }
   },
+
+  resolveOpen: async (save) => {
+    const { pendingOpenId } = get();
+    if (!pendingOpenId) return;
+    if (save) {
+      const status = await get().save();
+      if (status === "conflict") {
+        set({ pendingOpenId: null });
+        return;
+      }
+    } else {
+      // 放弃：清除 dirty，避免 open 再次触发确认
+      set({ dirty: false });
+    }
+    await get().open(pendingOpenId);
+  },
+
+  cancelPending: () => set({ pendingOpenId: null, pendingClose: false }),
 
   clearError: () => set({ openError: null }),
 
@@ -98,6 +131,31 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   close: async () => {
+    const { dirty, openFile } = get();
+    if (dirty && openFile) {
+      set({ pendingClose: true });
+      return "confirm";
+    }
+    await get().discardSession();
+    set({ openFile: null, content: "", dirty: false, conflict: null, pendingClose: false });
+    return "closed";
+  },
+
+  resolveClose: async (save) => {
+    if (save) {
+      const status = await get().save();
+      if (status === "conflict") {
+        set({ pendingClose: false });
+        return;
+      }
+    } else {
+      // 放弃：清除 dirty，避免 close 再次触发确认
+      set({ dirty: false });
+    }
+    await get().close();
+  },
+
+  discardSession: async () => {
     const { openFile } = get();
     if (openFile) {
       try {
@@ -106,6 +164,5 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         // 忽略
       }
     }
-    set({ openFile: null, content: "", dirty: false, conflict: null });
   },
 }));

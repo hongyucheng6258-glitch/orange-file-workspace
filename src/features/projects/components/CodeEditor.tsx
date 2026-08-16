@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
 import { python } from "@codemirror/lang-python";
@@ -17,6 +17,7 @@ import { go } from "@codemirror/legacy-modes/mode/go";
 import { toml } from "@codemirror/legacy-modes/mode/toml";
 import { Save, X, AlertTriangle, RotateCcw } from "lucide-react";
 import { useEditorStore } from "../stores/editorStore";
+import { ConfirmDialog } from "../../../components/ConfirmDialog";
 
 function langFor(name: string) {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
@@ -68,8 +69,9 @@ function langFor(name: string) {
 }
 
 export function CodeEditor() {
-  const { openFile, content, dirty, saving, conflict, openError, setContent, save, forceSave, close, clearError } =
+  const { openFile, content, dirty, saving, conflict, openError, setContent, save, forceSave, close, resolveClose, cancelPending, clearError } =
     useEditorStore();
+  const [showUnsaved, setShowUnsaved] = useState(false);
 
   const extensions = useMemo(
     () => [langFor(openFile?.resource.name ?? "")],
@@ -123,7 +125,15 @@ export function CodeEditor() {
           >
             <Save size={13} /> {saving ? "保存中…" : "保存"}
           </button>
-          <button className="icon-btn" title="关闭" onClick={() => close()}>
+          <button
+            className="icon-btn"
+            title="关闭"
+            onClick={() => {
+              void close().then((res) => {
+                if (res === "confirm") setShowUnsaved(true);
+              });
+            }}
+          >
             <X size={14} />
           </button>
         </div>
@@ -157,7 +167,7 @@ export function CodeEditor() {
               {conflict.message}。磁盘上的文件已改变，继续保存将覆盖外部修改。
             </p>
             <div className="modal-actions">
-              <button className="btn" onClick={() => close()}>
+              <button className="btn" onClick={() => void resolveClose(false)}>
                 <RotateCcw size={13} /> 放弃修改
               </button>
               <button
@@ -172,6 +182,23 @@ export function CodeEditor() {
             </div>
           </div>
         </div>
+      )}
+
+      {showUnsaved && (
+        <ConfirmDialog
+          title="未保存的修改"
+          message="当前文件有未保存的修改，关闭前是否保存？"
+          onSave={() => {
+            void resolveClose(true).then(() => setShowUnsaved(false));
+          }}
+          onDiscard={() => {
+            void resolveClose(false).then(() => setShowUnsaved(false));
+          }}
+          onCancel={() => {
+            cancelPending();
+            setShowUnsaved(false);
+          }}
+        />
       )}
     </div>
   );

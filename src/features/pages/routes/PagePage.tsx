@@ -3,12 +3,15 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { FileText, Plus, Trash2 } from "lucide-react";
 import { usePageStore } from "../stores/pageStore";
 import { PageEditor } from "../components/PageEditor";
+import { ConfirmDialog } from "../../../components/ConfirmDialog";
 
 export function PagePage() {
-  const { tree, loadTree, openPage, createPage, currentPageId } = usePageStore();
+  const { tree, loadTree, openPage, createPage, currentPageId, pendingTarget, resolveOpen, cancelOpen } =
+    usePageStore();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [showUnsaved, setShowUnsaved] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -20,7 +23,9 @@ export function PagePage() {
   useEffect(() => {
     const openId = (location.state as { openId?: string } | null)?.openId;
     if (openId) {
-      openPage(openId);
+      void openPage(openId).then((res) => {
+        if (res === "confirm") setShowUnsaved(true);
+      });
       navigate(location.pathname, { replace: true, state: null });
     }
     // 仅挂载时处理一次
@@ -53,7 +58,9 @@ export function PagePage() {
               className={`page-tree-item ${r.id === currentPageId ? "active" : ""}`}
               onClick={() => {
                 setConfirmDeleteId(null);
-                openPage(r.id);
+                void openPage(r.id).then((res) => {
+                  if (res === "confirm") setShowUnsaved(true);
+                });
               }}
             >
               <FileText size={13} />
@@ -107,6 +114,23 @@ export function PagePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showUnsaved && pendingTarget && (
+        <ConfirmDialog
+          title="未保存的修改"
+          message="当前页面有未保存的修改，切换前是否保存？"
+          onSave={() => {
+            void resolveOpen(true).then(() => setShowUnsaved(false));
+          }}
+          onDiscard={() => {
+            void resolveOpen(false).then(() => setShowUnsaved(false));
+          }}
+          onCancel={() => {
+            cancelOpen();
+            setShowUnsaved(false);
+          }}
+        />
       )}
     </div>
   );
