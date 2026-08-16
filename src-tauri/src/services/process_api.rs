@@ -194,8 +194,8 @@ mod win32 {
     use super::*;
     use std::os::windows::io::FromRawHandle;
     use windows::Win32::Foundation::{
-        CloseHandle, GetLastError, HANDLE, HANDLE_FLAG_INHERIT, SetHandleInformation, WAIT_OBJECT_0,
-        WAIT_TIMEOUT, GENERIC_READ,
+        CloseHandle, GetLastError, SetHandleInformation, GENERIC_READ, HANDLE, HANDLE_FLAG_INHERIT,
+        WAIT_OBJECT_0, WAIT_TIMEOUT,
     };
     use windows::Win32::Storage::FileSystem::{
         CreateFileW, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
@@ -209,8 +209,8 @@ mod win32 {
     use windows::Win32::System::Pipes::CreatePipe;
     use windows::Win32::System::Threading::{
         CreateProcessW, GetExitCodeProcess, ResumeThread, TerminateProcess, WaitForSingleObject,
-        PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOW, CREATE_NO_WINDOW,
-        CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
+        CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, PROCESS_INFORMATION,
+        STARTF_USESTDHANDLES, STARTUPINFOW,
     };
 
     fn last_win32_error() -> u32 {
@@ -274,8 +274,8 @@ mod win32 {
 
     impl Win32ProcessApi for Win32ProcessApiImpl {
         fn create_job(&self) -> Result<JobHandle, ProcessApiError> {
-            let handle =
-                unsafe { CreateJobObjectW(None, None) }.map_err(|_| api_error("创建 Job Object"))?;
+            let handle = unsafe { CreateJobObjectW(None, None) }
+                .map_err(|_| api_error("创建 Job Object"))?;
             if handle.is_invalid() {
                 return Err(api_error("创建 Job Object"));
             }
@@ -329,7 +329,12 @@ mod win32 {
             let cwd_wide: Vec<u16> = spec
                 .cwd
                 .as_deref()
-                .map(|p| p.to_string_lossy().encode_utf16().chain(std::iter::once(0)).collect())
+                .map(|p| {
+                    p.to_string_lossy()
+                        .encode_utf16()
+                        .chain(std::iter::once(0))
+                        .collect()
+                })
                 .unwrap_or_default();
             let cwd_ptr = if cwd_wide.is_empty() {
                 windows::core::PCWSTR::null()
@@ -369,12 +374,10 @@ mod win32 {
                 return Err(api_error("创建子进程"));
             }
 
-            let stdout: Option<Box<dyn Read + Send>> = unsafe {
-                Some(Box::new(std::fs::File::from_raw_handle(out_read.0 as _)))
-            };
-            let stderr: Option<Box<dyn Read + Send>> = unsafe {
-                Some(Box::new(std::fs::File::from_raw_handle(err_read.0 as _)))
-            };
+            let stdout: Option<Box<dyn Read + Send>> =
+                unsafe { Some(Box::new(std::fs::File::from_raw_handle(out_read.0 as _))) };
+            let stderr: Option<Box<dyn Read + Send>> =
+                unsafe { Some(Box::new(std::fs::File::from_raw_handle(err_read.0 as _))) };
             let pid = pi.dwProcessId;
 
             Ok(SuspendedProcess {
@@ -461,7 +464,9 @@ impl JobHandle {
     pub(crate) fn test_new() -> Self {
         #[cfg(windows)]
         {
-            Self { inner: windows::Win32::Foundation::HANDLE(std::ptr::null_mut()) }
+            Self {
+                inner: windows::Win32::Foundation::HANDLE(std::ptr::null_mut()),
+            }
         }
         #[cfg(not(windows))]
         {
@@ -495,7 +500,11 @@ impl SuspendedProcess {
         }
         #[cfg(not(windows))]
         {
-            Self { pid, stdout, stderr }
+            Self {
+                pid,
+                stdout,
+                stderr,
+            }
         }
     }
 }
@@ -506,42 +515,65 @@ pub struct Win32ProcessApiImpl;
 #[cfg(not(windows))]
 impl Win32ProcessApi for Win32ProcessApiImpl {
     fn create_job(&self) -> Result<JobHandle, ProcessApiError> {
-        Err(ProcessApiError::new("unsupported", "当前平台不支持 Job Object"))
+        Err(ProcessApiError::new(
+            "unsupported",
+            "当前平台不支持 Job Object",
+        ))
     }
     fn set_job_kill_on_close(&self, _job: &JobHandle) -> Result<(), ProcessApiError> {
-        Err(ProcessApiError::new("unsupported", "当前平台不支持 Job Object"))
+        Err(ProcessApiError::new(
+            "unsupported",
+            "当前平台不支持 Job Object",
+        ))
     }
     fn create_process_suspended(
         &self,
         _spec: &ProcessSpec,
     ) -> Result<SuspendedProcess, ProcessApiError> {
-        Err(ProcessApiError::new("unsupported", "当前平台不支持挂起进程"))
+        Err(ProcessApiError::new(
+            "unsupported",
+            "当前平台不支持挂起进程",
+        ))
     }
     fn assign_process_to_job(
         &self,
         _job: &JobHandle,
         _process: &SuspendedProcess,
     ) -> Result<(), ProcessApiError> {
-        Err(ProcessApiError::new("unsupported", "当前平台不支持 Job Object"))
+        Err(ProcessApiError::new(
+            "unsupported",
+            "当前平台不支持 Job Object",
+        ))
     }
     fn resume_thread(&self, _process: &SuspendedProcess) -> Result<(), ProcessApiError> {
-        Err(ProcessApiError::new("unsupported", "当前平台不支持恢复线程"))
+        Err(ProcessApiError::new(
+            "unsupported",
+            "当前平台不支持恢复线程",
+        ))
     }
     fn terminate_job(&self, _job: &JobHandle) -> Result<(), ProcessApiError> {
-        Err(ProcessApiError::new("unsupported", "当前平台不支持终止 Job"))
+        Err(ProcessApiError::new(
+            "unsupported",
+            "当前平台不支持终止 Job",
+        ))
     }
     fn terminate_process(&self, _process: &SuspendedProcess) -> Result<(), ProcessApiError> {
-        Err(ProcessApiError::new("unsupported", "当前平台不支持终止进程"))
+        Err(ProcessApiError::new(
+            "unsupported",
+            "当前平台不支持终止进程",
+        ))
     }
-    fn wait_process_exit(
-        &self,
-        _process: &SuspendedProcess,
-        _timeout: Duration,
-    ) -> WaitResult {
-        WaitResult::Failed(ProcessApiError::new("unsupported", "当前平台不支持等待进程"))
+    fn wait_process_exit(&self, _process: &SuspendedProcess, _timeout: Duration) -> WaitResult {
+        WaitResult::Failed(ProcessApiError::new(
+            "unsupported",
+            "当前平台不支持等待进程",
+        ))
     }
     fn query_job_process_count(&self, _job: &JobHandle) -> Result<u32, ProcessApiError> {
-        Err(ProcessApiError::new("unsupported", "当前平台不支持查询 Job"))
+        Err(ProcessApiError::new(
+            "unsupported",
+            "当前平台不支持查询 Job",
+        ))
     }
 }
 

@@ -161,10 +161,16 @@ pub struct RuntimeError {
 
 impl RuntimeError {
     fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
-        Self { code: code.into(), message: message.into() }
+        Self {
+            code: code.into(),
+            message: message.into(),
+        }
     }
     fn from_api(code: &str, e: &ProcessApiError) -> Self {
-        Self { code: code.into(), message: e.message.clone() }
+        Self {
+            code: code.into(),
+            message: e.message.clone(),
+        }
     }
 }
 
@@ -183,7 +189,10 @@ struct LogBus {
 
 impl LogBus {
     fn new() -> Self {
-        Self { ring: Arc::new(LogRing::new()), seq: Arc::new(AtomicU64::new(1)) }
+        Self {
+            ring: Arc::new(LogRing::new()),
+            seq: Arc::new(AtomicU64::new(1)),
+        }
     }
     fn next_seq(&self) -> u64 {
         self.seq.fetch_add(1, Ordering::SeqCst)
@@ -197,7 +206,10 @@ struct LogRing {
 
 impl LogRing {
     fn new() -> Self {
-        Self { entries: Mutex::new(VecDeque::new()), bytes: Mutex::new(0) }
+        Self {
+            entries: Mutex::new(VecDeque::new()),
+            bytes: Mutex::new(0),
+        }
     }
 
     fn push(&self, seq: u64, stream: OutputStream, text: String, truncated: bool) {
@@ -221,20 +233,36 @@ impl LogRing {
             });
             *bytes += marker.len();
             let next = seq + 1;
-            entries.push_back(LogEntry { seq: next, stream, text, truncated });
+            entries.push_back(LogEntry {
+                seq: next,
+                stream,
+                text,
+                truncated,
+            });
             *bytes += len;
         } else {
-            entries.push_back(LogEntry { seq, stream, text, truncated });
+            entries.push_back(LogEntry {
+                seq,
+                stream,
+                text,
+                truncated,
+            });
             *bytes += len;
         }
     }
 
     fn page(&self, after_seq: u64) -> LogPage {
         let entries = self.entries.lock().unwrap();
-        let filtered: Vec<LogEntry> =
-            entries.iter().filter(|e| e.seq > after_seq).cloned().collect();
+        let filtered: Vec<LogEntry> = entries
+            .iter()
+            .filter(|e| e.seq > after_seq)
+            .cloned()
+            .collect();
         let next_seq = filtered.last().map(|e| e.seq + 1).unwrap_or(after_seq + 1);
-        LogPage { entries: filtered, next_seq }
+        LogPage {
+            entries: filtered,
+            next_seq,
+        }
     }
 }
 
@@ -535,7 +563,10 @@ impl RuntimeManager {
         if stop_flag.load(Ordering::SeqCst) {
             let _ = self.api.terminate_process(&process);
             let _ = self.api.wait_process_exit(&process, STOP_TIMEOUT);
-            return Err(RuntimeError::new("stopped_during_start", "启动过程中已请求停止"));
+            return Err(RuntimeError::new(
+                "stopped_during_start",
+                "启动过程中已请求停止",
+            ));
         }
         if let Err(e) = self.api.assign_process_to_job(&job, &process) {
             let _ = self.api.terminate_process(&process);
@@ -546,7 +577,10 @@ impl RuntimeManager {
             // 加入 Job 后、恢复前再次检查。
             let _ = self.api.terminate_job(&job);
             let _ = self.api.wait_process_exit(&process, STOP_TIMEOUT);
-            return Err(RuntimeError::new("stopped_during_start", "启动过程中已请求停止"));
+            return Err(RuntimeError::new(
+                "stopped_during_start",
+                "启动过程中已请求停止",
+            ));
         }
         if let Err(e) = self.api.resume_thread(&process) {
             let _ = self.api.terminate_job(&job);
@@ -561,7 +595,10 @@ impl RuntimeManager {
         let (bus, project_id) = {
             let inner = self.inner.lock().unwrap();
             let run = inner.runs.get(&run_id);
-            (run.map(|r| r.bus.clone()), run.map(|r| r.project_id.clone()).unwrap_or_default())
+            (
+                run.map(|r| r.bus.clone()),
+                run.map(|r| r.project_id.clone()).unwrap_or_default(),
+            )
         };
         let Some(bus) = bus else { return };
         let stop_flag = {
@@ -612,7 +649,10 @@ impl RuntimeManager {
                 stop_started = Some(Instant::now());
                 let _ = self.api.terminate_job(&job);
             }
-            match self.api.wait_process_exit(&process, Duration::from_millis(200)) {
+            match self
+                .api
+                .wait_process_exit(&process, Duration::from_millis(200))
+            {
                 WaitResult::Exited { exit_code } => {
                     let stop_reason = if stop_flag.load(Ordering::SeqCst) {
                         Some("user".to_string())
@@ -663,7 +703,12 @@ impl RuntimeManager {
             drop(process);
             inner.recent.insert(
                 run.project_key.clone(),
-                RecentRun { run_id, snapshot: snap.clone(), bus, config: run.config.clone() },
+                RecentRun {
+                    run_id,
+                    snapshot: snap.clone(),
+                    bus,
+                    config: run.config.clone(),
+                },
             );
             self.emit_status_payload(&snap);
             self.sink.emit_exited(&ExitedPayload {
@@ -747,7 +792,12 @@ impl RuntimeManager {
             });
             inner.recent.insert(
                 run.project_key.clone(),
-                RecentRun { run_id, snapshot: snap, bus, config: run.config.clone() },
+                RecentRun {
+                    run_id,
+                    snapshot: snap,
+                    bus,
+                    config: run.config.clone(),
+                },
             );
         } else {
             drop(job);
@@ -841,7 +891,11 @@ impl RuntimeManager {
         if let Some(c) = inner.cleanup.iter().find(|c| c.run_id == run_id) {
             return Some(c.snapshot.clone());
         }
-        inner.recent.values().find(|r| r.run_id == run_id).map(|r| r.snapshot.clone())
+        inner
+            .recent
+            .values()
+            .find(|r| r.run_id == run_id)
+            .map(|r| r.snapshot.clone())
     }
 
     pub fn get_run_by_project_key(&self, project_key: &str) -> Option<RunSnapshot> {
@@ -861,7 +915,11 @@ impl RuntimeManager {
         } else if let Some(c) = inner.cleanup.iter().find(|c| c.run_id == run_id) {
             Some(c.bus.clone())
         } else {
-            inner.recent.values().find(|r| r.run_id == run_id).map(|r| r.bus.clone())
+            inner
+                .recent
+                .values()
+                .find(|r| r.run_id == run_id)
+                .map(|r| r.bus.clone())
         };
         let Some(bus) = bus else {
             return Err(RuntimeError::new("run_not_found", "运行实例不存在或已淘汰"));
@@ -879,7 +937,9 @@ impl RuntimeManager {
             let mut remaining: Vec<CleanupEntry> = Vec::new();
             for entry in inner.cleanup.drain(..) {
                 let exited = match entry.resources.as_ref() {
-                    Some(r) => match self.api.wait_process_exit(&r.process, Duration::from_millis(50))
+                    Some(r) => match self
+                        .api
+                        .wait_process_exit(&r.process, Duration::from_millis(50))
                     {
                         WaitResult::Exited { .. } => true,
                         WaitResult::Timeout => {
@@ -895,13 +955,7 @@ impl RuntimeManager {
                 };
                 if exited {
                     let c = entry;
-                    done.push((
-                        c.project_key,
-                        c.run_id,
-                        c.snapshot,
-                        c.bus,
-                        c.config,
-                    ));
+                    done.push((c.project_key, c.run_id, c.snapshot, c.bus, c.config));
                 } else {
                     remaining.push(entry);
                 }
@@ -917,7 +971,12 @@ impl RuntimeManager {
             inner.project_keys.remove(&project_key);
             inner.recent.insert(
                 project_key,
-                RecentRun { run_id, snapshot: snapshot.clone(), bus, config },
+                RecentRun {
+                    run_id,
+                    snapshot: snapshot.clone(),
+                    bus,
+                    config,
+                },
             );
             drop(inner);
             self.emit_status_payload(&snapshot);

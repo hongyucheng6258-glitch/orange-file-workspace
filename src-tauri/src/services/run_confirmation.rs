@@ -55,16 +55,28 @@ pub struct ConfirmationError {
 
 impl ConfirmationError {
     fn invalid_config(msg: impl Into<String>) -> Self {
-        Self { code: "invalid_config".into(), message: msg.into() }
+        Self {
+            code: "invalid_config".into(),
+            message: msg.into(),
+        }
     }
     fn invalid_cwd(msg: impl Into<String>) -> Self {
-        Self { code: "invalid_working_directory".into(), message: msg.into() }
+        Self {
+            code: "invalid_working_directory".into(),
+            message: msg.into(),
+        }
     }
     fn runtime_not_found(msg: impl Into<String>) -> Self {
-        Self { code: "runtime_not_found".into(), message: msg.into() }
+        Self {
+            code: "runtime_not_found".into(),
+            message: msg.into(),
+        }
     }
     fn confirmation_required(msg: impl Into<String>) -> Self {
-        Self { code: "confirmation_required".into(), message: msg.into() }
+        Self {
+            code: "confirmation_required".into(),
+            message: msg.into(),
+        }
     }
 }
 
@@ -141,12 +153,19 @@ impl ConfirmationSession {
     ) -> Result<ConfirmationPreview, ConfirmationError> {
         let normalized = normalize(config, project_root)?;
         let canonical_json = canonical_json(&normalized);
-        let id = format!("c{}", self.next_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
+        let id = format!(
+            "c{}",
+            self.next_id
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        );
         let expires_at = Instant::now() + self.ttl;
-        self.tickets
-            .lock()
-            .unwrap()
-            .insert(id.clone(), ConfirmationTicket { canonical_json, expires_at });
+        self.tickets.lock().unwrap().insert(
+            id.clone(),
+            ConfirmationTicket {
+                canonical_json,
+                expires_at,
+            },
+        );
         Ok(ConfirmationPreview {
             confirmation_id: id,
             summary: redacted_summary(&normalized),
@@ -184,11 +203,7 @@ impl ConfirmationSession {
         let normalized = normalize(config, project_root)?;
         let canonical_json = canonical_json(&normalized);
         let expected = compute_hash(&self.secret, &canonical_json);
-        let ok = bool::from(
-            expected
-                .as_bytes()
-                .ct_eq(confirmation_hash.as_bytes()),
-        );
+        let ok = bool::from(expected.as_bytes().ct_eq(confirmation_hash.as_bytes()));
         if !ok {
             return Err(ConfirmationError::confirmation_required(
                 "配置已变化或确认已失效，请重新确认",
@@ -229,8 +244,14 @@ fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
         ipad[i] = k[i] ^ 0x36;
         opad[i] = k[i] ^ 0x5c;
     }
-    let inner = Sha256::new().chain_update(ipad).chain_update(data).finalize();
-    let outer = Sha256::new().chain_update(opad).chain_update(inner).finalize();
+    let inner = Sha256::new()
+        .chain_update(ipad)
+        .chain_update(data)
+        .finalize();
+    let outer = Sha256::new()
+        .chain_update(opad)
+        .chain_update(inner)
+        .finalize();
     outer.into()
 }
 
@@ -429,7 +450,8 @@ pub fn normalize(
     }
 
     // 环境变量校验：名称/值不含 NUL，名称不含 '='，大小写不敏感去重。
-    let mut env_pairs: Vec<(String, Option<String>)> = Vec::with_capacity(config.env_overrides.len());
+    let mut env_pairs: Vec<(String, Option<String>)> =
+        Vec::with_capacity(config.env_overrides.len());
     for (key, value) in &config.env_overrides {
         if key.is_empty() || key.contains('\0') || key.contains('=') {
             return Err(ConfirmationError::invalid_config(format!(
@@ -472,7 +494,10 @@ pub fn normalize(
     // 项目根规范化。
     let canon_root = canonical_key(project_root)
         .ok_or_else(|| ConfirmationError::invalid_cwd("项目根目录无法访问"))?;
-    if !std::fs::metadata(&canon_root).map(|m| m.is_dir()).unwrap_or(false) {
+    if !std::fs::metadata(&canon_root)
+        .map(|m| m.is_dir())
+        .unwrap_or(false)
+    {
         return Err(ConfirmationError::invalid_cwd("项目根目录不是有效目录"));
     }
 
@@ -492,7 +517,10 @@ pub fn normalize(
     };
     let canon_cwd = canonical_key(&cwd_input)
         .ok_or_else(|| ConfirmationError::invalid_cwd("工作目录不存在或无法访问"))?;
-    if !std::fs::metadata(&canon_cwd).map(|m| m.is_dir()).unwrap_or(false) {
+    if !std::fs::metadata(&canon_cwd)
+        .map(|m| m.is_dir())
+        .unwrap_or(false)
+    {
         return Err(ConfirmationError::invalid_cwd("工作目录不是有效目录"));
     }
     if canon_cwd.strip_prefix(&canon_root).is_err() {
@@ -653,7 +681,10 @@ mod tests {
         let root = make_root("cwd-missing");
         let mut c = base_config(&root);
         c.cwd = root.join("nope").to_string_lossy().to_string();
-        assert_eq!(normalize(&c, &root).unwrap_err().code, "invalid_working_directory");
+        assert_eq!(
+            normalize(&c, &root).unwrap_err().code,
+            "invalid_working_directory"
+        );
     }
 
     #[test]
@@ -673,7 +704,12 @@ mod tests {
         let mut c = base_config(&root);
         c.executable = "bin\\run.exe".into();
         let n = normalize(&c, &root).unwrap();
-        assert_eq!(n.executable, canonical_key(&root.join("bin").join("run.exe")).unwrap().to_string_lossy());
+        assert_eq!(
+            n.executable,
+            canonical_key(&root.join("bin").join("run.exe"))
+                .unwrap()
+                .to_string_lossy()
+        );
     }
 
     #[test]
@@ -682,7 +718,10 @@ mod tests {
         let other = make_root("rel-exe-escape-other");
         std::fs::write(other.join("evil.exe"), "x").unwrap();
         let mut c = base_config(&root);
-        c.executable = format!("..\\{}\\evil.exe", other.file_name().unwrap().to_string_lossy());
+        c.executable = format!(
+            "..\\{}\\evil.exe",
+            other.file_name().unwrap().to_string_lossy()
+        );
         assert_eq!(normalize(&c, &root).unwrap_err().code, "invalid_config");
     }
 
@@ -717,7 +756,10 @@ mod tests {
     #[test]
     fn strip_verbatim_normalizes_drive_and_unc() {
         assert_eq!(strip_verbatim(r"\\?\C:\Foo\Bar"), r"c:\Foo\Bar");
-        assert_eq!(strip_verbatim(r"\\?\UNC\HOST\Share\Dir"), r"\\host\share\Dir");
+        assert_eq!(
+            strip_verbatim(r"\\?\UNC\HOST\Share\Dir"),
+            r"\\host\share\Dir"
+        );
     }
 
     #[test]
@@ -790,7 +832,9 @@ mod tests {
         let preview = session.prepare(&c1, &root).unwrap();
         let grant = session.confirm(&preview.confirmation_id).unwrap();
         c1.args = vec!["other.js".into()];
-        let err = session.verify(&c1, &root, &grant.confirmation_hash).unwrap_err();
+        let err = session
+            .verify(&c1, &root, &grant.confirmation_hash)
+            .unwrap_err();
         assert_eq!(err.code, "confirmation_required");
     }
 
@@ -830,7 +874,12 @@ mod tests {
         let c = base_config(&root);
         let preview = s1.prepare(&c, &root).unwrap();
         let grant = s1.confirm(&preview.confirmation_id).unwrap();
-        assert_eq!(s2.verify(&c, &root, &grant.confirmation_hash).unwrap_err().code, "confirmation_required");
+        assert_eq!(
+            s2.verify(&c, &root, &grant.confirmation_hash)
+                .unwrap_err()
+                .code,
+            "confirmation_required"
+        );
     }
 
     #[test]
@@ -845,7 +894,10 @@ mod tests {
         let first = bad.as_bytes()[0];
         let replacement = if first == b'A' { b'B' } else { b'A' };
         bad.replace_range(0..1, &(replacement as char).to_string());
-        assert_eq!(session.verify(&c, &root, &bad).unwrap_err().code, "confirmation_required");
+        assert_eq!(
+            session.verify(&c, &root, &bad).unwrap_err().code,
+            "confirmation_required"
+        );
     }
 
     #[test]
@@ -853,9 +905,12 @@ mod tests {
         let root = make_root("redact");
         std::fs::write(root.join("server.js"), "x").unwrap();
         let mut c = base_config(&root);
-        c.env_overrides.insert("API_TOKEN".into(), Some("super-secret-value".into()));
+        c.env_overrides
+            .insert("API_TOKEN".into(), Some("super-secret-value".into()));
         c.env_overrides.insert("PORT".into(), Some("3000".into()));
-        let preview = ConfirmationSession::new([9u8; 32]).prepare(&c, &root).unwrap();
+        let preview = ConfirmationSession::new([9u8; 32])
+            .prepare(&c, &root)
+            .unwrap();
         let summary = preview.summary.to_string();
         assert!(!summary.contains("super-secret-value"));
         assert!(summary.contains("字符"));

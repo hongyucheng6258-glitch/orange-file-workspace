@@ -12,8 +12,8 @@ use crate::error::AppError;
 use crate::ipc::CommandResult;
 use crate::services::project_detector::{self, DiskProjectFs};
 use crate::services::project_runtime::{
-    ErrorPayload, ExitedPayload, OutputPayload, RunEventSink, RunSnapshot, StatusPayload,
-    RuntimeManager,
+    ErrorPayload, ExitedPayload, OutputPayload, RunEventSink, RunSnapshot, RuntimeManager,
+    StatusPayload,
 };
 use crate::services::run_confirmation::{ConfirmationGrant, ConfirmationPreview, RunConfig};
 use crate::AppState;
@@ -31,13 +31,19 @@ impl AppRunEventSink {
 
 impl RunEventSink for AppRunEventSink {
     fn emit_status(&self, p: &StatusPayload) {
-        let _ = self.app.emit(crate::events::EVENT_PROJECT_PROCESS_STATUS, p);
+        let _ = self
+            .app
+            .emit(crate::events::EVENT_PROJECT_PROCESS_STATUS, p);
     }
     fn emit_output(&self, p: &OutputPayload) {
-        let _ = self.app.emit(crate::events::EVENT_PROJECT_PROCESS_OUTPUT, p);
+        let _ = self
+            .app
+            .emit(crate::events::EVENT_PROJECT_PROCESS_OUTPUT, p);
     }
     fn emit_exited(&self, p: &ExitedPayload) {
-        let _ = self.app.emit(crate::events::EVENT_PROJECT_PROCESS_EXITED, p);
+        let _ = self
+            .app
+            .emit(crate::events::EVENT_PROJECT_PROCESS_EXITED, p);
     }
     fn emit_error(&self, p: &ErrorPayload) {
         let _ = self.app.emit(crate::events::EVENT_PROJECT_PROCESS_ERROR, p);
@@ -120,10 +126,7 @@ pub fn start_project_process(
 
 /// 停止运行实例（幂等）。
 #[tauri::command]
-pub fn stop_project_process(
-    state: State<AppState>,
-    run_id: String,
-) -> CommandResult<RunSnapshot> {
+pub fn stop_project_process(state: State<AppState>, run_id: String) -> CommandResult<RunSnapshot> {
     runtime(&state).stop(&run_id).map_err(Into::into)
 }
 
@@ -158,5 +161,7 @@ pub fn get_process_logs(
     run_id: String,
     after_seq: u64,
 ) -> CommandResult<crate::services::project_runtime::LogPage> {
-    runtime(&state).get_logs(&run_id, after_seq).map_err(Into::into)
+    runtime(&state)
+        .get_logs(&run_id, after_seq)
+        .map_err(Into::into)
 }

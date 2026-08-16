@@ -95,7 +95,10 @@ impl Win32ProcessApi for FakeApi {
         Ok(())
     }
 
-    fn create_process_suspended(&self, _spec: &ProcessSpec) -> Result<SuspendedProcess, ProcessApiError> {
+    fn create_process_suspended(
+        &self,
+        _spec: &ProcessSpec,
+    ) -> Result<SuspendedProcess, ProcessApiError> {
         self.log("create_process_suspended");
         if self.fail_spawn.load(Ordering::SeqCst) {
             return Err(ProcessApiError::new("win32_error", "spawn failed"));
@@ -109,7 +112,11 @@ impl Win32ProcessApi for FakeApi {
         ))
     }
 
-    fn assign_process_to_job(&self, _job: &JobHandle, _process: &SuspendedProcess) -> Result<(), ProcessApiError> {
+    fn assign_process_to_job(
+        &self,
+        _job: &JobHandle,
+        _process: &SuspendedProcess,
+    ) -> Result<(), ProcessApiError> {
         self.log("assign_process_to_job");
         {
             let barrier = self.assign_barrier.lock().unwrap();
@@ -154,7 +161,9 @@ impl Win32ProcessApi for FakeApi {
     fn wait_process_exit(&self, _process: &SuspendedProcess, _timeout: Duration) -> WaitResult {
         self.log("wait_process_exit");
         if self.exited.load(Ordering::SeqCst) {
-            WaitResult::Exited { exit_code: self.exit_code.load(Ordering::SeqCst) }
+            WaitResult::Exited {
+                exit_code: self.exit_code.load(Ordering::SeqCst),
+            }
         } else {
             WaitResult::Timeout
         }
@@ -229,7 +238,11 @@ fn tmp_root(tag: &str) -> PathBuf {
 fn base_config(root: &Path) -> RunConfig {
     RunConfig {
         project_id: "p1".into(),
-        executable: root.join("bin").join("tool.exe").to_string_lossy().to_string(),
+        executable: root
+            .join("bin")
+            .join("tool.exe")
+            .to_string_lossy()
+            .to_string(),
         args: vec!["--serve".into()],
         cwd: root.to_string_lossy().to_string(),
         env_overrides: HashMap::new(),
@@ -245,7 +258,9 @@ fn project_key(root: &Path) -> String {
 fn start_run(manager: &Arc<RuntimeManager>, root: &Path, config: &RunConfig) -> RunSnapshot {
     let preview = manager.prepare_confirmation(config, root).unwrap();
     let grant = manager.confirm_config(&preview.confirmation_id).unwrap();
-    manager.start(config, root, &grant.confirmation_hash).unwrap()
+    manager
+        .start(config, root, &grant.confirmation_hash)
+        .unwrap()
 }
 
 fn make_manager(api: Arc<FakeApi>, sink: Arc<TestSink>) -> Arc<RuntimeManager> {
@@ -278,15 +293,27 @@ fn start_natural_exit_emits_single_terminal() {
     let snap = start_run(&manager, &root, &config);
     assert_eq!(snap.state, RunState::Running);
     assert_eq!(snap.pid, Some(4242));
-    assert!(wait_until(|| {
-        manager.get_run(&snap.run_id).map(|s| s.state == RunState::Exited).unwrap_or(false)
-    }, Duration::from_secs(3)));
+    assert!(wait_until(
+        || {
+            manager
+                .get_run(&snap.run_id)
+                .map(|s| s.state == RunState::Exited)
+                .unwrap_or(false)
+        },
+        Duration::from_secs(3)
+    ));
     let final_snap = manager.get_run(&snap.run_id).unwrap();
     assert_eq!(final_snap.state, RunState::Exited);
     assert_eq!(final_snap.exit_code, Some(0));
     // 终态后项目占位释放。
-    assert!(manager.get_run_by_project_key(&project_key(&root)).is_some());
-    assert!(manager.get_run_by_project_key(&project_key(&root)).unwrap().state.is_terminal());
+    assert!(manager
+        .get_run_by_project_key(&project_key(&root))
+        .is_some());
+    assert!(manager
+        .get_run_by_project_key(&project_key(&root))
+        .unwrap()
+        .state
+        .is_terminal());
     // 仅一个退出事件。
     let exited = sink.exited();
     assert_eq!(exited.len(), 1);
@@ -303,12 +330,21 @@ fn nonzero_exit_reports_error_code() {
     api.set_natural_exit(7);
     let config = base_config(&root);
     let snap = start_run(&manager, &root, &config);
-    assert!(wait_until(|| {
-        manager.get_run(&snap.run_id).map(|s| s.state == RunState::Exited).unwrap_or(false)
-    }, Duration::from_secs(3)));
+    assert!(wait_until(
+        || {
+            manager
+                .get_run(&snap.run_id)
+                .map(|s| s.state == RunState::Exited)
+                .unwrap_or(false)
+        },
+        Duration::from_secs(3)
+    ));
     let final_snap = manager.get_run(&snap.run_id).unwrap();
     assert_eq!(final_snap.exit_code, Some(7));
-    assert_eq!(final_snap.error_code.as_deref(), Some("process_non_zero_exit"));
+    assert_eq!(
+        final_snap.error_code.as_deref(),
+        Some("process_non_zero_exit")
+    );
 }
 
 #[test]
@@ -323,9 +359,15 @@ fn stop_marks_user_and_terminates() {
     let stopped = manager.stop(&snap.run_id).unwrap();
     assert_eq!(stopped.state, RunState::Stopping);
     // terminate_job 默认使进程退出。
-    assert!(wait_until(|| {
-        manager.get_run(&snap.run_id).map(|s| s.state == RunState::Exited).unwrap_or(false)
-    }, Duration::from_secs(3)));
+    assert!(wait_until(
+        || {
+            manager
+                .get_run(&snap.run_id)
+                .map(|s| s.state == RunState::Exited)
+                .unwrap_or(false)
+        },
+        Duration::from_secs(3)
+    ));
     let final_snap = manager.get_run(&snap.run_id).unwrap();
     assert_eq!(final_snap.state, RunState::Exited);
     assert_eq!(final_snap.stop_reason.as_deref(), Some("user"));
@@ -348,23 +390,33 @@ fn stop_timeout_retains_project_until_cleanup() {
     assert_eq!(snap.state, RunState::Running);
     let _ = manager.stop(&snap.run_id).unwrap();
     // 等待 5 秒停止超时。
-    assert!(wait_until(|| {
-        manager.get_run(&snap.run_id).map(|s| s.state == RunState::Failed).unwrap_or(false)
-    }, Duration::from_secs(7)));
+    assert!(wait_until(
+        || {
+            manager
+                .get_run(&snap.run_id)
+                .map(|s| s.state == RunState::Failed)
+                .unwrap_or(false)
+        },
+        Duration::from_secs(7)
+    ));
     let failed = manager.get_run(&snap.run_id).unwrap();
     assert_eq!(failed.error_code.as_deref(), Some("process_stop_timeout"));
     // 项目占位保留 → 新启动被拒绝。
     let config2 = base_config(&root);
     let preview = manager.prepare_confirmation(&config2, &root).unwrap();
     let grant = manager.confirm_config(&preview.confirmation_id).unwrap();
-    let err = manager.start(&config2, &root, &grant.confirmation_hash).unwrap_err();
+    let err = manager
+        .start(&config2, &root, &grant.confirmation_hash)
+        .unwrap_err();
     assert_eq!(err.code, "project_already_running");
     // 进程退出后 cleanup 释放占位。
     api.set_exited(0);
     manager.cleanup_tick();
     let preview = manager.prepare_confirmation(&config2, &root).unwrap();
     let grant = manager.confirm_config(&preview.confirmation_id).unwrap();
-    let snap2 = manager.start(&config2, &root, &grant.confirmation_hash).unwrap();
+    let snap2 = manager
+        .start(&config2, &root, &grant.confirmation_hash)
+        .unwrap();
     assert_eq!(snap2.state, RunState::Running);
     // 清理完成前旧 run 仍可查询。
     assert!(manager.get_run(&snap.run_id).is_some());
@@ -406,9 +458,15 @@ fn restart_after_terminal_creates_new_run_id() {
     api.set_natural_exit(0);
     let config = base_config(&root);
     let snap = start_run(&manager, &root, &config);
-    assert!(wait_until(|| {
-        manager.get_run(&snap.run_id).map(|s| s.state == RunState::Exited).unwrap_or(false)
-    }, Duration::from_secs(3)));
+    assert!(wait_until(
+        || {
+            manager
+                .get_run(&snap.run_id)
+                .map(|s| s.state == RunState::Exited)
+                .unwrap_or(false)
+        },
+        Duration::from_secs(3)
+    ));
     // 重置进程状态，避免新运行立即退出。
     api.exited.store(false, Ordering::SeqCst);
     let restarted = manager.restart(&snap.run_id).unwrap();
@@ -461,7 +519,10 @@ fn stop_during_start_never_resumes() {
 
     // 等待 run 注册为 Starting。
     let key = project_key(&root);
-    assert!(wait_until(|| manager.get_run_by_project_key(&key).is_some(), Duration::from_secs(3)));
+    assert!(wait_until(
+        || manager.get_run_by_project_key(&key).is_some(),
+        Duration::from_secs(3)
+    ));
     let starting = manager.get_run_by_project_key(&key).unwrap();
     assert_eq!(starting.state, RunState::Starting);
     let run_id = starting.run_id.clone();
@@ -471,11 +532,15 @@ fn stop_during_start_never_resumes() {
     assert_eq!(result.state, RunState::Exited);
     assert_eq!(result.stop_reason.as_deref(), Some("user"));
     // 从未恢复主线程。
-        assert!(!api.called("resume_thread"));
-        assert!(api.called("terminate_job"));
+    assert!(!api.called("resume_thread"));
+    assert!(api.called("terminate_job"));
     // 项目占位已释放。
     assert!(manager.get_run_by_project_key(&key).is_some());
-    assert!(manager.get_run_by_project_key(&key).unwrap().state.is_terminal());
+    assert!(manager
+        .get_run_by_project_key(&key)
+        .unwrap()
+        .state
+        .is_terminal());
 }
 
 // ---- 失败注入 ----
@@ -483,11 +548,19 @@ fn stop_during_start_never_resumes() {
 #[test]
 fn spawn_failures_release_key_and_report_codes() {
     let cases: &[(&str, &dyn Fn(&FakeApi))] = &[
-        ("create_job", &|api| api.fail_create_job.store(true, Ordering::SeqCst)),
-        ("kill_on_close", &|api| api.fail_kill_on_close.store(true, Ordering::SeqCst)),
+        ("create_job", &|api| {
+            api.fail_create_job.store(true, Ordering::SeqCst)
+        }),
+        ("kill_on_close", &|api| {
+            api.fail_kill_on_close.store(true, Ordering::SeqCst)
+        }),
         ("spawn", &|api| api.fail_spawn.store(true, Ordering::SeqCst)),
-        ("assign", &|api| api.fail_assign.store(true, Ordering::SeqCst)),
-        ("resume", &|api| api.fail_resume.store(true, Ordering::SeqCst)),
+        ("assign", &|api| {
+            api.fail_assign.store(true, Ordering::SeqCst)
+        }),
+        ("resume", &|api| {
+            api.fail_resume.store(true, Ordering::SeqCst)
+        }),
     ];
     for (name, inject) in cases {
         let api = FakeApi::new();
@@ -498,16 +571,24 @@ fn spawn_failures_release_key_and_report_codes() {
         let config = base_config(&root);
         let preview = manager.prepare_confirmation(&config, &root).unwrap();
         let grant = manager.confirm_config(&preview.confirmation_id).unwrap();
-        let err = manager.start(&config, &root, &grant.confirmation_hash).unwrap_err();
+        let err = manager
+            .start(&config, &root, &grant.confirmation_hash)
+            .unwrap_err();
         assert!(
-            matches!(err.code.as_str(), "process_containment_failed" | "process_spawn_failed"),
+            matches!(
+                err.code.as_str(),
+                "process_containment_failed" | "process_spawn_failed"
+            ),
             "{name}: unexpected code {}",
             err.code
         );
         // 失败后项目占位释放。
         let after = manager.get_run_by_project_key(&project_key(&root));
         assert!(after.is_some(), "{name}: 最近记录缺失");
-        assert!(after.unwrap().state == RunState::Failed, "{name}: 应为 Failed");
+        assert!(
+            after.unwrap().state == RunState::Failed,
+            "{name}: 应为 Failed"
+        );
         // assign 失败时不恢复主线程。
         if *name == "assign" {
             assert!(!api.called("resume_thread"), "assign 失败后不应恢复主线程");
@@ -529,7 +610,9 @@ fn assign_failure_never_resumes_thread() {
     let config = base_config(&root);
     let preview = manager.prepare_confirmation(&config, &root).unwrap();
     let grant = manager.confirm_config(&preview.confirmation_id).unwrap();
-    let _ = manager.start(&config, &root, &grant.confirmation_hash).unwrap_err();
+    let _ = manager
+        .start(&config, &root, &grant.confirmation_hash)
+        .unwrap_err();
     assert!(!api.called("resume_thread"));
     assert!(api.called("terminate_process"));
 }
@@ -575,7 +658,10 @@ fn log_ring_trims_oldest_with_marker() {
     }
     let page = ring.page(0);
     assert!(page.entries.len() < 70, "应淘汰最旧内容");
-    assert!(page.entries.iter().any(|e| e.truncated && e.text.contains("截断")));
+    assert!(page
+        .entries
+        .iter()
+        .any(|e| e.truncated && e.text.contains("截断")));
 }
 
 // ---- 事件唯一性 ----
@@ -589,9 +675,15 @@ fn exactly_one_terminal_event_per_run() {
     let config = base_config(&root);
     let snap = start_run(&manager, &root, &config);
     let _ = manager.stop(&snap.run_id).unwrap();
-    assert!(wait_until(|| {
-        manager.get_run(&snap.run_id).map(|s| s.state == RunState::Exited).unwrap_or(false)
-    }, Duration::from_secs(3)));
+    assert!(wait_until(
+        || {
+            manager
+                .get_run(&snap.run_id)
+                .map(|s| s.state == RunState::Exited)
+                .unwrap_or(false)
+        },
+        Duration::from_secs(3)
+    ));
     assert_eq!(sink.exited().len(), 1);
 }
 

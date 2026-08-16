@@ -35,7 +35,13 @@ pub struct DetectionResult {
 }
 
 impl DetectionResult {
-    fn push_candidate(&mut self, label: impl Into<String>, executable: impl Into<String>, args: Vec<String>, confidence: u8) {
+    fn push_candidate(
+        &mut self,
+        label: impl Into<String>,
+        executable: impl Into<String>,
+        args: Vec<String>,
+        confidence: u8,
+    ) {
         self.candidates.push(RuntimeCandidate {
             label: label.into(),
             executable: executable.into(),
@@ -386,7 +392,8 @@ mod tests {
         }
 
         fn file(mut self, path: impl AsRef<Path>, content: impl Into<String>) -> Self {
-            self.files.insert(path.as_ref().to_path_buf(), content.into());
+            self.files
+                .insert(path.as_ref().to_path_buf(), content.into());
             self
         }
 
@@ -446,8 +453,10 @@ mod tests {
 
     #[test]
     fn node_dev_start_order_and_default_npm() {
-        let fs = FakeFs::new()
-            .file(root().join("package.json"), node_pkg(r#"{"dev":"vite","start":"vite preview"}"#));
+        let fs = FakeFs::new().file(
+            root().join("package.json"),
+            node_pkg(r#"{"dev":"vite","start":"vite preview"}"#),
+        );
         let r = detect(&fs, &root());
         assert_eq!(r.runtime_kind, Some(RuntimeKind::Node));
         let labels: Vec<&str> = r.candidates.iter().map(|c| c.label.as_str()).collect();
@@ -467,8 +476,10 @@ mod tests {
 
     #[test]
     fn node_other_scripts_listed_last() {
-        let fs = FakeFs::new()
-            .file(root().join("package.json"), node_pkg(r#"{"build":"tsc","lint":"eslint ."}"#));
+        let fs = FakeFs::new().file(
+            root().join("package.json"),
+            node_pkg(r#"{"build":"tsc","lint":"eslint ."}"#),
+        );
         let r = detect(&fs, &root());
         let labels: Vec<&str> = r.candidates.iter().map(|c| c.label.as_str()).collect();
         assert_eq!(labels, vec!["npm run build", "npm run lint"]);
@@ -477,7 +488,10 @@ mod tests {
     #[test]
     fn node_main_fallback_when_no_scripts() {
         let fs = FakeFs::new()
-            .file(root().join("package.json"), r#"{"name":"demo","main":"index.js"}"#)
+            .file(
+                root().join("package.json"),
+                r#"{"name":"demo","main":"index.js"}"#,
+            )
             .file(root().join("index.js"), "console.log(1)");
         let r = detect(&fs, &root());
         assert_eq!(r.candidates.len(), 1);
@@ -488,11 +502,17 @@ mod tests {
     #[test]
     fn node_main_out_of_bounds_rejected() {
         let fs = FakeFs::new()
-            .file(root().join("package.json"), r#"{"name":"demo","main":"../evil.js"}"#)
+            .file(
+                root().join("package.json"),
+                r#"{"name":"demo","main":"../evil.js"}"#,
+            )
             .file(PathBuf::from("C:\\evil.js"), "bad");
         let r = detect(&fs, &root());
         assert!(r.candidates.is_empty());
-        assert!(r.diagnostics.iter().any(|d| d.contains("越界") || d.contains("不存在")));
+        assert!(r
+            .diagnostics
+            .iter()
+            .any(|d| d.contains("越界") || d.contains("不存在")));
     }
 
     #[test]
@@ -520,7 +540,14 @@ mod tests {
             .file(root().join("app.py"), "")
             .file(root().join(".venv").join("Scripts").join("python.exe"), "");
         let r = detect(&fs, &root());
-        assert_eq!(r.candidates[0].executable, root().join(".venv").join("Scripts").join("python.exe").to_string_lossy());
+        assert_eq!(
+            r.candidates[0].executable,
+            root()
+                .join(".venv")
+                .join("Scripts")
+                .join("python.exe")
+                .to_string_lossy()
+        );
     }
 
     #[test]
@@ -564,7 +591,10 @@ cli = "demo.cli:main"
     fn rust_workspace_multi_package_requires_choice() {
         let meta = r#"{"packages":[{"name":"a","targets":[{"name":"a","kind":["bin"]}]},{"name":"b","targets":[{"name":"b","kind":["bin"]}]}]}"#;
         let fs = FakeFs::new()
-            .file(root().join("Cargo.toml"), "[workspace]\nmembers=[\"a\",\"b\"]")
+            .file(
+                root().join("Cargo.toml"),
+                "[workspace]\nmembers=[\"a\",\"b\"]",
+            )
             .cargo(meta);
         let r = detect(&fs, &root());
         assert!(r.candidates.is_empty());
@@ -606,14 +636,26 @@ cli = "demo.cli:main"
             .file(root().join("src").join("index.ts"), "export {}")
             .file(root().join("src").join("lib.rs"), "fn main() {}")
             .file(root().join("src").join("main.py"), "print(1)")
-            .file(root().join("node_modules").join("x").join("index.js"), "module.exports={}");
+            .file(
+                root().join("node_modules").join("x").join("index.js"),
+                "module.exports={}",
+            );
         let _ = detect(&fs, &root());
         let reads = fs.read_log();
         for p in &reads {
             let rel = p.strip_prefix(&root()).unwrap();
-            let first = rel.components().next().unwrap().as_os_str().to_string_lossy().to_string();
+            let first = rel
+                .components()
+                .next()
+                .unwrap()
+                .as_os_str()
+                .to_string_lossy()
+                .to_string();
             assert!(
-                !matches!(first.as_str(), "src" | "node_modules" | "target" | ".git" | ".venv" | "Cargo.toml"),
+                !matches!(
+                    first.as_str(),
+                    "src" | "node_modules" | "target" | ".git" | ".venv" | "Cargo.toml"
+                ),
                 "识别器不应读取 {p:?}"
             );
         }
