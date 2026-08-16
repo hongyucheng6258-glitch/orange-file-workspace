@@ -1,17 +1,29 @@
 import { call } from "./tauri";
 
-/**
- * 启动系统级文件拖出（Windows OLE DoDragDrop）。
- * 必须在元素的 onDragStart 中调用，并先调用 e.preventDefault() 抑制 HTML5 拖拽，
- * 由 Rust 端接管鼠标，将文件拖到资源管理器、桌面等外部目标。
- */
+export type DragOutStatus = {
+  phase: "starting" | "completed" | "error";
+  message: string;
+};
+
+function announce(status: DragOutStatus): void {
+  window.dispatchEvent(
+    new CustomEvent<DragOutStatus>("nexus:drag-status", { detail: status }),
+  );
+}
+
+/** 启动系统级文件拖出（Windows 原生拖拽）。 */
 export function startDragOut(ids: string[]): void {
   if (!("__TAURI_INTERNALS__" in window) || ids.length === 0) return;
-  call<number>("drag_out", { ids }).catch((error: Error) => {
-    window.dispatchEvent(
-      new CustomEvent("nexus:drag-error", {
-        detail: error.message || "文件拖出失败",
-      }),
-    );
-  });
+
+  announce({ phase: "starting", message: "正在启动系统拖拽…" });
+  call<number>("drag_out", { ids })
+    .then(() => {
+      announce({ phase: "completed", message: "拖拽已结束" });
+    })
+    .catch((error: Error) => {
+      announce({
+        phase: "error",
+        message: error.message || "文件拖出失败",
+      });
+    });
 }

@@ -5,6 +5,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
 import { File, FolderOpen, HardDrive, Link2, Upload, X } from "lucide-react";
 import { call } from "../../../lib/tauri";
+import type { DragOutStatus } from "../../../lib/dragOut";
 import { useFileStore } from "../../files/stores/fileStore";
 import { useSettingsStore } from "../../settings/stores/settingsStore";
 import { resolveImportParentId } from "../importTarget";
@@ -21,6 +22,7 @@ export function ImportDropzone() {
   const [mode, setMode] = useState<ImportMode>(defaultMode);
   const [importing, setImporting] = useState(false);
   const [dragError, setDragError] = useState<string | null>(null);
+  const [dragOutStatus, setDragOutStatus] = useState<string | null>(null);
   const [showDesktopHint, setShowDesktopHint] = useState(false);
   const parentId = useFileStore((s) => s.parentId);
   const addTask = useTaskStore((s) => s.addTask);
@@ -28,13 +30,21 @@ export function ImportDropzone() {
   const importParentId = resolveImportParentId(location.pathname, parentId);
 
   useEffect(() => {
-    const onDragError = (event: Event) => {
-      setDragError((event as CustomEvent<string>).detail || "文件拖出失败");
+    const onDragStatus = (event: Event) => {
+      const status = (event as CustomEvent<DragOutStatus>).detail;
+      if (!status) return;
+      if (status.phase === "error") {
+        setDragOutStatus(null);
+        setDragError(status.message || "文件拖出失败");
+        return;
+      }
+      setDragError(null);
+      setDragOutStatus(status.phase === "starting" ? status.message : null);
     };
-    window.addEventListener("nexus:drag-error", onDragError);
+    window.addEventListener("nexus:drag-status", onDragStatus);
 
     if (!("__TAURI_INTERNALS__" in window)) {
-      return () => window.removeEventListener("nexus:drag-error", onDragError);
+      return () => window.removeEventListener("nexus:drag-status", onDragStatus);
     }
 
     let disposed = false;
@@ -70,7 +80,7 @@ export function ImportDropzone() {
 
     return () => {
       disposed = true;
-      window.removeEventListener("nexus:drag-error", onDragError);
+      window.removeEventListener("nexus:drag-status", onDragStatus);
       unlisten?.();
     };
   }, []);
@@ -125,6 +135,12 @@ export function ImportDropzone() {
 
   return (
     <>
+      {dragOutStatus && !dragError && (
+        <div className="drop-error drop-status" role="status">
+          <span>{dragOutStatus}</span>
+        </div>
+      )}
+
       {dragError && (
         <div className="drop-error" role="alert">
           <span>{dragError}</span>

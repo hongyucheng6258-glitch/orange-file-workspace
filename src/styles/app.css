@@ -917,6 +917,11 @@ input {
   overflow-wrap: anywhere;
 }
 
+.drop-status {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 .drop-overlay {
   position: fixed;
   inset: 0;

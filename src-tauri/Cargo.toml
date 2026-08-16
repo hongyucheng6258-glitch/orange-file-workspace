@@ -38,6 +38,7 @@ portable-pty = "0.8.1"
 # 项目运行：pyproject.toml 脚本表解析（仅诊断）、确认协议常量时间比较。
 toml = "0.8"
 subtle = "2"
+drag = "2.1.1"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [
