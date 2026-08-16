@@ -1,8 +1,9 @@
-import { Settings, Palette, HardDrive, Filter, Archive, Info } from "lucide-react";
+import { Settings, Palette, TerminalSquare, HardDrive, Filter, Archive, Info } from "lucide-react";
 
 export type SettingsTab =
   | "general"
   | "appearance"
+  | "terminal"
   | "storage"
   | "ignore"
   | "backup"
@@ -11,6 +12,7 @@ export type SettingsTab =
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "general", label: "通用", icon: <Settings size={14} /> },
   { id: "appearance", label: "外观", icon: <Palette size={14} /> },
+  { id: "terminal", label: "终端", icon: <TerminalSquare size={14} /> },
   { id: "storage", label: "存储", icon: <HardDrive size={14} /> },
   { id: "ignore", label: "忽略规则", icon: <Filter size={14} /> },
   { id: "backup", label: "备份与恢复", icon: <Archive size={14} /> },

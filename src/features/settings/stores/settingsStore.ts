@@ -18,6 +18,16 @@ export interface AppSettings {
     theme_mode: "system" | "light" | "dark";
     density: "comfortable" | "compact";
   };
+  terminal: {
+    font_size: number;
+    cursor_style: "block" | "bar" | "underline";
+    theme:
+      | "campbell"
+      | "vs_dark"
+      | "one_dark"
+      | "dracula"
+      | "solarized_dark";
+  };
   ignore: { custom_rules: IgnoreRule[] };
   backup: {
     enabled: boolean;

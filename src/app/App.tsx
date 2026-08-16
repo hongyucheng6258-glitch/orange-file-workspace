@@ -10,6 +10,7 @@ import { TrashPage } from "../features/trash/routes/TrashPage";
 import { SettingsPage } from "../features/settings/routes/SettingsPage";
 import { HomePage } from "../features/home/routes/HomePage";
 import { SystemPage } from "../features/system/routes/SystemPage";
+import { TerminalPage } from "../features/terminal/routes/TerminalPage";
 import { RunCenterPage } from "../features/runs/routes/RunCenterPage";
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/trash" element={<TrashPage />} />
           <Route path="/tasks" element={<TaskCenterPage />} />
           <Route path="/runs" element={<RunCenterPage />} />
+          <Route path="/terminal" element={<TerminalPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/system" element={<SystemPage />} />
           <Route path="/search" element={<SearchPage />} />

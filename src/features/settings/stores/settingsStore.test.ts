@@ -9,6 +9,7 @@ const base: AppSettings = {
     preview_size_limit_mb: 256,
   },
   appearance: { theme_mode: "system", density: "comfortable" },
+  terminal: { font_size: 14, cursor_style: "bar", theme: "campbell" },
   ignore: { custom_rules: [] },
   backup: {
     enabled: false,

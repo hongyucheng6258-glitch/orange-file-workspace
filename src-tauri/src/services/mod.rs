@@ -15,12 +15,16 @@ pub mod project_runtime;
 pub mod project_service;
 pub mod run_confirmation;
 pub mod run_history;
+pub mod scan_service;
 pub mod settings_service;
 pub mod task_service;
 pub mod system_service;
 pub mod system_windows;
+pub mod terminal_history_service;
+pub mod terminal_service;
 #[cfg(test)]
 pub mod test_support;
+
 pub mod thumbnail_service;
 pub mod watcher_service;
 pub mod web_preview_service;

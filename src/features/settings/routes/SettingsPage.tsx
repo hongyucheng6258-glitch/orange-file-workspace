@@ -3,6 +3,7 @@ import { useSettingsStore } from "../stores/settingsStore";
 import { SettingsTabs, type SettingsTab } from "../components/SettingsTabs";
 import { GeneralSettings } from "../components/GeneralSettings";
 import { AppearanceSettings } from "../components/AppearanceSettings";
+import { TerminalSettings } from "../components/TerminalSettings";
 import { StorageSettings } from "../components/StorageSettings";
 import { BackupSettings } from "../components/BackupSettings";
 import { IgnoreRulesSettings } from "../components/IgnoreRulesSettings";
@@ -33,6 +34,7 @@ export function SettingsPage() {
         <div className="settings-body">
           {tab === "general" && <GeneralSettings />}
           {tab === "appearance" && <AppearanceSettings />}
+          {tab === "terminal" && <TerminalSettings />}
           {tab === "storage" && <StorageSettings />}
           {tab === "ignore" && <IgnoreRulesSettings />}
           {tab === "backup" && <BackupSettings />}
