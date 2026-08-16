@@ -74,10 +74,10 @@ impl HistoryRun {
             project_key: project_key.to_string(),
             executable: get("executable"),
             args,
-            cwd: get("cwd").into(),
+            cwd: get("cwd"),
             env,
             expected_port,
-            preview_scheme: get("preview_scheme").into(),
+            preview_scheme: get("preview_scheme"),
             state: snap.state,
             exit_code: snap.exit_code,
             error_code: snap.error_code.clone(),
@@ -169,10 +169,6 @@ impl SqliteRunHistoryStore {
         Self {
             conn: Mutex::new(conn),
         }
-    }
-
-    fn schema(&self) -> &'static str {
-        include_str!("../../migrations/0008_project_run_history.sql")
     }
 }
 
@@ -385,11 +381,13 @@ impl RunHistoryStore for SqliteRunHistoryStore {
 
 /// 内存测试实现。
 #[derive(Default)]
+#[allow(dead_code)] // 测试模块与 backup_service 测试使用
 pub struct InMemoryRunHistoryStore {
     pub runs: Mutex<Vec<HistoryRun>>,
 }
 
 impl InMemoryRunHistoryStore {
+    #[allow(dead_code)] // 测试模块与 backup_service 测试使用
     pub fn new() -> Self {
         Self::default()
     }
@@ -405,7 +403,7 @@ impl RunHistoryStore for InMemoryRunHistoryStore {
 
     fn list(&self, limit: usize) -> Vec<HistoryRun> {
         let mut runs = self.runs.lock().unwrap().clone();
-        runs.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+        runs.sort_by_key(|r| std::cmp::Reverse(r.started_at));
         runs.truncate(limit);
         runs
     }
@@ -419,7 +417,7 @@ impl RunHistoryStore for InMemoryRunHistoryStore {
             .filter(|r| r.project_key == project_key)
             .cloned()
             .collect();
-        runs.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+        runs.sort_by_key(|r| std::cmp::Reverse(r.started_at));
         runs.truncate(limit);
         runs
     }
@@ -431,7 +429,7 @@ impl RunHistoryStore for InMemoryRunHistoryStore {
         runs.retain(|r| r.exited_at >= cutoff);
         // 每项目保留最近 MAX_PER_PROJECT 条。
         let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-        runs.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+        runs.sort_by_key(|r| std::cmp::Reverse(r.started_at));
         runs.retain(|r| {
             let count = seen.entry(r.project_key.clone()).or_insert(0);
             *count += 1;

@@ -387,7 +387,7 @@ fn detect_java(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) {
 }
 
 /// Makefile：存在 make 时提供默认目标候选。
-fn detect_makefile(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) {
+fn detect_makefile(fs: &dyn ProjectFs, _root: &Path, result: &mut DetectionResult) {
     if let Some(make) = fs.resolve_on_path("make") {
         result.push_candidate("make", make.to_string_lossy().to_string(), vec![], 60);
     } else {
