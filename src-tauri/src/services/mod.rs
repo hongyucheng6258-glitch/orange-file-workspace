@@ -11,6 +11,7 @@ pub mod page_service;
 pub mod preview_service;
 pub mod project_detector;
 pub mod project_service;
+pub mod run_confirmation;
 pub mod settings_service;
 pub mod task_service;
 pub mod system_service;
