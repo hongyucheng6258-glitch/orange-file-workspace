@@ -52,6 +52,11 @@ const runSnapshot = {
   summary: { executable: "npm", args: ["run", "dev"], cwd: "C:\\proj", env: {}, expected_port: null, preview_scheme: "http" },
 };
 
+function activeRun() {
+  const s = useProjectRuntimeStore.getState();
+  return s.runs[s.activeCwd] ?? null;
+}
+
 beforeEach(() => {
   mockCall.mockReset();
   // 默认行为：识别 + 无运行状态。
@@ -165,16 +170,16 @@ describe("projectRuntimeStore", () => {
     const preview = await store.getState().prepare();
     expect(preview).not.toBeNull();
     await store.getState().startWithConfirmation(preview!.confirmationId);
-    expect(store.getState().run?.state).toBe("running");
-    expect(store.getState().run?.pid).toBe(1234);
+    expect(activeRun()?.state).toBe("running");
+    expect(activeRun()?.pid).toBe(1234);
     expect(mockCall).toHaveBeenCalledWith("start_project_process", expect.anything());
   });
 
-  it("output events append deduped logs", async () => {
+  it("output events append deduped logs to the active run", async () => {
     const store = useProjectRuntimeStore;
     await store.getState().load("p1");
-    // 先有 run。
-    store.setState({ run: runSnapshot as never });
+    // 先有 run（挂在 "" cwd 下）。
+    store.setState({ runs: { "": runSnapshot as never }, runIdToCwd: { "run-1": "" } });
     emit("project-process://output", {
       runId: "run-1",
       projectId: "p1",
@@ -207,9 +212,10 @@ describe("projectRuntimeStore", () => {
     expect(logs[0].text).toBe("hello-dup");
   });
 
-  it("status events update run state", async () => {
+  it("status events update the run mapped by cwd", async () => {
     const store = useProjectRuntimeStore;
     await store.getState().load("p1");
+    store.setState({ runs: { "": runSnapshot as never }, runIdToCwd: { "run-1": "" } });
     emit("project-process://status", {
       runId: "run-1",
       projectId: "p1",
@@ -220,7 +226,7 @@ describe("projectRuntimeStore", () => {
       errorMessage: null,
     });
     await vi.waitFor(() => {
-      expect(store.getState().run?.state).toBe("exited");
+      expect(activeRun()?.state).toBe("exited");
     });
   });
 
@@ -238,12 +244,55 @@ describe("projectRuntimeStore", () => {
     });
   });
 
-  it("stop calls stop_project_process", async () => {
+  it("stop calls stop_project_process for the active run", async () => {
     const store = useProjectRuntimeStore;
     await store.getState().load("p1");
-    store.setState({ run: { ...runSnapshot, state: "running" } as never });
+    store.setState({ runs: { "": { ...runSnapshot, state: "running" } as never }, runIdToCwd: { "run-1": "" } });
     mockCall.mockResolvedValueOnce({ ...runSnapshot, state: "stopping" });
     await store.getState().stop();
     expect(mockCall).toHaveBeenCalledWith("stop_project_process", { runId: "run-1" });
+  });
+
+  it("parallel: starting backend then frontend does not block the second start", async () => {
+    mockCall.mockImplementation((cmd: string) => {
+      if (cmd === "detect_project_runtime") {
+        return Promise.resolve({
+          runtimeKind: "java",
+          candidates: [
+            { label: "backend: mvn spring-boot:run", executable: "mvn", args: ["spring-boot:run"], confidence: 80, cwd: "web/backend" },
+            { label: "frontend: npm run dev", executable: "npm", args: ["run", "dev"], confidence: 100, cwd: "web/frontend" },
+          ],
+          diagnostics: [],
+        });
+      }
+      if (cmd === "get_project_run") return Promise.resolve(null);
+      return Promise.resolve(undefined);
+    });
+    const store = useProjectRuntimeStore;
+    await store.getState().load("p1");
+
+    // 启动后端（候选 0 → cwd=web/backend）。
+    store.getState().pickCandidate(0);
+    expect(store.getState().activeCwd).toBe("web/backend");
+    mockCall
+      .mockImplementationOnce(() =>
+        Promise.resolve({ confirmationId: "c1", summary: {}, expiresInSeconds: 600 }),
+      )
+      .mockImplementationOnce(() => Promise.resolve({ confirmationId: "c1", confirmationHash: "h1" }))
+      .mockImplementationOnce(() =>
+        Promise.resolve({ ...runSnapshot, runId: "run-backend", cwd: "C:\\proj\\web\\backend", summary: { ...runSnapshot.summary, cwd: "C:\\proj\\web\\backend" } }),
+      );
+    const preview1 = await store.getState().start();
+    expect(preview1).not.toBeNull();
+    await store.getState().startWithConfirmation(preview1!.confirmationId);
+    expect(store.getState().runs["web/backend"]?.runId).toBe("run-backend");
+
+    // 切换前端（候选 1 → cwd=web/frontend），其 runs 项不存在 → 不应被拦截。
+    store.getState().pickCandidate(1);
+    expect(store.getState().activeCwd).toBe("web/frontend");
+    const preview2 = await store.getState().start();
+    expect(preview2).not.toBeNull();
+    // 后端仍在运行映射中。
+    expect(store.getState().runs["web/backend"]?.state).toBe("running");
   });
 });

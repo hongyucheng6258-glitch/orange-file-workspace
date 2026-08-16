@@ -21,7 +21,8 @@ export const useProjectPreviewStore = create<ProjectPreviewState>((set, get) => 
   error: null,
 
   openPreview: async () => {
-    const run = useProjectRuntimeStore.getState().run;
+    const s = useProjectRuntimeStore.getState();
+    const run = s.runs[s.activeCwd];
     if (!run || run.state !== "running") {
       set({ error: "项目未在运行，无法打开预览" });
       return;

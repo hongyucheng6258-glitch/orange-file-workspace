@@ -58,14 +58,23 @@ beforeEach(() => {
 
 afterEach(() => {
   useProjectPreviewStore.getState().reset();
-  useProjectRuntimeStore.setState({ run: null });
+  useProjectRuntimeStore.setState({ runs: {}, runIdToCwd: {}, activeCwd: "" });
 });
+
+/** 把运行快照挂到 "" cwd 下（等效于旧版 setState({ run })）。 */
+function setActiveRun(snap: unknown) {
+  useProjectRuntimeStore.setState({
+    activeCwd: "",
+    runs: { "": snap as never },
+    runIdToCwd: { [(snap as { runId: string }).runId]: "" },
+  });
+}
 
 describe("projectPreviewStore", () => {
   it("openPreview opens browser when ownership confirmed", async () => {
     mockCall.mockResolvedValueOnce(target);
     mockOpenUrl.mockResolvedValueOnce(undefined);
-    useProjectRuntimeStore.setState({ run: runningSnapshot as never });
+    setActiveRun(runningSnapshot);
 
     await useProjectPreviewStore.getState().openPreview();
 
@@ -79,7 +88,7 @@ describe("projectPreviewStore", () => {
     const unconfirmed = { ...target, ownership: "unconfirmed" as const };
     mockCall.mockResolvedValueOnce(unconfirmed);
 
-    useProjectRuntimeStore.setState({ run: runningSnapshot as never });
+    setActiveRun(runningSnapshot);
     await useProjectPreviewStore.getState().openPreview();
 
     expect(mockOpenUrl).not.toHaveBeenCalled();
@@ -88,7 +97,7 @@ describe("projectPreviewStore", () => {
 
   it("openPreview surfaces preview_unavailable error", async () => {
     mockCall.mockRejectedValueOnce(new Error("端口 3000 当前未监听"));
-    useProjectRuntimeStore.setState({ run: runningSnapshot as never });
+    setActiveRun(runningSnapshot);
 
     await useProjectPreviewStore.getState().openPreview();
 
@@ -97,9 +106,7 @@ describe("projectPreviewStore", () => {
   });
 
   it("openPreview rejects when project not running", async () => {
-    useProjectRuntimeStore.setState({
-      run: { ...runningSnapshot, state: "exited" } as never,
-    });
+    setActiveRun({ ...runningSnapshot, state: "exited" });
 
     await useProjectPreviewStore.getState().openPreview();
 
