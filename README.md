@@ -1,7 +1,107 @@
-# Tauri + React + Typescript
+# Orange（本地文件工作台）
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+Orange 是一个本地优先的文件与项目管理工作台：文件、页面、代码项目、内置终端、全盘搜索与自动备份一站式管理，所有数据保存在本机，无需登录。
 
-## Recommended IDE Setup
+## 功能特性
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+- **文件管理**：本地文件导入（托管/外部两种模式）、目录浏览、文件预览、批量导入与进度跟踪。
+- **页面**：富文本页面编辑（基于 Tiptap），支持图片、表格、任务列表等。
+- **代码项目**：导入本地项目目录，内置 CodeMirror 代码编辑器（大文件安全编辑、未保存草稿恢复、外部修改冲突对比），支持一键运行项目并查看运行日志与 Web 预览。
+- **内置终端**：基于 ConPTY + xterm 的嵌入式终端，支持多标签页、配色主题、命令历史。
+- **全盘搜索**：聚合 Windows Search、后台全盘索引、应用索引与资源库的统一搜索入口，可打开文件、启动应用、定位文件位置。
+- **回收站与备份**：删除先入回收站可恢复；自动/手动备份（元数据或完整备份），恢复前完整性预检。
+- **系统监控**：CPU/内存/磁盘/网络概览（系统页）。
+
+## 技术栈
+
+- 桌面壳：Tauri 2（Rust）
+- 前端：React 19 + TypeScript + Vite + Zustand + React Router
+- 编辑器：CodeMirror 6（代码）、Tiptap 3（页面）
+- 终端：portable-pty 0.8（ConPTY）+ @xterm/xterm 6
+- 数据库：SQLite（rusqlite，bundled，含 FTS5）
+
+## 环境要求
+
+- Node.js 22+（npm 为唯一包管理器）
+- Rust 1.75+（rustup 稳定工具链）
+- Windows 10/11（依赖 Windows Search 与 ConPTY 的桌面功能）
+
+## 开发指南
+
+```bash
+# 安装前端依赖
+npm install
+
+# 前端开发服务器
+npm run dev
+
+# 桌面应用调试（Tauri，需 Rust 工具链）
+npm run tauri dev
+```
+
+### 检查与测试
+
+```bash
+npm run typecheck   # 前端类型检查（tsc --noEmit）
+npm run test        # 前端单元测试（vitest）
+npm run test:rust   # Rust 测试（cargo test，272+ 用例）
+npm run fmt         # Rust 格式检查（cargo fmt --check）
+npm run clippy      # Rust 静态检查（cargo clippy）
+npm run check       # 上述全部
+```
+
+### 打包
+
+```bash
+npm run tauri build
+```
+
+## 数据目录
+
+应用数据保存在系统应用数据目录（`app_data_dir`），默认路径：
+
+```
+%APPDATA%\com.nexus.file-workspace\     # 或由 config.json 中的 data_dir 覆盖
+```
+
+数据目录结构：
+
+| 路径 | 内容 |
+|---|---|
+| `workspace.db` | 主数据库：资源、页面、编辑会话、设置、任务、备份记录 |
+| `managed-files/` | 托管模式导入的文件的副本 |
+| `backups/` | 自动与手动备份快照 |
+| `thumbnails/` | 文件缩略图缓存 |
+| `config.json` | 数据目录覆盖配置（可选） |
+
+> 说明：资源可在"托管"（复制进 `managed-files`）与"外部"（仅引用原路径）两种模式之间选择；外部模式删除/移动原文件会导致资源不可用，可在资源页校验定位。
+
+## 故障恢复手册
+
+### 数据库损坏或启动失败
+
+1. 退出应用，备份整个数据目录（尤其 `workspace.db`）。
+2. 从设置页"备份与恢复"选择最近的备份恢复；或手动替换 `workspace.db` 为备份目录中的同名文件后重启。
+3. 若数据库文件本身损坏且无备份：迁移系统会在启动时尝试自动恢复；仍失败时，可删除 `workspace.db` 重新初始化（资源文件不丢失，但索引、页面、会话等记录会清空）。
+
+### 备份恢复中断
+
+恢复采用"先落盘后提交"的事务式流程：托管文件恢复失败或完整性校验不一致时，数据库会自动回滚，保证库与文件一致。恢复失败时按提示查看具体失败项，确认磁盘空间与权限后重试。
+
+### 索引扫描中断
+
+索引进度检查点仅用于展示，中断后从卷根重新扫描（同代次 upsert 幂等，不会丢失已索引数据）。可在搜索页索引状态栏手动暂停/继续/重建。
+
+### 迁移目录（数据/托管目录更换）
+
+设置页支持将数据目录或托管目录迁移到新位置，迁移前校验：目标必须为绝对路径、可写、空间充足、且不能嵌套在当前目录内。迁移中断会自动清理残留。
+
+### 编辑器数据安全
+
+- 大文件（>10 MiB）只读预览，编辑保存会拒绝超限会话，防止截断。
+- 编辑内容自动草稿持久化（停止输入 800ms 后保存），崩溃后重新打开会提示恢复。
+- 文件被外部修改时保存会触发冲突提示，可对比磁盘版本后决定放弃或覆盖。
+
+## 许可证
+
+私有项目，保留所有权利。
