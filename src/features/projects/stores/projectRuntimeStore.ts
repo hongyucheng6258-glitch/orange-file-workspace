@@ -24,7 +24,7 @@ function defaultConfig(projectId: string, detection: DetectionResult | null): Ru
     projectId,
     executable: first?.executable ?? "",
     args: first?.args ?? [],
-    cwd: "",
+    cwd: first?.cwd ?? "",
     envOverrides: {},
     expectedPort: null,
     previewScheme: "http",
@@ -180,6 +180,7 @@ export const useProjectRuntimeStore = create<ProjectRuntimeState>((set, get) => 
         ...(get().config ?? defaultConfig(projectId, detection)),
         executable: cand.executable,
         args: cand.args,
+        cwd: cand.cwd ?? "",
       },
       confirmation: null,
     });

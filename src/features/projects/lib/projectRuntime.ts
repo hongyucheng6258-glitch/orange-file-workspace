@@ -12,6 +12,8 @@ export interface RuntimeCandidate {
   executable: string;
   args: string[];
   confidence: number;
+  /** 相对项目根的工作目录（子项目候选）；缺省 = 项目根。 */
+  cwd?: string | null;
 }
 
 export interface DetectionResult {

@@ -106,6 +106,49 @@ describe("projectRuntimeStore", () => {
     expect(store.getState().config?.executable).toBe("python");
   });
 
+  it("default config applies subproject candidate cwd", async () => {
+    mockCall.mockImplementation((cmd: string) => {
+      if (cmd === "detect_project_runtime") {
+        return Promise.resolve({
+          runtimeKind: "java",
+          candidates: [
+            { label: "backend: mvn spring-boot:run", executable: "mvn", args: ["spring-boot:run"], confidence: 80, cwd: "backend" },
+          ],
+          diagnostics: [],
+        });
+      }
+      if (cmd === "get_project_run") return Promise.resolve(null);
+      return Promise.resolve(undefined);
+    });
+    await useProjectRuntimeStore.getState().load("p1");
+    const s = useProjectRuntimeStore.getState();
+    expect(s.config?.executable).toBe("mvn");
+    expect(s.config?.cwd).toBe("backend");
+  });
+
+  it("pickCandidate applies subproject cwd and clears it for root candidates", async () => {
+    mockCall.mockImplementation((cmd: string) => {
+      if (cmd === "detect_project_runtime") {
+        return Promise.resolve({
+          runtimeKind: "java",
+          candidates: [
+            { label: "backend: mvn spring-boot:run", executable: "mvn", args: ["spring-boot:run"], confidence: 80, cwd: "backend" },
+            { label: "npm run dev", executable: "npm", args: ["run", "dev"], confidence: 100 },
+          ],
+          diagnostics: [],
+        });
+      }
+      if (cmd === "get_project_run") return Promise.resolve(null);
+      return Promise.resolve(undefined);
+    });
+    const store = useProjectRuntimeStore;
+    await store.getState().load("p1");
+    store.getState().pickCandidate(0);
+    expect(store.getState().config?.cwd).toBe("backend");
+    store.getState().pickCandidate(1);
+    expect(store.getState().config?.cwd).toBe("");
+  });
+
   it("start flow: prepare then startWithConfirmation", async () => {
     const store = useProjectRuntimeStore;
     await store.getState().load("p1");
