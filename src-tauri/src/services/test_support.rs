@@ -178,7 +178,9 @@ impl Win32ProcessApi for FakeApi {
     fn wait_process_exit(&self, _process: &SuspendedProcess, _timeout: Duration) -> WaitResult {
         self.log("wait_process_exit");
         if self.exited.load(Ordering::SeqCst) {
-            WaitResult::Exited { exit_code: self.exit_code.load(Ordering::SeqCst) }
+            WaitResult::Exited {
+                exit_code: self.exit_code.load(Ordering::SeqCst),
+            }
         } else {
             WaitResult::Timeout
         }
@@ -279,7 +281,11 @@ pub fn tmp_root(tag: &str) -> PathBuf {
 pub fn base_config(root: &Path) -> RunConfig {
     RunConfig {
         project_id: "p1".into(),
-        executable: root.join("bin").join("tool.exe").to_string_lossy().to_string(),
+        executable: root
+            .join("bin")
+            .join("tool.exe")
+            .to_string_lossy()
+            .to_string(),
         args: vec!["--serve".into()],
         cwd: root.to_string_lossy().to_string(),
         env_overrides: HashMap::new(),
@@ -292,14 +298,12 @@ pub fn project_key(root: &Path) -> String {
     canonical_key(root).unwrap().to_string_lossy().to_string()
 }
 
-pub fn start_run(
-    manager: &Arc<RuntimeManager>,
-    root: &Path,
-    config: &RunConfig,
-) -> RunSnapshot {
+pub fn start_run(manager: &Arc<RuntimeManager>, root: &Path, config: &RunConfig) -> RunSnapshot {
     let preview = manager.prepare_confirmation(config, root).unwrap();
     let grant = manager.confirm_config(&preview.confirmation_id).unwrap();
-    manager.start(config, root, &grant.confirmation_hash).unwrap()
+    manager
+        .start(config, root, &grant.confirmation_hash)
+        .unwrap()
 }
 
 pub fn make_manager(api: Arc<FakeApi>, sink: Arc<TestSink>) -> Arc<RuntimeManager> {

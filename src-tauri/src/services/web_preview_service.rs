@@ -68,10 +68,16 @@ pub struct PreviewError {
 
 impl PreviewError {
     fn unavailable(msg: impl Into<String>) -> Self {
-        Self { code: "preview_unavailable".into(), message: msg.into() }
+        Self {
+            code: "preview_unavailable".into(),
+            message: msg.into(),
+        }
     }
     fn run_not_found(msg: impl Into<String>) -> Self {
-        Self { code: "run_not_found".into(), message: msg.into() }
+        Self {
+            code: "run_not_found".into(),
+            message: msg.into(),
+        }
     }
 }
 
@@ -200,7 +206,11 @@ fn parse_url_candidate(url: &str, source: PreviewSource) -> Option<UrlCandidate>
         scheme: scheme.to_string(),
         host,
         port,
-        path: if path.is_empty() { String::new() } else { path.to_string() },
+        path: if path.is_empty() {
+            String::new()
+        } else {
+            path.to_string()
+        },
         source,
     })
 }
@@ -250,7 +260,10 @@ pub fn resolve_target(
 
 /// 格式化完整 URL。
 pub fn format_url(candidate: &UrlCandidate) -> String {
-    format!("{}://{}:{}{}", candidate.scheme, candidate.host, candidate.port, candidate.path)
+    format!(
+        "{}://{}:{}{}",
+        candidate.scheme, candidate.host, candidate.port, candidate.path
+    )
 }
 
 /// Windows TCP 监听表探测实现（`GetExtendedTcpTable`）。
@@ -267,7 +280,8 @@ impl PortProbe for Win32PortProbe {
 #[cfg(windows)]
 fn win32_tcp_listener_pid(port: u16) -> Option<u32> {
     use windows::Win32::NetworkManagement::IpHelper::{
-        GetExtendedTcpTable, MIB_TCPROW_OWNER_PID, MIB_TCPTABLE_OWNER_PID, TCP_TABLE_OWNER_PID_LISTENER,
+        GetExtendedTcpTable, MIB_TCPROW_OWNER_PID, MIB_TCPTABLE_OWNER_PID,
+        TCP_TABLE_OWNER_PID_LISTENER,
     };
     const NO_ERROR: u32 = 0;
     const ERROR_INSUFFICIENT_BUFFER: u32 = 122;
@@ -275,7 +289,8 @@ fn win32_tcp_listener_pid(port: u16) -> Option<u32> {
 
     // 第一次调用获取所需缓冲区大小。
     let mut size: u32 = 0;
-    let rc = unsafe { GetExtendedTcpTable(None, &mut size, false, 0, TCP_TABLE_OWNER_PID_LISTENER, 0) };
+    let rc =
+        unsafe { GetExtendedTcpTable(None, &mut size, false, 0, TCP_TABLE_OWNER_PID_LISTENER, 0) };
     if rc == NO_ERROR && size == 0 {
         return None;
     }
@@ -395,9 +410,7 @@ impl PreviewService {
 }
 
 /// 共享预览依赖：为 lib.rs 初始化提供统一入口。
-pub fn build_preview_service(
-    runtime: Arc<RuntimeManager>,
-) -> Arc<PreviewService> {
+pub fn build_preview_service(runtime: Arc<RuntimeManager>) -> Arc<PreviewService> {
     #[cfg(windows)]
     let probe: Arc<dyn PortProbe> = Arc::new(Win32PortProbe);
     #[cfg(not(windows))]

@@ -13,7 +13,10 @@ use crate::services::test_support::*;
 #[test]
 fn port_from_args_forms() {
     assert_eq!(port_from_args(&["--port=3000".into()]), Some(3000));
-    assert_eq!(port_from_args(&["--port".into(), "3000".into()]), Some(3000));
+    assert_eq!(
+        port_from_args(&["--port".into(), "3000".into()]),
+        Some(3000)
+    );
     assert_eq!(port_from_args(&["-p".into(), "8080".into()]), Some(8080));
     assert_eq!(port_from_args(&["run".into(), "dev".into()]), None);
     assert_eq!(port_from_args(&["--port".into(), "abc".into()]), None);
@@ -123,7 +126,9 @@ struct FakePortProbe {
 
 impl FakePortProbe {
     fn new() -> Arc<Self> {
-        Arc::new(Self { listeners: Mutex::new(HashMap::new()) })
+        Arc::new(Self {
+            listeners: Mutex::new(HashMap::new()),
+        })
     }
     fn listen(&self, port: u16, pid: u32) {
         self.listeners.lock().unwrap().insert(port, pid);
