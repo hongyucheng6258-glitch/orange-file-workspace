@@ -412,13 +412,18 @@ fn collect_tree(
     };
 
     for entry in entries.flatten() {
+        // 不跟随符号链接与目录联接（防循环递归与越界复制）
+        let Ok(ft) = entry.file_type() else { continue };
+        if ft.is_symlink() {
+            continue;
+        }
         let p = entry.path();
         if is_ignored(&p, ignore_rules) {
             continue;
         }
-        if p.is_dir() {
+        if ft.is_dir() {
             collect_tree(&p, &dest_dir, mode, Some(dir_id.clone()), ignore_rules, out, failures);
-        } else if p.is_file() {
+        } else if ft.is_file() {
             match build_file(&p, &dest_dir, mode, Some(dir_id.clone())) {
                 Ok(item) => out.push(item),
                 Err(e) => failures.push((p, e.to_string())),
@@ -1453,5 +1458,36 @@ mod tests {
             )
             .expect("visible count");
         assert_eq!(visible, 1, "r2 must be reachable from visible root tree");
+    }
+
+    #[test]
+    fn collect_tree_does_not_follow_symlink_loops() {
+        let root = temp_dir("linkloop");
+        std::fs::create_dir_all(root.join("real")).expect("mkdir");
+        std::fs::write(root.join("real/a.txt"), "x").expect("write");
+        let managed = temp_dir("mroot");
+        let mut pending = Vec::new();
+        let mut failures = Vec::new();
+
+        // 创建指向自身的目录联接（Windows junction / symlink dir），形成循环
+        #[cfg(windows)]
+        {
+            let link = root.join("loop");
+            if std::os::windows::fs::symlink_dir(&root, &link).is_ok()
+                && std::fs::symlink_metadata(&link).is_ok()
+            {
+                collect_tree(&root, &managed, SourceType::External, None, &[], &mut pending, &mut failures);
+                // 若循环被跟随会无限递归/栈溢出；此处只应收集真实目录与文件
+                assert!(pending.len() < 100, "symlink loop must not explode, got {}", pending.len());
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            collect_tree(&root, &managed, SourceType::External, None, &[], &mut pending, &mut failures);
+            assert!(pending.len() < 100, "symlink loop must not explode, got {}", pending.len());
+        }
+
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&managed);
     }
 }

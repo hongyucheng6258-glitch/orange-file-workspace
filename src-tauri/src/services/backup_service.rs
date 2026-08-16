@@ -293,7 +293,7 @@ pub fn list_backups(state: &AppState) -> Result<Vec<crate::db::models::BackupRec
     Ok(records)
 }
 
-/// 复制目录（递归）。
+/// 复制目录（递归）。不跟随符号链接与目录联接（防循环与越界复制）。
 fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), AppError> {
     if !src.exists() {
         return Ok(());
@@ -301,9 +301,14 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), AppError> {
     std::fs::create_dir_all(dst)?;
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
+        let file_type = entry.file_type()?;
+        // 跳过符号链接与目录联接：避免循环递归与把托管目录之外的数据纳入备份
+        if file_type.is_symlink() {
+            continue;
+        }
         let path = entry.path();
         let target = dst.join(entry.file_name());
-        if path.is_dir() {
+        if file_type.is_dir() {
             copy_dir_all(&path, &target)?;
         } else {
             std::fs::copy(&path, &target)?;
@@ -312,14 +317,18 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), AppError> {
     Ok(())
 }
 
-/// 统计目录内文件数与总字节数（含子目录）。
+/// 统计目录内文件数与总字节数（含子目录）。不跟随符号链接与目录联接。
 fn count_files_and_bytes(dir: &Path) -> (u64, u64) {
     fn walk(d: &Path, n: &mut u64, b: &mut u64) {
         if let Ok(entries) = std::fs::read_dir(d) {
             for e in entries.flatten() {
-                let p = e.path();
-                if p.is_dir() {
-                    walk(&p, n, b);
+                // 用 file_type（symlink 元数据）判断：符号链接不进入统计（与复制逻辑一致）
+                let Ok(ft) = e.file_type() else { continue };
+                if ft.is_symlink() {
+                    continue;
+                }
+                if ft.is_dir() {
+                    walk(&e.path(), n, b);
                 } else {
                     *n += 1;
                     *b += e.metadata().map(|m| m.len()).unwrap_or(0);
@@ -508,6 +517,32 @@ mod tests {
                     .count()
             })
             .unwrap_or(0)
+    }
+
+    #[test]
+    fn copy_dir_all_does_not_follow_symlink_loops() {
+        let src = std::env::temp_dir().join(format!("nexus-cpsrc-{}", crate::db::models::new_id()));
+        let dst = std::env::temp_dir().join(format!("nexus-cpdst-{}", crate::db::models::new_id()));
+        let _ = std::fs::remove_dir_all(&src);
+        let _ = std::fs::remove_dir_all(&dst);
+        std::fs::create_dir_all(src.join("real")).expect("mkdir");
+        std::fs::write(src.join("real/a.txt"), "x").expect("write");
+
+        // 尝试创建指向 src 自身的目录联接；无权限时跳过链接部分，仅验证正常复制
+        #[cfg(windows)]
+        {
+            let link = src.join("loop");
+            let _ = std::os::windows::fs::symlink_dir(&src, &link);
+        }
+
+        copy_dir_all(&src, &dst).expect("copy");
+
+        // 符号链接目录不应被复制进目标（无论是否创建成功都验证）
+        assert!(!dst.join("loop").exists(), "symlink loop must be skipped");
+        assert!(dst.join("real/a.txt").exists(), "real file copied");
+
+        let _ = std::fs::remove_dir_all(&src);
+        let _ = std::fs::remove_dir_all(&dst);
     }
 
     #[test]
