@@ -500,7 +500,7 @@ fn detect_into(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) ->
     true
 }
 
-/// 子项目探测跳过的一层噪音目录。
+/// 子项目探测跳过的噪音目录。
 const SKIP_SUBDIR_NAMES: &[&str] = &[
     "node_modules",
     ".git",
@@ -513,39 +513,74 @@ const SKIP_SUBDIR_NAMES: &[&str] = &[
     ".vscode",
 ];
 
-/// 仅当根目录没有直接配置文件时，扫描一层子目录识别子项目（backend/frontend 等）。
-/// 不递归更深层；候选工作目录设为对应子目录。
-fn detect_subprojects(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) {
-    let mut found = 0usize;
-    for dir in fs.list_child_dirs(root) {
-        let Some(name) = dir.file_name().map(|n| n.to_string_lossy().to_string()) else {
+/// 子项目探测的最大深度（相对项目根的层数，如 web/frontend/admin 为 3 层）。
+const MAX_SUBPROJECT_DEPTH: usize = 3;
+
+/// 把一个子项目检测结果合并进主结果，cwd 与 label 前缀为相对项目根路径。
+fn merge_subproject(
+    result: &mut DetectionResult,
+    found: &mut usize,
+    rel_path: String,
+    sub: DetectionResult,
+) {
+    *found += 1;
+    if result.runtime_kind.is_none() {
+        result.runtime_kind = sub.runtime_kind;
+    }
+    for cand in sub.candidates {
+        let label = format!("{rel_path}: {}", cand.label);
+        result.push_candidate_in(
+            label,
+            cand.executable,
+            cand.args,
+            cand.confidence,
+            Some(rel_path.clone()),
+        );
+    }
+    for d in sub.diagnostics {
+        result.push_diag(format!("{rel_path}: {d}"));
+    }
+}
+
+/// 递归扫描：目录无直接配置时下探其子目录，最多 `depth` 层；有配置即停（不递归）。
+fn scan_subprojects(
+    fs: &dyn ProjectFs,
+    dir: &Path,
+    depth: usize,
+    rel_prefix: String,
+    result: &mut DetectionResult,
+    found: &mut usize,
+) {
+    if depth > MAX_SUBPROJECT_DEPTH {
+        return;
+    }
+    for child in fs.list_child_dirs(dir) {
+        let Some(name) = child.file_name().map(|n| n.to_string_lossy().to_string()) else {
             continue;
         };
         if SKIP_SUBDIR_NAMES.contains(&name.as_str()) {
             continue;
         }
+        let rel = if rel_prefix.is_empty() {
+            name.clone()
+        } else {
+            format!("{rel_prefix}/{name}")
+        };
         let mut sub = DetectionResult::default();
-        if !detect_into(fs, &dir, &mut sub) {
-            continue;
-        }
-        found += 1;
-        if result.runtime_kind.is_none() {
-            result.runtime_kind = sub.runtime_kind;
-        }
-        for cand in sub.candidates {
-            let label = format!("{name}: {}", cand.label);
-            result.push_candidate_in(
-                label,
-                cand.executable,
-                cand.args,
-                cand.confidence,
-                Some(name.clone()),
-            );
-        }
-        for d in sub.diagnostics {
-            result.push_diag(format!("{name}: {d}"));
+        if detect_into(fs, &child, &mut sub) {
+            merge_subproject(result, found, rel, sub);
+        } else {
+            scan_subprojects(fs, &child, depth + 1, rel, result, found);
         }
     }
+}
+
+/// 仅当根目录没有直接配置文件时，有限深度扫描子目录识别子项目
+/// （backend/frontend、web/backend、web/frontend/admin 等分离结构）。
+/// 候选工作目录设为对应子目录相对路径。
+fn detect_subprojects(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) {
+    let mut found = 0usize;
+    scan_subprojects(fs, root, 1, String::new(), result, &mut found);
     if found == 0 {
         result.push_diag(
             "未识别到受支持的运行时配置文件（package.json / Cargo.toml / pyproject.toml / requirements.txt / Python 入口 / pom.xml / build.gradle / Makefile / Dockerfile），子目录中也未发现受支持的项目"
@@ -1130,5 +1165,91 @@ cli = "demo.cli:main"
                 );
             }
         }
+    }
+
+    #[test]
+    fn subproject_three_level_deep() {
+        // web/backend（Spring Boot）+ web/frontend/admin（Vue3）→ 相对 cwd 候选。
+        let fs = FakeFs::new()
+            .dir(root().join("web"))
+            .dir(root().join("web").join("backend"))
+            .file(
+                root().join("web").join("backend").join("pom.xml"),
+                "<project><build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>",
+            )
+            .path_exe("mvn")
+            .dir(root().join("web").join("frontend"))
+            .dir(root().join("web").join("frontend").join("admin"))
+            .file(
+                root().join("web").join("frontend").join("admin").join("package.json"),
+                node_pkg(r#"{"dev":"vite"}"#),
+            )
+            .path_exe("npm");
+        let r = detect(&fs, &root());
+        let backend = r
+            .candidates
+            .iter()
+            .find(|c| c.label == "web/backend: mvn spring-boot:run");
+        assert!(backend.is_some(), "应识别 web/backend: {:?}", r.candidates);
+        assert_eq!(backend.unwrap().cwd.as_deref(), Some("web/backend"));
+        let admin = r
+            .candidates
+            .iter()
+            .find(|c| c.label == "web/frontend/admin: npm run dev");
+        assert!(
+            admin.is_some(),
+            "应识别 web/frontend/admin: {:?}",
+            r.candidates
+        );
+        assert_eq!(admin.unwrap().cwd.as_deref(), Some("web/frontend/admin"));
+        assert!(r.diagnostics.iter().any(|d| d.contains("2 个可运行项目")));
+    }
+
+    #[test]
+    fn subproject_depth_limit_stops_at_three() {
+        // a/b/c/d 共 4 层 → 超出深度，不识别。
+        let fs = FakeFs::new()
+            .dir(root().join("a"))
+            .dir(root().join("a").join("b"))
+            .dir(root().join("a").join("b").join("c"))
+            .dir(root().join("a").join("b").join("c").join("d"))
+            .file(
+                root()
+                    .join("a")
+                    .join("b")
+                    .join("c")
+                    .join("d")
+                    .join("package.json"),
+                node_pkg(r#"{"dev":"vite"}"#),
+            );
+        let r = detect(&fs, &root());
+        assert!(
+            r.candidates.is_empty(),
+            "4 层超出深度限制: {:?}",
+            r.candidates
+        );
+    }
+
+    #[test]
+    fn subproject_noise_dir_at_deep_level_skipped() {
+        // web/node_modules/x/package.json → node_modules 在任何层都跳过。
+        let fs = FakeFs::new()
+            .dir(root().join("web"))
+            .dir(root().join("web").join("node_modules"))
+            .dir(root().join("web").join("node_modules").join("x"))
+            .file(
+                root()
+                    .join("web")
+                    .join("node_modules")
+                    .join("x")
+                    .join("package.json"),
+                node_pkg(r#"{"dev":"vite"}"#),
+            );
+        let r = detect(&fs, &root());
+        assert!(
+            r.candidates.is_empty(),
+            "噪音目录不应产生候选: {:?}",
+            r.candidates
+        );
     }
 }
