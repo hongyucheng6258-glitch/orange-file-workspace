@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Code2, Folder, File as FileIcon, FolderOpen, ChevronRight, ChevronDown, Plus, Trash2 } from "lucide-react";
+import { Code2, Folder, File as FileIcon, FolderOpen, ChevronRight, ChevronDown, Plus, Trash2, TerminalSquare } from "lucide-react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { Resource } from "../../../lib/types";
 import { call } from "../../../lib/tauri";
+import { getResourcePath } from "../../../lib/openResource";
 import { useEditorStore } from "../stores/editorStore";
+import { useProjectRuntimeStore } from "../stores/projectRuntimeStore";
 import { CodeEditor } from "../components/CodeEditor";
+import { ProjectRuntimePanel } from "../components/ProjectRuntimePanel";
 
 /** 文件树节点：懒加载子目录。 */
 function TreeNode({
+  projectId,
   resource,
   depth,
   onOpenFile,
 }: {
+  projectId: string;
   resource: Resource;
   depth: number;
   onOpenFile: (id: string) => void;
@@ -30,7 +35,7 @@ function TreeNode({
     if (next && !loaded) {
       try {
         const items = await call<Resource[]>("list_project_files", {
-          projectId: "",
+          projectId,
           parentId: resource.id,
         });
         setChildren(items);
@@ -39,7 +44,7 @@ function TreeNode({
         // ignore
       }
     }
-  }, [isFolder, expanded, loaded, resource.id]);
+  }, [isFolder, expanded, loaded, resource.id, projectId]);
 
   if (isFolder) {
     return (
@@ -63,7 +68,13 @@ function TreeNode({
         </button>
         {expanded &&
           children.map((c) => (
-            <TreeNode key={c.id} resource={c} depth={depth + 1} onOpenFile={onOpenFile} />
+            <TreeNode
+              key={c.id}
+              projectId={projectId}
+              resource={c}
+              depth={depth + 1}
+              onOpenFile={onOpenFile}
+            />
           ))}
       </div>
     );
@@ -101,11 +112,14 @@ export function ProjectPage() {
 
   const selectProject = useCallback(async (p: Resource) => {
     setCurrent(p);
+    setTree([]);
     const items = await call<Resource[]>("list_project_files", {
       projectId: p.id,
       parentId: null,
     });
     setTree(items);
+    // 加载运行识别、状态与事件订阅。
+    void useProjectRuntimeStore.getState().load(p.id);
   }, []);
 
   // 从收藏跳转打开指定项目。
@@ -130,6 +144,15 @@ export function ProjectPage() {
       setImporting(false);
     }
   }, [loadProjects]);
+
+  /** “在终端打开”：在项目根目录启动终端。 */
+  const openProjectTerminal = useCallback(
+    async (p: Resource) => {
+      const path = await getResourcePath(p.id);
+      navigate(path ? `/terminal?cwd=${encodeURIComponent(path)}` : "/terminal");
+    },
+    [navigate],
+  );
 
   const deleteProject = useCallback(
     async (p: Resource) => {
@@ -173,6 +196,13 @@ export function ProjectPage() {
                 <span className="project-item-name">{p.name}</span>
               </button>
               <button
+                className="icon-btn project-item-action"
+                title="在终端打开"
+                onClick={() => void openProjectTerminal(p)}
+              >
+                <TerminalSquare size={13} />
+              </button>
+              <button
                 className="icon-btn project-item-delete"
                 title="删除项目"
                 onClick={() => deleteProject(p)}
@@ -190,14 +220,24 @@ export function ProjectPage() {
         </div>
         <div className="project-tree-body">
           {tree.map((r) => (
-            <TreeNode key={r.id} resource={r} depth={0} onOpenFile={openFile} />
-          ))}
-        </div>
-      </aside>
+          <TreeNode
+            key={r.id}
+            projectId={current?.id ?? ""}
+            resource={r}
+            depth={0}
+            onOpenFile={openFile}
+          />
+        ))}
+      </div>
+    </aside>
 
-      <main className="project-editor">
-        <CodeEditor />
-      </main>
-    </div>
-  );
+    <main className="project-editor">
+      <CodeEditor />
+    </main>
+
+    <aside className="project-runtime">
+      <ProjectRuntimePanel />
+    </aside>
+  </div>
+);
 }
