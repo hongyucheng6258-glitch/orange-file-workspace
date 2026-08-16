@@ -142,6 +142,16 @@ pub trait RunEventSink: Send + Sync {
     fn emit_error(&self, p: &ErrorPayload);
 }
 
+/// 空事件输出（测试与无 UI 场景）。
+pub struct NullRunEventSink;
+
+impl RunEventSink for NullRunEventSink {
+    fn emit_status(&self, _p: &StatusPayload) {}
+    fn emit_output(&self, _p: &OutputPayload) {}
+    fn emit_exited(&self, _p: &ExitedPayload) {}
+    fn emit_error(&self, _p: &ErrorPayload) {}
+}
+
 /// 运行错误，映射到 `AppError`。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeError {

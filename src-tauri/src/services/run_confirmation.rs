@@ -21,6 +21,7 @@ pub const CANONICAL_VERSION: u32 = 1;
 
 /// 前端提交的运行配置（Tauri 命令参数）。
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RunConfig {
     pub project_id: String,
     pub executable: String,
@@ -109,6 +110,7 @@ impl Default for ConfirmationSession {
 }
 
 impl ConfirmationSession {
+    #[allow(dead_code)] // 供命令层按需构造自定义密钥的会话
     pub fn new(secret: [u8; 32]) -> Self {
         Self::with_secret_and_ttl(secret, CONFIRMATION_TTL)
     }
@@ -205,6 +207,7 @@ impl ConfirmationSession {
     }
 
     /// 当前有效票据数量（测试与诊断用）。
+    #[allow(dead_code)]
     pub fn pending_count(&self) -> usize {
         self.tickets.lock().unwrap().len()
     }
@@ -337,14 +340,6 @@ pub fn canonical_key(path: &Path) -> Option<PathBuf> {
     let s = canon.to_string_lossy().to_string();
     let s = strip_verbatim(&s).replace('/', "\\");
     Some(PathBuf::from(s))
-}
-
-/// 候选路径是否位于项目根内（基于真实路径）。
-pub fn within_root(root: &Path, candidate: &Path) -> bool {
-    match (canonical_key(root), canonical_key(candidate)) {
-        (Some(r), Some(c)) => c.strip_prefix(&r).is_ok(),
-        _ => false,
-    }
 }
 
 /// 是否为 Windows 批处理文件。
@@ -581,9 +576,13 @@ mod tests {
     }
 
     fn base_config(root: &Path) -> RunConfig {
+        // 用系统自带 cmd.exe 作为可执行程序，避免测试依赖本机 PATH（如 node）。
+        let exe = std::env::var_os("ComSpec")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Windows\System32\cmd.exe"));
         RunConfig {
             project_id: "p1".into(),
-            executable: "node".into(),
+            executable: exe.to_string_lossy().to_string(),
             args: vec!["server.js".into()],
             cwd: root.to_string_lossy().to_string(),
             env_overrides: HashMap::new(),

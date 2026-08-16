@@ -35,14 +35,6 @@ pub struct DetectionResult {
 }
 
 impl DetectionResult {
-    fn with_kind(kind: RuntimeKind) -> Self {
-        Self {
-            runtime_kind: Some(kind),
-            candidates: Vec::new(),
-            diagnostics: Vec::new(),
-        }
-    }
-
     fn push_candidate(&mut self, label: impl Into<String>, executable: impl Into<String>, args: Vec<String>, confidence: u8) {
         self.candidates.push(RuntimeCandidate {
             label: label.into(),

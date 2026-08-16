@@ -7,7 +7,7 @@ mod ipc;
 mod services;
 
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use tauri::Manager;
 
@@ -22,6 +22,7 @@ pub struct AppState {
     pub managed_dir: std::sync::Mutex<PathBuf>,
     pub conn: Mutex<rusqlite::Connection>,
     pub sampler: Mutex<services::system_service::SystemSampler>,
+    pub runtime: Arc<services::project_runtime::RuntimeManager>,
 }
 
 /// 启动配置：固定位置 `%APPDATA%\com.nexus.file-workspace\config.json`。
@@ -90,12 +91,29 @@ pub fn run() {
                 let _ = scope.allow_directory(&data_dir, true);
                 let _ = scope.allow_directory(&managed_dir, true);
             }
+            // 项目运行管理器：确认协议 + 进程生命周期 + 日志。
+            let runtime_manager = Arc::new(services::project_runtime::RuntimeManager::new(
+                Arc::new(services::process_api::Win32ProcessApiImpl),
+                Arc::new(commands::project_runtime::AppRunEventSink::new(
+                    app.handle().clone(),
+                )),
+            ));
             app.manage(AppState {
                 data_dir: Mutex::new(data_dir),
                 managed_dir: Mutex::new(managed_dir),
                 conn: Mutex::new(conn),
                 sampler: Mutex::new(services::system_service::SystemSampler::new()),
+                runtime: runtime_manager.clone(),
             });
+            // 运行管理器：确认票据过期清理 + 停止超时清理重试。
+            {
+                let runtime = runtime_manager.clone();
+                std::thread::spawn(move || loop {
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    runtime.sweep_expired();
+                    runtime.cleanup_tick();
+                });
+            }
             services::watcher_service::start_managed_watcher(app.handle().clone());
             services::backup_service::start_backup_scheduler(app.handle().clone());
             // Keep Tauri's native drop registration intact. The experimental global
@@ -187,6 +205,15 @@ pub fn run() {
             commands::system::restart_explorer,
             commands::system::run_admin_tool,
             commands::system::get_admin_status
+            ,
+            commands::project_runtime::detect_project_runtime,
+            commands::project_runtime::prepare_run_confirmation,
+            commands::project_runtime::confirm_run_config,
+            commands::project_runtime::start_project_process,
+            commands::project_runtime::stop_project_process,
+            commands::project_runtime::restart_project_process,
+            commands::project_runtime::get_project_run,
+            commands::project_runtime::get_process_logs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

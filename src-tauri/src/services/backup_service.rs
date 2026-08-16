@@ -450,6 +450,10 @@ mod tests {
                 sampler: std::sync::Mutex::new(
                     crate::services::system_service::SystemSampler::new(),
                 ),
+                runtime: std::sync::Arc::new(crate::services::project_runtime::RuntimeManager::new(
+                    std::sync::Arc::new(crate::services::process_api::Win32ProcessApiImpl),
+                    std::sync::Arc::new(crate::services::project_runtime::NullRunEventSink),
+                )),
             },
             dir,
         )

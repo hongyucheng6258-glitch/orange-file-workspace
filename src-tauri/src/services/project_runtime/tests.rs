@@ -183,17 +183,11 @@ impl TestSink {
     fn new() -> Arc<Self> {
         Arc::new(Self::default())
     }
-    fn statuses(&self) -> Vec<StatusPayload> {
-        self.statuses.lock().unwrap().clone()
-    }
     fn outputs(&self) -> Vec<OutputPayload> {
         self.outputs.lock().unwrap().clone()
     }
     fn exited(&self) -> Vec<ExitedPayload> {
         self.exited.lock().unwrap().clone()
-    }
-    fn errors(&self) -> Vec<ErrorPayload> {
-        self.errors.lock().unwrap().clone()
     }
     fn wait_outputs(&self, expected: usize, timeout: Duration) -> Vec<OutputPayload> {
         let deadline = Instant::now() + timeout;
@@ -204,18 +198,6 @@ impl TestSink {
             }
             if Instant::now() >= deadline {
                 return self.outputs();
-            }
-            std::thread::sleep(Duration::from_millis(20));
-        }
-    }
-    fn wait_state(&self, state: RunState, timeout: Duration) -> bool {
-        let deadline = Instant::now() + timeout;
-        loop {
-            if self.statuses().iter().any(|s| s.state == state) {
-                return true;
-            }
-            if Instant::now() >= deadline {
-                return false;
             }
             std::thread::sleep(Duration::from_millis(20));
         }
