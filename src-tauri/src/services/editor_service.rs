@@ -161,6 +161,11 @@ pub fn get_draft(conn: &Connection, resource_id: &str) -> Result<Option<String>,
     Ok(draft.filter(|d| !d.is_empty()))
 }
 
+/// 读取磁盘文件的当前完整内容（与编辑器同样上限），用于冲突对比。
+pub fn read_disk_full(path: &Path) -> Result<String, AppError> {
+    preview_service::read_text_full(path, EDITOR_MAX_BYTES)
+}
+
 /// 最近打开的文件（按会话更新时间倒序，排除已删除资源）。
 /// 返回 (resource_id, 文件名, 路径, 更新时间)。
 pub fn list_recent_files(

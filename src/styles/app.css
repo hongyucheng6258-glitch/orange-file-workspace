@@ -812,6 +812,45 @@ input {
   gap: 14px;
 }
 
+.modal.modal-wide {
+  width: min(900px, 92vw);
+}
+
+.diff-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  min-height: 0;
+}
+
+.diff-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.diff-pane-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.diff-pre {
+  margin: 0;
+  padding: 10px;
+  background: var(--surface-2, #f5f6f8);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow: auto;
+  max-height: 55vh;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: var(--font-mono, monospace);
+}
+
 .modal h3 {
   margin: 0;
   font-size: 15px;
@@ -1021,6 +1060,12 @@ input {
   justify-content: space-between;
   color: var(--text-tertiary);
   font-size: 12px;
+}
+
+.task-card-meta.index-volumes {
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  justify-content: flex-start;
 }
 
 /* ===== 底部任务条 ===== */

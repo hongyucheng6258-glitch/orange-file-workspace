@@ -15,9 +15,10 @@ import { php } from "@codemirror/lang-php";
 import { StreamLanguage } from "@codemirror/language";
 import { go } from "@codemirror/legacy-modes/mode/go";
 import { toml } from "@codemirror/legacy-modes/mode/toml";
-import { Save, X, AlertTriangle, RotateCcw } from "lucide-react";
+import { Save, X, AlertTriangle, RotateCcw, FileCode2, Loader2 } from "lucide-react";
 import { useEditorStore } from "../stores/editorStore";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
+import { call } from "../../../lib/tauri";
 
 function langFor(name: string) {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
@@ -72,6 +73,22 @@ export function CodeEditor() {
   const { openFile, content, dirty, saving, conflict, openError, pendingDraft, setContent, save, forceSave, close, resolveClose, cancelPending, clearError, resolveDraft } =
     useEditorStore();
   const [showUnsaved, setShowUnsaved] = useState(false);
+  const [diskVersion, setDiskVersion] = useState<string | null>(null);
+  const [diskLoading, setDiskLoading] = useState(false);
+
+  // 冲突时读取磁盘当前内容用于对比
+  const viewDiskVersion = useCallback(async () => {
+    if (!openFile) return;
+    setDiskLoading(true);
+    try {
+      const text = await call<string>("read_disk_content", { resourceId: openFile.resource.id });
+      setDiskVersion(text);
+    } catch (e) {
+      window.alert(`读取磁盘版本失败：${(e as Error).message}`);
+    } finally {
+      setDiskLoading(false);
+    }
+  }, [openFile]);
 
   const extensions = useMemo(
     () => [langFor(openFile?.resource.name ?? "")],
@@ -167,6 +184,10 @@ export function CodeEditor() {
               {conflict.message}。磁盘上的文件已改变，继续保存将覆盖外部修改。
             </p>
             <div className="modal-actions">
+              <button className="btn" onClick={() => void viewDiskVersion()} disabled={diskLoading}>
+                {diskLoading ? <Loader2 size={13} className="spin" /> : <FileCode2 size={13} />}{" "}
+                {diskLoading ? "读取中…" : "查看磁盘版本"}
+              </button>
               <button className="btn" onClick={() => void resolveClose(false)}>
                 <RotateCcw size={13} /> 放弃修改
               </button>
@@ -179,6 +200,29 @@ export function CodeEditor() {
               >
                 覆盖保存
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {diskVersion !== null && (
+        <div className="modal-mask">
+          <div className="modal modal-wide">
+            <div className="modal-head">
+              <h3>磁盘版本对比</h3>
+              <button className="icon-btn" onClick={() => setDiskVersion(null)} title="关闭">
+                <X size={14} />
+              </button>
+            </div>
+            <div className="diff-grid">
+              <div className="diff-pane">
+                <div className="diff-pane-title">磁盘当前内容</div>
+                <pre className="diff-pre">{diskVersion}</pre>
+              </div>
+              <div className="diff-pane">
+                <div className="diff-pane-title">我的未保存修改</div>
+                <pre className="diff-pre">{content}</pre>
+              </div>
             </div>
           </div>
         </div>

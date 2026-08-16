@@ -60,6 +60,21 @@ pub fn save_draft(
     Ok(())
 }
 
+/// 读取磁盘上文件的当前完整内容（与编辑器同上限），用于冲突对比。
+#[tauri::command]
+pub fn read_disk_content(state: State<AppState>, resource_id: String) -> CommandResult<String> {
+    let conn = lock_db(&state);
+    let locations = crate::db::repositories::list_locations(&conn, &resource_id)?;
+    let Some(loc) = locations.first() else {
+        return Err(AppError::new("location_missing", "资源缺少物理位置"));
+    };
+    let path = std::path::PathBuf::from(&loc.path);
+    if !path.is_file() {
+        return Err(AppError::new("not_file", "该资源不是文件"));
+    }
+    editor_service::read_disk_full(&path)
+}
+
 /// 最近打开的文件（编辑器会话按更新时间倒序）。
 #[tauri::command]
 pub fn list_recent_files(state: State<AppState>) -> CommandResult<Vec<serde_json::Value>> {
