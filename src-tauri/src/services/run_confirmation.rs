@@ -88,6 +88,7 @@ impl From<ConfirmationError> for AppError {
 
 /// 确认预览：脱敏后的运行摘要。
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConfirmationPreview {
     pub confirmation_id: String,
     pub summary: serde_json::Value,
@@ -96,6 +97,7 @@ pub struct ConfirmationPreview {
 
 /// 确认兑换结果。
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConfirmationGrant {
     pub confirmation_id: String,
     pub confirmation_hash: String,
