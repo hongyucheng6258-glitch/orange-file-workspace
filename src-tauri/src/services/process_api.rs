@@ -456,6 +456,50 @@ mod win32 {
 #[allow(unused_imports)] // 步骤 4 运行状态机将引用该实现
 pub use win32::Win32ProcessApiImpl;
 
+#[cfg(test)]
+impl JobHandle {
+    pub(crate) fn test_new() -> Self {
+        #[cfg(windows)]
+        {
+            Self { inner: windows::Win32::Foundation::HANDLE(std::ptr::null_mut()) }
+        }
+        #[cfg(not(windows))]
+        {
+            Self {}
+        }
+    }
+}
+
+// Windows 内核句柄只是指针，可在线程间移动；Drop 从任意线程 CloseHandle 均安全。
+// 运行管理器会把句柄所有权传入协调线程，因此必须标记 Send/Sync。
+unsafe impl Send for JobHandle {}
+unsafe impl Sync for JobHandle {}
+unsafe impl Send for SuspendedProcess {}
+
+#[cfg(test)]
+impl SuspendedProcess {
+    pub(crate) fn test_new(
+        pid: u32,
+        stdout: Option<Box<dyn Read + Send>>,
+        stderr: Option<Box<dyn Read + Send>>,
+    ) -> Self {
+        #[cfg(windows)]
+        {
+            Self {
+                process: windows::Win32::Foundation::HANDLE::default(),
+                thread: windows::Win32::Foundation::HANDLE::default(),
+                pid,
+                stdout,
+                stderr,
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            Self { pid, stdout, stderr }
+        }
+    }
+}
+
 #[cfg(not(windows))]
 pub struct Win32ProcessApiImpl;
 
