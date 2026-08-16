@@ -31,13 +31,19 @@ impl AppRunEventSink {
 
 impl RunEventSink for AppRunEventSink {
     fn emit_status(&self, p: &StatusPayload) {
-        let _ = self.app.emit(crate::events::EVENT_PROJECT_PROCESS_STATUS, p);
+        let _ = self
+            .app
+            .emit(crate::events::EVENT_PROJECT_PROCESS_STATUS, p);
     }
     fn emit_output(&self, p: &OutputPayload) {
-        let _ = self.app.emit(crate::events::EVENT_PROJECT_PROCESS_OUTPUT, p);
+        let _ = self
+            .app
+            .emit(crate::events::EVENT_PROJECT_PROCESS_OUTPUT, p);
     }
     fn emit_exited(&self, p: &ExitedPayload) {
-        let _ = self.app.emit(crate::events::EVENT_PROJECT_PROCESS_EXITED, p);
+        let _ = self
+            .app
+            .emit(crate::events::EVENT_PROJECT_PROCESS_EXITED, p);
     }
     fn emit_error(&self, p: &ErrorPayload) {
         let _ = self.app.emit(crate::events::EVENT_PROJECT_PROCESS_ERROR, p);
@@ -137,6 +143,7 @@ pub fn restart_project_process(
 }
 
 /// 查询项目当前运行状态（活动或最近终态）。
+/// 先按项目根键查询；无结果时回退按 project_id 匹配（覆盖子项目运行）。
 #[tauri::command]
 pub fn get_project_run(
     state: State<AppState>,
@@ -148,7 +155,9 @@ pub fn get_project_run(
     let key = crate::services::run_confirmation::canonical_key(&root)
         .map(|p| p.to_string_lossy().to_string())
         .ok_or_else(|| AppError::new("invalid_working_directory", "项目根目录无法解析"))?;
-    Ok(runtime(&state).get_run_by_project_key(&key))
+    let runtime = runtime(&state);
+    let by_key = runtime.get_run_by_project_key(&key);
+    Ok(by_key.or_else(|| runtime.get_run_by_project_id(&project_id)))
 }
 
 /// 获取运行实例当前保留的日志分页。

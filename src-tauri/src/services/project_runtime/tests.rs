@@ -574,3 +574,36 @@ fn history_keeps_project_run_out_of_active() {
     let all = manager.list_runs(true);
     assert!(all.iter().any(|s| s.run_id == "hist-run-1"));
 }
+
+#[test]
+fn get_run_by_project_id_finds_subproject_runs() {
+    let api = FakeApi::new();
+    let sink = TestSink::new();
+    let manager = make_manager(api.clone(), sink.clone());
+    let root = tmp_root("by-pid");
+    // 工作目录必须真实存在（start 校验）。
+    let backend_dir = root.join("web").join("backend");
+    let frontend_dir = root.join("web").join("frontend");
+    std::fs::create_dir_all(&backend_dir).unwrap();
+    std::fs::create_dir_all(&frontend_dir).unwrap();
+    // 同一项目（project_id 相同）两个子项目（cwd 不同）并行运行。
+    let mut cfg_backend = base_config(&root);
+    cfg_backend.cwd = backend_dir.to_string_lossy().to_string();
+    let mut cfg_frontend = base_config(&root);
+    cfg_frontend.cwd = frontend_dir.to_string_lossy().to_string();
+    let s1 = start_run(&manager, &root, &cfg_backend);
+    let s2 = start_run(&manager, &root, &cfg_frontend);
+    assert_eq!(s1.state, RunState::Running, "子项目 cwd 不同应可并行");
+    assert_eq!(s2.state, RunState::Running);
+    // 按 project_id 查到活动运行（并行时 started_at 可能同秒，断言任一子项目运行命中）。
+    let found = manager.get_run_by_project_id("p1").unwrap();
+    assert!(found.run_id == s1.run_id || found.run_id == s2.run_id);
+    assert!(!found.state.is_terminal());
+    // 停止后端后仍能按 project_id 查到运行（stopping 或另一子项目活动）。
+    let _ = manager.stop(&s1.run_id).unwrap();
+    let found2 = manager.get_run_by_project_id("p1").unwrap();
+    assert!(found2.run_id == s1.run_id || found2.run_id == s2.run_id);
+    // 无运行（未加载历史）时返回 None。
+    let empty = make_manager(api.clone(), sink.clone());
+    assert!(empty.get_run_by_project_id("p1").is_none());
+}

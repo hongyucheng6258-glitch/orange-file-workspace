@@ -1014,6 +1014,14 @@ impl RuntimeManager {
         inner.recent.get(project_key).map(|r| r.snapshot.clone())
     }
 
+    /// 按 project_id 查询最近运行（活动优先，含子项目运行；无活动时回退最近终态）。
+    /// 多个活动运行（如前后端子项目并行）取启动时间最近的一个。
+    pub fn get_run_by_project_id(&self, project_id: &str) -> Option<RunSnapshot> {
+        let mut out = self.list_runs(true);
+        out.retain(|s| s.project_id == project_id);
+        out.first().cloned()
+    }
+
     pub fn get_logs(&self, run_id: &str, after_seq: u64) -> Result<LogPage, RuntimeError> {
         let inner = self.inner.lock().unwrap();
         let bus = if let Some(run) = inner.runs.get(run_id) {
