@@ -1893,6 +1893,57 @@ input {
 
 .run-error-line { font-size: 11px; color: #dc2626; word-break: break-all; }
 
+/* ---- Web 端口预览 ---- */
+.run-btn-preview { margin-left: auto; }
+.run-preview-target {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--input-bg, rgba(0, 0, 0, 0.03));
+}
+.run-preview-url {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.run-preview-url code {
+  font-family: var(--font-mono, Consolas, monospace);
+  font-size: 12px;
+  color: var(--primary);
+  word-break: break-all;
+}
+.run-ownership-badge {
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.run-ownership-badge.confirmed { background: rgba(34, 197, 94, 0.15); color: #16a34a; }
+.run-ownership-badge.unconfirmed { background: rgba(245, 158, 11, 0.15); color: #d97706; }
+.run-preview-meta { font-size: 11px; color: var(--text-secondary); }
+.run-preview-warn {
+  font-size: 11px;
+  color: #d97706;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.run-preview-manual {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  border: 1px solid #d97706;
+  color: #d97706;
+  background: transparent;
+  cursor: pointer;
+}
+.run-preview-manual:hover { background: rgba(217, 119, 6, 0.1); }
+
 .run-log-viewer {
   flex: 1;
   min-height: 120px;

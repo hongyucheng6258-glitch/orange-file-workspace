@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Play, RotateCw, Square, Trash2, Plus, TerminalSquare } from "lucide-react";
+import { Eye, Loader2, Play, RotateCw, Square, Trash2, Plus, TerminalSquare } from "lucide-react";
 import { useProjectRuntimeStore } from "../stores/projectRuntimeStore";
+import { useProjectPreviewStore } from "../stores/projectPreviewStore";
+import { ownershipLabel, previewSourceLabel, subscribePreviewReady } from "../lib/projectPreview";
 import { ProjectLogViewer } from "./ProjectLogViewer";
 import { RunConfirmationDialog } from "./RunConfirmationDialog";
 
-/** 项目页运行面板：识别、配置、确认、启动/停止/重启、日志。 */
+/** 项目页运行面板：识别、配置、确认、启动/停止/重启、Web 预览、日志。 */
 export function ProjectRuntimePanel() {
   const store = useProjectRuntimeStore();
+  const preview = useProjectPreviewStore();
   const [showConfirm, setShowConfirm] = useState(false);
 
+  const projectId = store.projectId;
   const detection = store.detection;
   const config = store.config;
   const run = store.run;
@@ -22,6 +26,30 @@ export function ProjectRuntimePanel() {
     }
     return { canStart: true, canStop: false, canRestart: true };
   }, [run]);
+
+  const canPreview = run?.state === "running";
+
+  // 项目切换时清空预览状态并订阅就绪事件。
+  useEffect(() => {
+    preview.reset();
+    let disposed = false;
+    let off: (() => void) | null = null;
+    void subscribePreviewReady((target) => {
+      if (disposed) return;
+      const current = useProjectRuntimeStore.getState().run;
+      if (current && target.runId === current.runId) {
+        useProjectPreviewStore.setState({ target });
+      }
+    }).then((unlisten) => {
+      if (disposed) unlisten();
+      else off = unlisten;
+    });
+    return () => {
+      disposed = true;
+      off?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   const stateLabel: Record<string, string> = {
     starting: "启动中",
@@ -239,7 +267,42 @@ export function ProjectRuntimePanel() {
               >
                 <RotateCw size={13} /> 重启
               </button>
+              <button
+                className="btn-secondary run-btn-preview"
+                disabled={!canPreview || preview.checking}
+                onClick={() => void preview.openPreview()}
+              >
+                <Eye size={13} /> {preview.checking ? "检查中…" : "预览"}
+              </button>
             </div>
+
+            {preview.target && (
+              <div className="run-preview-target">
+                <div className="run-preview-url">
+                  <code>{preview.target.url}</code>
+                  <span className={`run-ownership-badge ${preview.target.ownership}`}>
+                    {ownershipLabel(preview.target.ownership)}
+                  </span>
+                </div>
+                <div className="run-preview-meta">
+                  来源：{previewSourceLabel(preview.target.source)} · 端口 {preview.target.port}
+                </div>
+                {preview.target.ownership === "unconfirmed" && (
+                  <div className="run-preview-warn">
+                    端口归属未确认：该端口可能被其他进程占用。请确认后手动打开。
+                    <button
+                      className="run-preview-manual"
+                      onClick={() => void preview.openInBrowser()}
+                    >
+                      手动打开
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {preview.error && (
+              <div className="run-error-line">{preview.error}</div>
+            )}
 
             {run?.errorMessage && (
               <div className="run-error-line">
