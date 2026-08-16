@@ -84,8 +84,7 @@ pub fn terminal_history_record(
     cwd: Option<String>,
 ) -> CommandResult<()> {
     let conn = state.conn.lock().expect("db lock poisoned");
-    record_command(&conn, &shell, &command, cwd.as_deref().unwrap_or(""))
-        .map_err(crate::error::AppError::from)?;
+    record_command(&conn, &shell, &command, cwd.as_deref().unwrap_or(""))?;
     Ok(())
 }
 
@@ -97,8 +96,7 @@ pub fn terminal_history_list(
     limit: Option<usize>,
 ) -> CommandResult<Vec<TerminalHistoryEntry>> {
     let conn = state.conn.lock().expect("db lock poisoned");
-    let entries =
-        list_history(&conn, &shell, limit.unwrap_or(100)).map_err(crate::error::AppError::from)?;
+    let entries = list_history(&conn, &shell, limit.unwrap_or(100))?;
     Ok(entries)
 }
 
@@ -106,6 +104,6 @@ pub fn terminal_history_list(
 #[tauri::command]
 pub fn terminal_history_clear(state: State<AppState>, shell: Option<String>) -> CommandResult<()> {
     let conn = state.conn.lock().expect("db lock poisoned");
-    clear_history(&conn, shell.as_deref()).map_err(crate::error::AppError::from)?;
+    clear_history(&conn, shell.as_deref())?;
     Ok(())
 }

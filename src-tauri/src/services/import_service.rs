@@ -690,7 +690,7 @@ pub fn is_ignored(path: &Path, rules: &[settings_service::IgnoreRule]) -> bool {
         let pat = rule.pattern.to_lowercase();
         let matched = match rule.kind.as_str() {
             "name" => {
-                name == pat || (pat.ends_with('*') && name.starts_with(&pat.trim_end_matches('*')))
+                name == pat || (pat.ends_with('*') && name.starts_with(pat.trim_end_matches('*')))
             }
             _ => path_lower.contains(&pat),
         };

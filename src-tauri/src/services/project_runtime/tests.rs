@@ -1,7 +1,7 @@
 //! 运行状态机测试：注入式进程 API + 事件收集 sink（替身见 `test_support`）。
 
 use super::*;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 
 use crate::services::run_history::InMemoryRunHistoryStore;
@@ -313,9 +313,12 @@ fn stop_during_start_never_resumes() {
 
 // ---- 失败注入 ----
 
+/// 失败注入用例：名称 + 注入回调。
+type FailureCase<'a> = (&'a str, &'a dyn Fn(&FakeApi));
+
 #[test]
 fn spawn_failures_release_key_and_report_codes() {
-    let cases: &[(&str, &dyn Fn(&FakeApi))] = &[
+    let cases: &[FailureCase] = &[
         ("create_job", &|api| {
             api.fail_create_job.store(true, Ordering::SeqCst)
         }),
@@ -423,7 +426,7 @@ fn exited_event_fires_after_output_drained() {
     api.spawn_stdout(b"last line before exit\n");
     api.set_natural_exit(0);
     let config = base_config(&root);
-    let snap = start_run(&manager, &root, &config);
+    let _snap = start_run(&manager, &root, &config);
     // 等待 exited 事件。
     assert!(wait_until(
         || !sink.exited().is_empty(),

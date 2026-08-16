@@ -395,7 +395,7 @@ pub fn spawn_session(
 
 /// 向会话写入输入（UTF-8 字节流）。
 pub fn write_session(runtime: &TerminalRuntime, id: u64, data: &str) -> Result<(), AppError> {
-    if data.as_bytes().len() > MAX_WRITE_BYTES {
+    if data.len() > MAX_WRITE_BYTES {
         return Err(AppError::new("input_too_large", "单次输入超过 64KB 限制"));
     }
     let sessions = runtime.sessions.lock().expect("terminal sessions lock");

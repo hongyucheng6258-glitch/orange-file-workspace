@@ -7,6 +7,10 @@
 //!    错误注册，并将事件以 `tauri://drag-*` 的格式转发给前端，与 Tauri 内置事件兼容。
 //! 2. 拖出：通过 OLE `DoDragDrop` 将资源物理路径从应用窗口拖出（复制/移动到
 //!    资源管理器等外部目标）。
+//!
+//! 注意：拖入已由 wry 内置 `dragDropEnabled` 覆盖，本模块的拖入注册保留备用。
+
+#![allow(dead_code)] // 拖入注册为历史保留（内置拖放已生效），拖出部分由命令层使用
 
 use std::{
     cell::UnsafeCell, ffi::OsString, mem, os::windows::ffi::OsStringExt, path::PathBuf, ptr,
@@ -391,8 +395,10 @@ impl IDataObject_Impl for DragSourceData_Impl {
                 return Err(E_NOTIMPL.into());
             }
             let handle = self.build_hdrop()?;
-            let mut medium = STGMEDIUM::default();
-            medium.tymed = TYMED_HGLOBAL.0 as u32;
+            let mut medium = STGMEDIUM {
+                tymed: TYMED_HGLOBAL.0 as u32,
+                ..Default::default()
+            };
             medium.u.hGlobal = handle;
             Ok(medium)
         }

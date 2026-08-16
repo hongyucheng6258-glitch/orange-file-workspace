@@ -73,7 +73,7 @@ pub fn extract_file_icon(path: &Path, cache_dir: &Path) -> Result<PathBuf, AppEr
             CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, SelectObject,
             BITMAP, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HDC,
         },
-        UI::Shell::{SHGetFileInfoW, SHFILEINFOW, SHGFI_FLAGS, SHGFI_ICON, SHGFI_LARGEICON},
+        UI::Shell::{SHGetFileInfoW, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON},
         UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo, HICON, ICONINFO},
     };
 

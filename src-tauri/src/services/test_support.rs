@@ -76,6 +76,7 @@ impl FakeApi {
         self.calls.lock().unwrap().iter().any(|c| c == call)
     }
 
+    #[allow(dead_code)] // 测试辅助：按需读取完整调用列表
     pub fn calls(&self) -> Vec<String> {
         self.calls.lock().unwrap().clone()
     }

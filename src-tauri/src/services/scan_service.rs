@@ -12,6 +12,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 /// 单卷扫描状态。
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // 部分字段仅测试断言使用，保留以完整映射 DB 行
 pub struct VolumeState {
     pub volume_id: String,
     pub root_path: String,
@@ -181,14 +182,7 @@ pub fn scan_directory(
     queue.push_back(root.to_path_buf());
     let mut indexed: i64 = 0;
     let mut skipped: i64 = 0;
-    let mut batch: Vec<(
-        String,
-        String,
-        String,
-        Option<String>,
-        Option<i64>,
-        Option<i64>,
-    )> = Vec::new();
+    let mut batch: Vec<IndexBatchRow> = Vec::new();
     let now = crate::db::connection::now_unix();
     // 最近处理的目录：每批 flush 时作为断点写入（含最后一批，保证小目录也可续扫）
     // 注意：checkpoint 只用于进度展示；恢复续扫必须从卷根重新开始（见 scan_start），
@@ -304,6 +298,16 @@ fn path_under(p: &std::path::Path, excluded: &std::path::Path) -> bool {
     }
 }
 
+/// 索引批量写入的一条记录：(canonical_path, display_name, entry_kind, extension, file_size, modified_at)
+type IndexBatchRow = (
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<i64>,
+    Option<i64>,
+);
+
 /// 批量写入索引条目并同步 FTS 外部内容表（代次感知 upsert）。
 ///
 /// 重建索引（rebuild_search_index 对每卷 scan_generation+1 后重扫全卷）时，
@@ -319,14 +323,7 @@ fn path_under(p: &std::path::Path, excluded: &std::path::Path) -> bool {
 /// 批次整体包一个事务：逐条 upsert + FTS 同步后一次提交，避免逐行隐式事务。
 fn flush_batch(
     conn: &mut Connection,
-    batch: &[(
-        String,
-        String,
-        String,
-        Option<String>,
-        Option<i64>,
-        Option<i64>,
-    )],
+    batch: &[IndexBatchRow],
     volume_id: &str,
     generation: i64,
     now: i64,
@@ -1009,7 +1006,7 @@ mod tests {
             let _ = fs::remove_dir_all(&root);
             fs::create_dir_all(root.join("real")).unwrap();
             fs::write(root.join("real/t.txt"), "x").unwrap();
-            let _ = std::os::windows::fs::symlink_dir(&root.join("real"), root.join("loop"));
+            let _ = std::os::windows::fs::symlink_dir(root.join("real"), root.join("loop"));
             scan_directory(&mut c, &root, "v2", 1, &[], &ScanControl::default()).unwrap();
             let count: i64 = c
                 .query_row("SELECT count(*) FROM system_search_entries", [], |r| {

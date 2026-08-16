@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test:rust": "cd src-tauri && cargo test",
     "fmt": "cd src-tauri && cargo fmt --check",
-    "clippy": "cd src-tauri && cargo clippy --all-targets",
+    "clippy": "cd src-tauri && cargo clippy --all-targets -- -D warnings",
     "check": "npm run typecheck && npm run test && npm run test:rust && npm run fmt && npm run clippy"
   },
   "dependencies": {

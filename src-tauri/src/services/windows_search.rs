@@ -7,6 +7,7 @@
 //! 1. COM 绑定不可用（如本机未启用 Search 服务）→ 返回 `Err`，调用方降级到本地索引层；
 //! 2. SQL 执行依赖 OLE DB（`Search.CollatorDSO` provider），windows crate 未提供
 //!    完整 OLE DB 绑定时 `query_windows_search_ole_db` 返回 `Err`，同样触发降级。
+//!
 //! 首版按"探测 + 优雅降级"实现：AQS→SQL 的编译链路走通即证明索引可达，
 //! 结果查询留待后续按 OLE DB provider 文档补齐（约 300 行 COM 调用）。
 

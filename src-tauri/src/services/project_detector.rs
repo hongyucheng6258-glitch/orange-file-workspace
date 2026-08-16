@@ -903,7 +903,7 @@ cli = "demo.cli:main"
         let _ = detect(&fs, &root());
         let reads = fs.read_log();
         for p in &reads {
-            let rel = p.strip_prefix(&root()).unwrap();
+            let rel = p.strip_prefix(root()).unwrap();
             let first = rel
                 .components()
                 .next()
@@ -1157,7 +1157,7 @@ cli = "demo.cli:main"
         let _ = detect(&fs, &root());
         let reads = fs.read_log();
         for p in &reads {
-            let rel = p.strip_prefix(&root()).unwrap();
+            let rel = p.strip_prefix(root()).unwrap();
             let parts: Vec<String> = rel
                 .components()
                 .map(|c| c.as_os_str().to_string_lossy().to_string())

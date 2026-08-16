@@ -10,7 +10,6 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use sha2::{Digest, Sha256};
-use subtle::ConstantTimeEq;
 
 use crate::error::AppError;
 
@@ -117,6 +116,7 @@ struct GrantEntry {
 
 /// 会话级确认管理：密钥驻留内存，票据单次使用，授权令牌单次消费。
 pub struct ConfirmationSession {
+    #[allow(dead_code)] // 预留：持久化/跨进程票据签名校验使用
     secret: [u8; 32],
     ttl: Duration,
     tickets: Mutex<HashMap<String, ConfirmationTicket>>,
@@ -264,6 +264,8 @@ impl ConfirmationSession {
 }
 
 /// 基于 sha2 的 HMAC-SHA-256（SHA-256 块大小 64 字节）。
+/// 预留：当前确认走内存 grants 表，签名用于持久化票据校验扩展。
+#[allow(dead_code)]
 fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
     const BLOCK: usize = 64;
     let mut k = [0u8; BLOCK];
@@ -291,6 +293,7 @@ fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
 }
 
 /// base64url 无填充编码。
+#[allow(dead_code)] // 与 hmac_sha256 配套的预留签名编码
 fn base64url(data: &[u8]) -> String {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     let mut out = String::new();
@@ -311,6 +314,7 @@ fn base64url(data: &[u8]) -> String {
     out
 }
 
+#[allow(dead_code)] // 与 hmac_sha256/base64url 配套的预留签名
 fn compute_hash(secret: &[u8; 32], canonical_json: &[u8]) -> String {
     base64url(&hmac_sha256(secret, canonical_json))
 }

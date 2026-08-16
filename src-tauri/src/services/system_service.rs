@@ -4,14 +4,14 @@
 //! 实时指标由前端按需轮询，本服务通过共享采样器计算增量速率。
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use serde::Serialize;
 use sysinfo::{Disks, Networks, ProcessStatus, ProcessesToUpdate, System, Users};
 
 /// 网络采样记录，用于计算上下行速率。
-struct NetSample {
+pub struct NetSample {
     received: u64,
     transmitted: u64,
     at: Instant,
@@ -278,7 +278,7 @@ pub fn collect_processes(
         .collect();
 
     if sort_by == "memory" {
-        list.sort_by(|a, b| b.memory.cmp(&a.memory));
+        list.sort_by_key(|p| std::cmp::Reverse(p.memory));
     } else {
         list.sort_by(|a, b| b.cpu_usage.total_cmp(&a.cpu_usage));
     }
@@ -400,7 +400,7 @@ fn report_table(title: &str, rows: Vec<(String, String)>) -> String {
 /// 生成诊断报告（JSON + HTML），保存到数据目录下的 system-reports/。
 pub fn export_report(
     sampler: &mut SystemSampler,
-    data_dir: &PathBuf,
+    data_dir: &Path,
     app_version: &str,
 ) -> Result<ReportOutput, String> {
     let overview = collect_overview(sampler);
@@ -827,7 +827,7 @@ mod tests {
         let mut s = SystemSampler::new();
         let snap = collect_snapshot(&mut s);
         assert!(snap.mem_total > 0);
-        assert!(snap.cpu_per_core.len() > 0);
+        assert!(!snap.cpu_per_core.is_empty());
         assert!(snap.timestamp > 0);
     }
 

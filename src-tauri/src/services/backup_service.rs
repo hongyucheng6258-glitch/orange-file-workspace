@@ -209,15 +209,13 @@ pub fn restore_from_dir(state: &AppState, backup_dir: &Path) -> Result<(), AppEr
     if managed_src.exists() {
         let protect_managed = protect_dir.join("managed-files-current");
         let managed_dst = state.managed_dir.lock().expect("dir lock").clone();
-        if let Err(e) = restore_managed_files(
+        restore_managed_files(
             state,
             &managed_src,
             &managed_dst,
             &protect_managed,
             &protect_dir,
-        ) {
-            return Err(e);
-        }
+        )?;
     }
 
     Ok(())

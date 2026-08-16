@@ -375,7 +375,7 @@ mod win32 {
             unsafe { CreatePipe(&mut out_read, &mut out_write, None, 0) }
                 .map_err(|_| api_error("创建 stdout 管道"))?;
             let out_read_g = RawHandleGuard(out_read);
-            let out_write_g = RawHandleGuard(out_write);
+            let _out_write_g = RawHandleGuard(out_write);
             make_inheritable(out_write)?;
 
             let mut err_read: HANDLE = Default::default();
@@ -383,11 +383,11 @@ mod win32 {
             unsafe { CreatePipe(&mut err_read, &mut err_write, None, 0) }
                 .map_err(|_| api_error("创建 stderr 管道"))?;
             let err_read_g = RawHandleGuard(err_read);
-            let err_write_g = RawHandleGuard(err_write);
+            let _err_write_g = RawHandleGuard(err_write);
             make_inheritable(err_write)?;
 
             let nul_in = open_nul_read_handle()?;
-            let nul_g = RawHandleGuard(nul_in);
+            let _nul_g = RawHandleGuard(nul_in);
 
             // 显式句柄继承白名单：仅 stdin/stdout/stderr，避免应用内其他可继承
             // 句柄（文件、管道、同步对象）被意外传给项目代码。
@@ -404,7 +404,7 @@ mod win32 {
                 InitializeProcThreadAttributeList(Some(attr_list), 1, None, &mut attr_size)
                     .map_err(|_| api_error("初始化句柄属性列表"))?;
             }
-            let attr_guard = ProcAttributeGuard(attr_list);
+            let _attr_guard = ProcAttributeGuard(attr_list);
             unsafe {
                 UpdateProcThreadAttribute(
                     attr_list,
@@ -805,7 +805,7 @@ mod tests {
         let text: String = block
             .split(|&u| u == 0)
             .filter(|s| !s.is_empty())
-            .map(|u| String::from_utf16_lossy(u))
+            .map(String::from_utf16_lossy)
             .collect::<Vec<_>>()
             .join("|");
         assert_eq!(text, "KEEP=1|PATH=C:\\new");
@@ -837,7 +837,7 @@ mod tests {
         let text: String = block
             .split(|&u| u == 0)
             .filter(|s| !s.is_empty())
-            .map(|u| String::from_utf16_lossy(u))
+            .map(String::from_utf16_lossy)
             .collect::<Vec<_>>()
             .join("|");
         assert_eq!(text, "Path=C:\\new");

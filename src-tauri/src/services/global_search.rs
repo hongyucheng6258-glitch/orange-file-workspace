@@ -77,7 +77,7 @@ fn kind_bonus(kind: &str) -> i64 {
 }
 
 /// 按评分降序排序；同分按类型加权后按名称字节序升序（tie-break）。
-pub fn sort_hits(hits: &mut Vec<GlobalSearchHit>) {
+pub fn sort_hits(hits: &mut [GlobalSearchHit]) {
     hits.sort_by(|a, b| {
         let wa = a.score + kind_bonus(&a.kind);
         let wb = b.score + kind_bonus(&b.kind);

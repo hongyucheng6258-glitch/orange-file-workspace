@@ -72,25 +72,20 @@ pub fn collect_gpu_info() -> Vec<GpuInfo> {
     unsafe {
         if let Ok(factory) = CreateDXGIFactory1::<IDXGIFactory1>() {
             let mut index = 0u32;
-            loop {
-                match factory.EnumAdapters1(index) {
-                    Ok(adapter) => {
-                        if let Ok(desc) = adapter.GetDesc1() {
-                            let name = String::from_utf16_lossy(&desc.Description)
-                                .trim_end_matches('\0')
-                                .to_string();
-                            gpus.push(GpuInfo {
-                                name,
-                                vendor: Some(vendor_name(desc.VendorId)),
-                                vram_bytes: desc.DedicatedVideoMemory as u64,
-                                driver_version: None,
-                                driver_date: None,
-                            });
-                        }
-                        index += 1;
-                    }
-                    Err(_) => break,
+            while let Ok(adapter) = factory.EnumAdapters1(index) {
+                if let Ok(desc) = adapter.GetDesc1() {
+                    let name = String::from_utf16_lossy(&desc.Description)
+                        .trim_end_matches('\0')
+                        .to_string();
+                    gpus.push(GpuInfo {
+                        name,
+                        vendor: Some(vendor_name(desc.VendorId)),
+                        vram_bytes: desc.DedicatedVideoMemory as u64,
+                        driver_version: None,
+                        driver_date: None,
+                    });
                 }
+                index += 1;
             }
         }
     }
@@ -259,15 +254,13 @@ pub fn collect_network_adapters() -> Vec<NetworkAdapterInfo> {
                                 ));
                             }
                         }
-                        23 => {
-                            if bytes.len() >= 24 {
-                                let octets = &bytes[8..24];
-                                let groups: Vec<String> = octets
-                                    .chunks(2)
-                                    .map(|c| format!("{:02x}{:02x}", c[0], c[1]))
-                                    .collect();
-                                ipv6.push(groups.join(":"));
-                            }
+                        23 if bytes.len() >= 24 => {
+                            let octets = &bytes[8..24];
+                            let groups: Vec<String> = octets
+                                .chunks(2)
+                                .map(|c| format!("{:02x}{:02x}", c[0], c[1]))
+                                .collect();
+                            ipv6.push(groups.join(":"));
                         }
                         _ => {}
                     }
@@ -309,8 +302,8 @@ fn enumerate_services(kind: u32) -> Vec<(String, String, String, String)> {
     use windows::Win32::Foundation::ERROR_MORE_DATA;
     use windows::Win32::System::Services::{
         CloseServiceHandle, EnumServicesStatusExW, OpenSCManagerW, OpenServiceW,
-        QueryServiceConfigW, ENUM_SERVICE_STATUS_PROCESSW, SC_ENUM_PROCESS_INFO, SC_HANDLE,
-        SC_MANAGER_ENUMERATE_SERVICE, SERVICE_QUERY_CONFIG,
+        ENUM_SERVICE_STATUS_PROCESSW, SC_ENUM_PROCESS_INFO, SC_MANAGER_ENUMERATE_SERVICE,
+        SERVICE_QUERY_CONFIG,
     };
 
     let mut out = Vec::new();
@@ -361,8 +354,7 @@ fn enumerate_services(kind: u32) -> Vec<(String, String, String, String)> {
             if offset + item_size > buf.len() {
                 break;
             }
-            let item =
-                unsafe { &*(buf.as_ptr().add(offset) as *const ENUM_SERVICE_STATUS_PROCESSW) };
+            let item = &*(buf.as_ptr().add(offset) as *const ENUM_SERVICE_STATUS_PROCESSW);
             let name = if item.lpServiceName.is_null() {
                 String::new()
             } else {
@@ -554,16 +546,14 @@ pub fn collect_startup_items() -> Vec<StartupItemInfo> {
 #[cfg(windows)]
 fn read_run_subkey(hive: winreg::RegKey, sub: &str, label: &str, out: &mut Vec<StartupItemInfo>) {
     if let Ok(key) = hive.open_subkey(sub) {
-        for item in key.enum_values() {
-            if let Ok((name, value)) = item {
-                let command = String::from_utf8_lossy(&value.bytes).into_owned();
-                if !name.is_empty() {
-                    out.push(StartupItemInfo {
-                        name,
-                        command,
-                        source: label.to_string(),
-                    });
-                }
+        for (name, value) in key.enum_values().flatten() {
+            let command = String::from_utf8_lossy(&value.bytes).into_owned();
+            if !name.is_empty() {
+                out.push(StartupItemInfo {
+                    name,
+                    command,
+                    source: label.to_string(),
+                });
             }
         }
     }
@@ -885,9 +875,11 @@ pub fn collect_disk_health() -> Vec<DiskHealthInfo> {
         };
         match handle {
             Ok(h) => {
-                let mut query = STORAGE_PROPERTY_QUERY::default();
-                query.PropertyId = StorageDeviceManagementStatus;
-                query.QueryType = PropertyStandardQuery;
+                let mut query = STORAGE_PROPERTY_QUERY {
+                    PropertyId: StorageDeviceManagementStatus,
+                    QueryType: PropertyStandardQuery,
+                    ..Default::default()
+                };
                 let mut status = STORAGE_DEVICE_MANAGEMENT_STATUS::default();
                 let mut returned: u32 = 0;
                 let ok = unsafe {
@@ -959,50 +951,41 @@ pub fn collect_gpu_metrics() -> Vec<GpuMetric> {
     unsafe {
         if let Ok(factory) = CreateDXGIFactory1::<IDXGIFactory1>() {
             let mut index = 0u32;
-            loop {
-                match factory.EnumAdapters1(index) {
-                    Ok(adapter) => {
-                        let name = adapter
-                            .GetDesc1()
-                            .map(|d| {
-                                String::from_utf16_lossy(&d.Description)
-                                    .trim_end_matches('\0')
-                                    .to_string()
-                            })
-                            .unwrap_or_default();
-                        let (total, used) = match adapter.cast::<IDXGIAdapter3>() {
-                            Ok(a3) => {
-                                let mut info: DXGI_QUERY_VIDEO_MEMORY_INFO = std::mem::zeroed();
-                                if a3
-                                    .QueryVideoMemoryInfo(
-                                        0,
-                                        DXGI_MEMORY_SEGMENT_GROUP_LOCAL,
-                                        &mut info,
-                                    )
-                                    .is_ok()
-                                {
-                                    (info.Budget as u64, info.CurrentUsage as u64)
-                                } else {
-                                    (0, 0)
-                                }
-                            }
-                            Err(_) => (0, 0),
-                        };
-                        let percent = if total > 0 {
-                            (used as f64 / total as f64) * 100.0
+            while let Ok(adapter) = factory.EnumAdapters1(index) {
+                let name = adapter
+                    .GetDesc1()
+                    .map(|d| {
+                        String::from_utf16_lossy(&d.Description)
+                            .trim_end_matches('\0')
+                            .to_string()
+                    })
+                    .unwrap_or_default();
+                let (total, used) = match adapter.cast::<IDXGIAdapter3>() {
+                    Ok(a3) => {
+                        let mut info: DXGI_QUERY_VIDEO_MEMORY_INFO = std::mem::zeroed();
+                        if a3
+                            .QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &mut info)
+                            .is_ok()
+                        {
+                            (info.Budget as u64, info.CurrentUsage as u64)
                         } else {
-                            0.0
-                        };
-                        out.push(GpuMetric {
-                            name,
-                            vram_total: total,
-                            vram_used: used,
-                            vram_percent: percent,
-                        });
-                        index += 1;
+                            (0, 0)
+                        }
                     }
-                    Err(_) => break,
-                }
+                    Err(_) => (0, 0),
+                };
+                let percent = if total > 0 {
+                    (used as f64 / total as f64) * 100.0
+                } else {
+                    0.0
+                };
+                out.push(GpuMetric {
+                    name,
+                    vram_total: total,
+                    vram_used: used,
+                    vram_percent: percent,
+                });
+                index += 1;
             }
         }
     }

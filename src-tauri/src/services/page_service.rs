@@ -104,7 +104,7 @@ pub fn list_pages(conn: &Connection, parent_id: Option<&str>) -> SqliteResult<Ve
            AND ((?1 IS NULL AND parent_id IS NULL) OR parent_id = ?1)
          ORDER BY name COLLATE NOCASE ASC",
     )?;
-    let rows = stmt.query_map([parent_id], |row| crate::db::models::resource_from_row(row))?;
+    let rows = stmt.query_map([parent_id], crate::db::models::resource_from_row)?;
     rows.collect()
 }
 
