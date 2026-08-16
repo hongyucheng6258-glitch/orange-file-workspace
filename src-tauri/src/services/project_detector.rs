@@ -650,7 +650,8 @@ fn merge_subproject(
     }
 }
 
-/// 递归扫描：目录无直接配置时下探其子目录，最多 `depth` 层；有配置即停（不递归）。
+/// 递归扫描：目录无直接配置时下探其子目录，最多 `depth` 层；
+/// 目录仅识别为 Docker 编排时合并候选后继续下探（backend/frontend 可单独运行）。
 fn scan_subprojects(
     fs: &dyn ProjectFs,
     dir: &Path,
@@ -676,7 +677,11 @@ fn scan_subprojects(
         };
         let mut sub = DetectionResult::default();
         if detect_into(fs, &child, &mut sub) {
-            merge_subproject(result, found, rel, sub);
+            let docker_only = sub.runtime_kind == Some(RuntimeKind::Docker);
+            merge_subproject(result, found, rel.clone(), sub);
+            if docker_only {
+                scan_subprojects(fs, &child, depth + 1, rel, result, found);
+            }
         } else {
             scan_subprojects(fs, &child, depth + 1, rel, result, found);
         }
@@ -705,10 +710,13 @@ fn detect_subprojects(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionRes
 pub fn detect(fs: &dyn ProjectFs, root: &Path) -> DetectionResult {
     let root = normalize_lexical(root);
     let mut result = DetectionResult::default();
-    if detect_into(fs, &root, &mut result) {
+    let recognized = detect_into(fs, &root, &mut result);
+    // 根目录识别到可直接运行的配置（Node/Java/Python/Rust/Makefile）时停止；
+    // 仅 Docker 编排时不阻断，继续子项目探测（backend/frontend 可单独运行）。
+    let docker_only = result.runtime_kind == Some(RuntimeKind::Docker);
+    if recognized && !docker_only {
         return result;
     }
-    // 根目录无直接配置：一层子目录探测（backend / frontend 等分离结构）。
     detect_subprojects(fs, &root, &mut result);
     result
 }
@@ -1240,6 +1248,78 @@ cli = "demo.cli:main"
         let cand = r.candidates.iter().find(|c| c.label == "docker compose up");
         assert!(cand.is_some());
         assert_eq!(cand.unwrap().args, vec!["compose", "up"]);
+    }
+
+    #[test]
+    fn docker_compose_root_still_scans_subprojects() {
+        // 根目录仅有 docker-compose.yml 编排时，backend/frontend 子项目仍需可单独运行。
+        let fs = FakeFs::new()
+            .file(root().join("docker-compose.yml"), "services: {}")
+            .path_exe("docker")
+            .dir(root().join("backend"))
+            .file(
+                root().join("backend").join("pom.xml"),
+                "<project><build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>",
+            )
+            .path_exe("mvn")
+            .dir(root().join("frontend"))
+            .file(
+                root().join("frontend").join("package.json"),
+                node_pkg(r#"{"dev":"vite"}"#),
+            )
+            .path_exe("npm");
+        let r = detect(&fs, &root());
+        let labels: Vec<&str> = r.candidates.iter().map(|c| c.label.as_str()).collect();
+        assert!(labels.contains(&"docker compose up"), "实际: {labels:?}");
+        assert!(
+            labels.contains(&"backend: mvn spring-boot:run"),
+            "实际: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"frontend: npm run dev"),
+            "实际: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn nested_docker_compose_dir_continues_scan() {
+        // 子目录（如 blog-system）自身是 docker-compose 编排时，其 backend/frontend 仍需下探。
+        let fs = FakeFs::new()
+            .dir(root().join("blog-system"))
+            .file(root().join("blog-system").join("docker-compose.yml"), "services: {}")
+            .path_exe("docker")
+            .dir(root().join("blog-system").join("backend"))
+            .file(
+                root()
+                    .join("blog-system")
+                    .join("backend")
+                    .join("pom.xml"),
+                "<project><build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>",
+            )
+            .path_exe("mvn")
+            .dir(root().join("blog-system").join("frontend"))
+            .file(
+                root()
+                    .join("blog-system")
+                    .join("frontend")
+                    .join("package.json"),
+                node_pkg(r#"{"dev":"vite"}"#),
+            )
+            .path_exe("npm");
+        let r = detect(&fs, &root());
+        let labels: Vec<&str> = r.candidates.iter().map(|c| c.label.as_str()).collect();
+        assert!(
+            labels.contains(&"blog-system: docker compose up"),
+            "实际: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"blog-system/backend: mvn spring-boot:run"),
+            "实际: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"blog-system/frontend: npm run dev"),
+            "实际: {labels:?}"
+        );
     }
 
     #[test]
