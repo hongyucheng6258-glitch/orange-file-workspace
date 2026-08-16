@@ -123,6 +123,46 @@ describe("projectPreviewStore", () => {
     expect(mockOpenUrl).toHaveBeenCalledWith("http://127.0.0.1:3000");
   });
 
+  it("autoOpenPreview retries until preview ready then opens browser", async () => {
+    vi.useFakeTimers();
+    // 前两次未就绪（端口未监听），第三次成功。
+    mockCall
+      .mockRejectedValueOnce(new Error("端口 3000 当前未监听"))
+      .mockRejectedValueOnce(new Error("端口 3000 当前未监听"))
+      .mockResolvedValueOnce(target);
+    mockOpenUrl.mockResolvedValueOnce(undefined);
+
+    useProjectPreviewStore.getState().autoOpenPreview("run-1", 30000);
+
+    // 首次探测在 1.5s 后。
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(mockCall).toHaveBeenCalledTimes(1);
+    // 失败后每 2s 重试。
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(mockCall).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(mockCall).toHaveBeenCalledTimes(3);
+    expect(mockOpenUrl).toHaveBeenCalledWith("http://127.0.0.1:3000");
+    expect(useProjectPreviewStore.getState().target?.ownership).toBe("confirmed");
+
+    vi.useRealTimers();
+  });
+
+  it("autoOpenPreview gives up silently after timeout", async () => {
+    vi.useFakeTimers();
+    mockCall.mockRejectedValue(new Error("端口 3000 当前未监听"));
+    mockOpenUrl.mockClear();
+
+    useProjectPreviewStore.getState().autoOpenPreview("run-1", 5000);
+
+    await vi.advanceTimersByTimeAsync(1500 + 2000 * 10);
+    // 未打开浏览器、无错误，静默放弃。
+    expect(mockOpenUrl).not.toHaveBeenCalled();
+    expect(useProjectPreviewStore.getState().error).toBeNull();
+
+    vi.useRealTimers();
+  });
+
   it("reset clears target and error", () => {
     useProjectPreviewStore.setState({ target, error: "x" });
     useProjectPreviewStore.getState().reset();

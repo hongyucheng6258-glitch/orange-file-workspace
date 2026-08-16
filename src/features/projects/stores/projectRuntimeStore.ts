@@ -49,6 +49,8 @@ interface ProjectRuntimeState {
   logsByCwd: Record<string, LogEntry[]>;
   busy: boolean;
   error: string | null;
+  /** 最近一次成功启动的 runId（UI 据此触发自动预览）。 */
+  lastStartedRunId: string | null;
 
   load: (projectId: string) => Promise<void>;
   reset: () => void;
@@ -77,6 +79,7 @@ export const useProjectRuntimeStore = create<ProjectRuntimeState>((set, get) => 
   logsByCwd: {},
   busy: false,
   error: null,
+  lastStartedRunId: null,
 
   load: async (projectId) => {
     get().reset();
@@ -187,6 +190,7 @@ export const useProjectRuntimeStore = create<ProjectRuntimeState>((set, get) => 
       logsByCwd: {},
       error: null,
       busy: false,
+      lastStartedRunId: null,
     });
   },
 
@@ -250,6 +254,7 @@ export const useProjectRuntimeStore = create<ProjectRuntimeState>((set, get) => 
         activeCwd: cwd,
         busy: false,
         error: null,
+        lastStartedRunId: snap.runId,
       });
     } catch (e) {
       set({ busy: false, error: (e as Error).message });
@@ -279,6 +284,7 @@ export const useProjectRuntimeStore = create<ProjectRuntimeState>((set, get) => 
           activeCwd: cwd,
           busy: false,
           error: null,
+          lastStartedRunId: snap.runId,
         });
         return null;
       } catch (e) {

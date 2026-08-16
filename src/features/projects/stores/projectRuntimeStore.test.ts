@@ -172,6 +172,7 @@ describe("projectRuntimeStore", () => {
     await store.getState().startWithConfirmation(preview!.confirmationId);
     expect(activeRun()?.state).toBe("running");
     expect(activeRun()?.pid).toBe(1234);
+    expect(store.getState().lastStartedRunId).toBe("run-1");
     expect(mockCall).toHaveBeenCalledWith("start_project_process", expect.anything());
   });
 

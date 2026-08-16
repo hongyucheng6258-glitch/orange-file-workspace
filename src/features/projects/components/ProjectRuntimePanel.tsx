@@ -30,6 +30,14 @@ export function ProjectRuntimePanel() {
 
   const canPreview = run?.state === "running";
 
+  // 启动成功后自动等待端口就绪并打开页面。
+  const lastStartedRunId = store.lastStartedRunId;
+  useEffect(() => {
+    if (!lastStartedRunId) return;
+    preview.autoOpenPreview(lastStartedRunId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastStartedRunId]);
+
   // 项目切换时清空预览状态并订阅就绪事件。
   useEffect(() => {
     preview.reset();
