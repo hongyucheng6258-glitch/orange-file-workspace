@@ -83,8 +83,12 @@ pub trait ProjectFs: Send + Sync {
     fn cargo_metadata_json(&self, root: &Path) -> Option<String>;
     /// 在 PATH 中解析可执行文件。
     fn resolve_on_path(&self, name: &str) -> Option<PathBuf>;
+    /// 读取进程环境变量（用于 MAVEN_HOME / JAVA_HOME 等解析）。
+    fn env_var(&self, name: &str) -> Option<String>;
     /// 列出根目录直接子目录（1 层，不递归；噪音目录由调用方过滤）。
     fn list_child_dirs(&self, root: &Path) -> Vec<PathBuf>;
+    /// 列出目录下所有普通文件（1 层，不递归）。
+    fn list_child_files(&self, dir: &Path) -> Vec<PathBuf>;
 }
 
 /// 磁盘生产实现。
@@ -145,6 +149,10 @@ impl ProjectFs for DiskProjectFs {
         None
     }
 
+    fn env_var(&self, name: &str) -> Option<String> {
+        std::env::var(name).ok()
+    }
+
     fn list_child_dirs(&self, root: &Path) -> Vec<PathBuf> {
         let Ok(entries) = std::fs::read_dir(root) else {
             return Vec::new();
@@ -156,6 +164,19 @@ impl ProjectFs for DiskProjectFs {
             .collect();
         dirs.sort();
         dirs
+    }
+
+    fn list_child_files(&self, dir: &Path) -> Vec<PathBuf> {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return Vec::new();
+        };
+        let mut files: Vec<PathBuf> = entries
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_file())
+            .collect();
+        files.sort();
+        files
     }
 }
 
@@ -379,26 +400,97 @@ fn detect_python(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) 
     result.push_diag("未找到 main.py / app.py / manage.py 入口文件");
 }
 
-/// Java：Maven/Gradle + Spring Boot 插件可确认时生成候选；否则只出诊断，不猜测目标。
+/// 解析 Maven 可执行文件：项目内 wrapper > PATH > MAVEN_HOME。
+fn resolve_maven(fs: &dyn ProjectFs, root: &Path) -> Option<PathBuf> {
+    for name in ["mvnw.cmd", "mvnw"] {
+        let p = root.join(name);
+        if fs.is_file(&p) {
+            return Some(p);
+        }
+    }
+    if let Some(m) = fs.resolve_on_path("mvn") {
+        return Some(m);
+    }
+    if let Some(home) = fs.env_var("MAVEN_HOME") {
+        let bin = PathBuf::from(home).join("bin");
+        for name in ["mvn.cmd", "mvn.bat", "mvn.exe", "mvn"] {
+            let p = bin.join(name);
+            if p.is_file() {
+                return Some(p);
+            }
+        }
+    }
+    None
+}
+
+/// 解析 Java 可执行文件：JAVA_HOME > PATH。
+fn resolve_java(fs: &dyn ProjectFs) -> Option<PathBuf> {
+    if let Some(home) = fs.env_var("JAVA_HOME") {
+        let p = PathBuf::from(home).join("bin").join("java.exe");
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    fs.resolve_on_path("java")
+}
+
+/// 在 target 下查找可执行 Spring Boot jar（排除 .jar.original 等附件）。
+fn find_spring_boot_jar(fs: &dyn ProjectFs, root: &Path) -> Option<PathBuf> {
+    let target = root.join("target");
+    if !fs.exists(&target) {
+        return None;
+    }
+    fs.list_child_files(&target).into_iter().find(|p| {
+        p.file_name()
+            .map(|n| {
+                let name = n.to_string_lossy();
+                name.ends_with(".jar") && !name.ends_with(".jar.original")
+            })
+            .unwrap_or(false)
+    })
+}
+
+/// Java：Maven/Gradle + Spring Boot 插件可确认时生成候选；否则尝试已构建的
+/// Spring Boot 可执行 jar（java -jar target/*.jar）；再不行只出诊断，不猜测目标。
 fn detect_java(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) {
     if fs.is_file(&root.join("pom.xml")) {
         let text = fs.read_to_string(&root.join("pom.xml")).unwrap_or_default();
         let has_boot = text.contains("spring-boot-maven-plugin");
-        if let Some(mvn) = fs.resolve_on_path("mvn") {
-            if has_boot {
+        if has_boot {
+            if let Some(mvn) = resolve_maven(fs, root) {
                 result.push_candidate(
                     "mvn spring-boot:run",
                     mvn.to_string_lossy().to_string(),
                     vec!["spring-boot:run".to_string()],
                     80,
                 );
+            } else if let Some(jar) = find_spring_boot_jar(fs, root) {
+                if let Some(java) = resolve_java(fs) {
+                    let jar_rel = jar
+                        .strip_prefix(root)
+                        .unwrap_or(&jar)
+                        .to_string_lossy()
+                        .to_string();
+                    result.push_candidate(
+                        format!("java -jar {jar_rel}"),
+                        java.to_string_lossy().to_string(),
+                        vec!["-jar".to_string(), jar_rel],
+                        75,
+                    );
+                } else {
+                    result.push_diag(
+                        "检测到 Spring Boot 可执行 jar，但未找到 java（已检查 JAVA_HOME 与 PATH）",
+                    );
+                }
             } else {
                 result.push_diag(
-                    "pom.xml 未包含 spring-boot-maven-plugin，不自动猜测运行目标，请手动配置命令",
+                    "检测到 Spring Boot 项目，但未找到 mvn/mvnw（已检查项目内 mvnw、PATH 与 MAVEN_HOME），且 target 下没有可执行 jar",
                 );
             }
         } else {
-            result.push_diag("检测到 Maven 项目但 PATH 中未解析到 mvn");
+            result.push_diag(
+                "pom.xml 未包含 spring-boot-maven-plugin，不自动猜测运行目标，请手动配置命令",
+            );
         }
     }
     let gradle_file = ["build.gradle", "build.gradle.kts"]
@@ -408,7 +500,13 @@ fn detect_java(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) {
     if let Some(gf) = gradle_file {
         let text = fs.read_to_string(&gf).unwrap_or_default();
         let has_boot = text.contains("org.springframework.boot");
-        if let Some(gradle) = fs.resolve_on_path("gradle") {
+        // PATH 解析结果已保证存在；GRADLE_HOME 候选需二次确认文件存在。
+        let gradle = fs.resolve_on_path("gradle").or_else(|| {
+            fs.env_var("GRADLE_HOME")
+                .map(|home| PathBuf::from(home).join("bin").join("gradle"))
+                .filter(|p| p.is_file())
+        });
+        if let Some(gradle) = gradle {
             if has_boot {
                 result.push_candidate(
                     "gradle bootRun",
@@ -422,7 +520,7 @@ fn detect_java(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) {
                 );
             }
         } else {
-            result.push_diag("检测到 Gradle 项目但 PATH 中未解析到 gradle");
+            result.push_diag("检测到 Gradle 项目但未找到 gradle（已检查 PATH 与 GRADLE_HOME）");
         }
     }
 }
@@ -626,6 +724,7 @@ mod tests {
         dirs: Vec<PathBuf>,
         cargo_meta: Option<String>,
         path_exes: Vec<String>,
+        env: BTreeMap<String, String>,
         reads: Mutex<Vec<PathBuf>>,
     }
 
@@ -636,6 +735,7 @@ mod tests {
                 dirs: Vec::new(),
                 cargo_meta: None,
                 path_exes: Vec::new(),
+                env: BTreeMap::new(),
                 reads: Mutex::new(Vec::new()),
             }
         }
@@ -658,6 +758,11 @@ mod tests {
 
         fn path_exe(mut self, name: impl Into<String>) -> Self {
             self.path_exes.push(name.into());
+            self
+        }
+
+        fn env(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+            self.env.insert(name.into(), value.into());
             self
         }
 
@@ -691,11 +796,26 @@ mod tests {
                 .map(|_| PathBuf::from(format!("C:\\tools\\{name}.exe")))
         }
 
+        fn env_var(&self, name: &str) -> Option<String> {
+            self.env.get(name).cloned()
+        }
+
         fn list_child_dirs(&self, root: &Path) -> Vec<PathBuf> {
             let mut out: Vec<PathBuf> = self
                 .dirs
                 .iter()
                 .filter(|d| d.parent().map(|p| p == root).unwrap_or(false))
+                .cloned()
+                .collect();
+            out.sort();
+            out
+        }
+
+        fn list_child_files(&self, dir: &Path) -> Vec<PathBuf> {
+            let mut out: Vec<PathBuf> = self
+                .files
+                .keys()
+                .filter(|p| p.parent().map(|par| par == dir).unwrap_or(false))
                 .cloned()
                 .collect();
             out.sort();
@@ -960,10 +1080,22 @@ cli = "demo.cli:main"
 
     #[test]
     fn java_maven_without_mvn_diag() {
-        let fs = FakeFs::new().file(root().join("pom.xml"), "<project/>");
+        // 有 spring-boot 插件，但无 mvn/mvnw、无已构建 jar → 明确诊断。
+        let fs = FakeFs::new()
+            .file(
+                root().join("pom.xml"),
+                "<project><build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>",
+            )
+            .dir(root().join("target"));
         let r = detect(&fs, &root());
         assert!(r.candidates.is_empty());
-        assert!(r.diagnostics.iter().any(|d| d.contains("mvn")));
+        assert!(
+            r.diagnostics
+                .iter()
+                .any(|d| d.contains("mvn/mvnw") && d.contains("MAVEN_HOME")),
+            "应提示 mvnw / PATH / MAVEN_HOME: {:?}",
+            r.diagnostics
+        );
     }
 
     #[test]
@@ -978,6 +1110,104 @@ cli = "demo.cli:main"
         let cand = r.candidates.iter().find(|c| c.label == "gradle bootRun");
         assert!(cand.is_some(), "应生成 gradle bootRun 候选");
         assert_eq!(cand.unwrap().confidence, 80);
+    }
+
+    #[test]
+    fn java_mavenw_wrapper_preferred() {
+        // 项目内存在 mvnw.cmd 时，即使 PATH 无 mvn 也应生成候选。
+        let fs = FakeFs::new()
+            .file(
+                root().join("pom.xml"),
+                "<project><build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>",
+            )
+            .file(root().join("mvnw.cmd"), "@echo off");
+        let r = detect(&fs, &root());
+        let cand = r
+            .candidates
+            .iter()
+            .find(|c| c.label == "mvn spring-boot:run");
+        assert!(cand.is_some(), "应通过 mvnw.cmd 生成候选");
+        assert_eq!(
+            cand.unwrap().executable,
+            root().join("mvnw.cmd").to_string_lossy()
+        );
+    }
+
+    #[test]
+    fn java_maven_home_resolution() {
+        // PATH 无 mvn，但 MAVEN_HOME 指向 D:\maven → 应解析到 mvn.cmd。
+        let fs = FakeFs::new()
+            .file(
+                root().join("pom.xml"),
+                "<project><build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>",
+            )
+            .env("MAVEN_HOME", "D:\\maven\\apache-maven-3.9.10")
+            .file(
+                PathBuf::from("D:\\maven\\apache-maven-3.9.10\\bin\\mvn.cmd"),
+                "@echo off",
+            );
+        let r = detect(&fs, &root());
+        let cand = r
+            .candidates
+            .iter()
+            .find(|c| c.label == "mvn spring-boot:run");
+        assert!(cand.is_some(), "应通过 MAVEN_HOME 生成候选: {r:?}");
+        assert_eq!(
+            cand.unwrap().executable,
+            "D:\\maven\\apache-maven-3.9.10\\bin\\mvn.cmd"
+        );
+    }
+
+    #[test]
+    fn java_built_jar_fallback_with_java_home() {
+        // 无 mvn/mvnw，但 target 下已有可执行 jar 且 JAVA_HOME 可用 → java -jar 候选。
+        let fs = FakeFs::new()
+            .file(
+                root().join("pom.xml"),
+                "<project><build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>",
+            )
+            .dir(root().join("target"))
+            .file(root().join("target").join("platform-server.jar"), "PK")
+            .file(
+                root().join("target").join("platform-server.jar.original"),
+                "PK",
+            )
+            .env("JAVA_HOME", "D:\\jdk22")
+            .file(PathBuf::from("D:\\jdk22\\bin\\java.exe"), "");
+        let r = detect(&fs, &root());
+        let cand = r
+            .candidates
+            .iter()
+            .find(|c| c.label.starts_with("java -jar target"));
+        assert!(cand.is_some(), "应生成 java -jar 候选: {r:?}");
+        assert_eq!(cand.unwrap().args[0], "-jar");
+        assert!(
+            cand.unwrap().args[1].ends_with("platform-server.jar"),
+            "jar 相对路径应指向 platform-server.jar: {:?}",
+            cand.unwrap().args
+        );
+        assert_eq!(cand.unwrap().executable, "D:\\jdk22\\bin\\java.exe");
+        assert_eq!(cand.unwrap().confidence, 75);
+    }
+
+    #[test]
+    fn java_no_mvn_no_jar_clear_diag() {
+        // 既无 mvn/mvnw，target 也无 jar → 明确诊断，不产生候选。
+        let fs = FakeFs::new()
+            .dir(root().join("target"))
+            .file(
+                root().join("pom.xml"),
+                "<project><build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>",
+            );
+        let r = detect(&fs, &root());
+        assert!(r.candidates.is_empty());
+        assert!(
+            r.diagnostics
+                .iter()
+                .any(|d| d.contains("mvn/mvnw") && d.contains("MAVEN_HOME")),
+            "应提示检查 mvnw、PATH 与 MAVEN_HOME: {:?}",
+            r.diagnostics
+        );
     }
 
     #[test]

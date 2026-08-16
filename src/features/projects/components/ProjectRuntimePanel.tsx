@@ -196,28 +196,37 @@ export function ProjectRuntimePanel() {
           ) : (
             config && (
               <div className="run-config">
-                {detection && detection.candidates.length > 0 && (
-                  <div className="run-candidates">
-                    {detection.candidates.map((c, i) => {
-                      const candCwd = c.cwd ?? "";
-                      const candRun = store.runs[candCwd];
-                      return (
-                        <button
-                          key={c.label}
-                          className={`run-candidate ${config.executable === c.executable && config.args.join(" ") === c.args.join(" ") ? "active" : ""}`}
-                          onClick={() => store.pickCandidate(i)}
-                        >
-                          <span className="run-candidate-label">{c.label}</span>
-                          {candRun && (
-                            <span className={`run-candidate-state ${candRun.state}`}>
-                              {stateLabel[candRun.state] ?? candRun.state}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                  {detection && detection.candidates.length > 0 && (
+                    <div className="run-candidates">
+                      {detection.candidates.map((c, i) => {
+                        const candCwd = c.cwd ?? "";
+                        const candRun = store.runs[candCwd];
+                        return (
+                          <button
+                            key={c.label}
+                            className={`run-candidate ${config.executable === c.executable && config.args.join(" ") === c.args.join(" ") ? "active" : ""}`}
+                            onClick={() => store.pickCandidate(i)}
+                          >
+                            <span className="run-candidate-label">{c.label}</span>
+                            {candRun && (
+                              <span className={`run-candidate-state ${candRun.state}`}>
+                                {stateLabel[candRun.state] ?? candRun.state}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {detection && detection.diagnostics.length > 0 && (
+                    <div className="run-empty">
+                      {detection.diagnostics.map((d, i) => (
+                        <div key={i} className="run-diagnostic">
+                          {d}
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                 <div className="run-field">
                   <label>程序</label>
