@@ -50,7 +50,7 @@ export function Sidebar() {
         ))}
       </nav>
       <div className="sidebar-foot">
-        <span className="storage-text">本地工作台 v0.1</span>
+        <span className="storage-text">橙子的工作台</span>
       </div>
     </aside>
   );
