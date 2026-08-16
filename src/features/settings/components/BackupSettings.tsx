@@ -60,10 +60,23 @@ export function BackupSettings() {
   };
 
   const doRestore = async (rec: BackupRecord) => {
-    if (!window.confirm(`恢复将覆盖当前所有数据，确定继续？\n${rec.path}`)) return;
     setRestoring(rec.id);
     setError(null);
     try {
+      // 预检：校验备份完整性并读取备份内容信息，失败则阻止恢复
+      const manifest = await call<{
+        created_at?: number;
+        database_version?: number;
+        include_files?: boolean;
+      }>("validate_backup", { backupId: rec.id });
+      const lines = [
+        `数据库版本：${manifest.database_version ?? "?"}`,
+        `内容：${manifest.include_files ? "完整备份（含托管文件）" : "仅元数据"}`,
+        manifest.created_at ? `创建时间：${formatTime(manifest.created_at)}` : "",
+      ].filter(Boolean);
+      if (!window.confirm(`恢复将覆盖当前所有数据，确定继续？\n${rec.path}\n${lines.join("\n")}`)) {
+        return;
+      }
       await call("restore_backup", { backupPath: rec.path });
       await load();
       window.alert("恢复完成，请刷新界面");

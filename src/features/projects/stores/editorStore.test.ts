@@ -34,6 +34,7 @@ afterEach(() => {
     openError: null,
     pendingOpenId: null,
     pendingClose: false,
+    pendingDraft: null,
   });
 });
 
@@ -105,5 +106,69 @@ describe("editorStore dirty guard", () => {
     expect(useEditorStore.getState().pendingOpenId).toBeNull();
     expect(useEditorStore.getState().openFile?.resource.id).toBe("f1");
     expect(useEditorStore.getState().content).toBe("changed");
+  });
+});
+
+describe("editorStore draft recovery", () => {
+  it("open sets pendingDraft when draft differs from disk content", async () => {
+    mockCall.mockImplementation((cmd: string) => {
+      if (cmd === "open_file")
+        return Promise.resolve({ ...fileData, content: "disk-v1", draft: "draft-v2" });
+      return Promise.resolve(undefined);
+    });
+    await useEditorStore.getState().open("f1");
+    const s = useEditorStore.getState();
+    expect(s.pendingDraft).toBe("draft-v2");
+    expect(s.content).toBe("disk-v1");
+    expect(s.dirty).toBe(false);
+  });
+
+  it("open does not set pendingDraft when draft equals disk content", async () => {
+    mockCall.mockImplementation((cmd: string) => {
+      if (cmd === "open_file")
+        return Promise.resolve({ ...fileData, content: "same", draft: "same" });
+      return Promise.resolve(undefined);
+    });
+    await useEditorStore.getState().open("f1");
+    expect(useEditorStore.getState().pendingDraft).toBeNull();
+  });
+
+  it("resolveDraft(true) restores draft and marks dirty", async () => {
+    mockCall.mockImplementation((cmd: string) => {
+      if (cmd === "open_file")
+        return Promise.resolve({ ...fileData, content: "disk-v1", draft: "draft-v2" });
+      return Promise.resolve(undefined);
+    });
+    await useEditorStore.getState().open("f1");
+    useEditorStore.getState().resolveDraft(true);
+    const s = useEditorStore.getState();
+    expect(s.pendingDraft).toBeNull();
+    expect(s.content).toBe("draft-v2");
+    expect(s.dirty).toBe(true);
+  });
+
+  it("resolveDraft(false) discards draft and keeps disk content", async () => {
+    mockCall.mockImplementation((cmd: string) => {
+      if (cmd === "open_file")
+        return Promise.resolve({ ...fileData, content: "disk-v1", draft: "draft-v2" });
+      return Promise.resolve(undefined);
+    });
+    await useEditorStore.getState().open("f1");
+    useEditorStore.getState().resolveDraft(false);
+    const s = useEditorStore.getState();
+    expect(s.pendingDraft).toBeNull();
+    expect(s.content).toBe("disk-v1");
+    expect(s.dirty).toBe(false);
+  });
+
+  it("setContent schedules debounced save_draft", async () => {
+    await useEditorStore.getState().open("f1");
+    useEditorStore.getState().setContent("changed");
+    // 触发防抖定时器
+    await new Promise((r) => setTimeout(r, 900));
+    expect(mockCall).toHaveBeenCalledWith("save_draft", {
+      resourceId: "f1",
+      content: "changed",
+    });
   });
 });

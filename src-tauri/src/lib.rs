@@ -6,7 +6,9 @@ mod events;
 mod ipc;
 mod services;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex};
 
 use tauri::Manager;
@@ -15,6 +17,14 @@ use db::connection::open;
 use db::migrations::run_migrations;
 use ipc::CommandResult;
 
+/// 全局搜索运行时：活动查询表 + 后台扫描控制。
+pub struct SearchRuntime {
+    pub active_queries: Mutex<HashMap<u64, ()>>,
+    pub next_query_id: AtomicU64,
+    pub scan_paused: Arc<AtomicBool>,
+    pub scan_trigger: AtomicU64, // 自增触发重建
+}
+
 /// 全局应用状态：数据目录、托管目录与数据库连接。
 /// data_dir 与 managed_dir 使用内部可变性，支持运行时迁移切换。
 pub struct AppState {
@@ -22,8 +32,20 @@ pub struct AppState {
     pub managed_dir: std::sync::Mutex<PathBuf>,
     pub conn: Mutex<rusqlite::Connection>,
     pub sampler: Mutex<services::system_service::SystemSampler>,
+    pub search: SearchRuntime,
+    pub terminal: services::terminal_service::TerminalRuntime,
     pub runtime: Arc<services::project_runtime::RuntimeManager>,
     pub preview: Arc<services::web_preview_service::PreviewService>,
+}
+
+impl AppState {
+    /// 从运行时构造扫描控制句柄（共享暂停标志）。
+    pub fn scan_control(&self) -> crate::services::scan_service::ScanControl {
+        crate::services::scan_service::ScanControl {
+            paused: self.search.scan_paused.clone(),
+            cancelled: Arc::new(AtomicBool::new(false)),
+        }
+    }
 }
 
 /// 启动配置：固定位置 `%APPDATA%\com.nexus.file-workspace\config.json`。
@@ -114,6 +136,13 @@ pub fn run() {
                 managed_dir: Mutex::new(managed_dir),
                 conn: Mutex::new(conn),
                 sampler: Mutex::new(services::system_service::SystemSampler::new()),
+                search: SearchRuntime {
+                    active_queries: Mutex::new(HashMap::new()),
+                    next_query_id: AtomicU64::new(1),
+                    scan_paused: Arc::new(AtomicBool::new(false)),
+                    scan_trigger: AtomicU64::new(0),
+                },
+                terminal: services::terminal_service::TerminalRuntime::default(),
                 runtime: runtime_manager.clone(),
                 preview: preview_service.clone(),
             });
@@ -128,6 +157,33 @@ pub fn run() {
             }
             services::watcher_service::start_managed_watcher(app.handle().clone());
             services::backup_service::start_backup_scheduler(app.handle().clone());
+            // 后台构建应用索引（开始菜单 / App Paths / 卸载注册表 / Store 快捷方式），不阻塞启动
+            {
+                let app_handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    #[cfg(windows)]
+                    {
+                        let entries = crate::services::app_index::windows::collect_apps();
+                        // 空结果防护：所有来源临时不可读时跳过重建，避免清空既有应用索引
+                        if entries.is_empty() {
+                            return;
+                        }
+                        let data_dir = app_handle
+                            .state::<AppState>()
+                            .data_dir
+                            .lock()
+                            .expect("data dir lock")
+                            .clone();
+                        if let Ok(mut conn) = crate::db::connection::open(&data_dir.join("workspace.db")) {
+                            let _ = crate::services::app_index::rebuild_app_index(&mut conn, &entries);
+                        }
+                    }
+                });
+            }
+            // 后台全盘扫描工作线程（目录遍历/跳过规则/检查点/代次清理/低优先级调度）
+            services::scan_service::start_scan_worker(app.handle().clone());
+            // 文件变化监听：已完成卷增量更新索引（Task 12）
+            services::scan_service::start_watchers(app.handle().clone());
             // Keep Tauri's native drop registration intact. The experimental global
             // registration revoked it and regressed both drag-in and window input.
             Ok(())
@@ -168,6 +224,7 @@ pub fn run() {
             commands::editor::save_file,
             commands::editor::save_file_force,
             commands::editor::discard_session,
+            commands::editor::save_draft,
             commands::resources::toggle_favorite,
             commands::resources::list_favorites,
             commands::resources::get_ancestors,
@@ -216,8 +273,26 @@ pub fn run() {
             commands::system::flush_dns_cache,
             commands::system::restart_explorer,
             commands::system::run_admin_tool,
-            commands::system::get_admin_status
-            ,
+            commands::system::get_admin_status,
+            commands::global_search::start_global_search,
+            commands::global_search::cancel_global_search,
+            commands::global_search::open_search_result,
+            commands::global_search::reveal_search_result,
+            commands::global_search::get_search_index_status,
+            commands::global_search::pause_search_index,
+            commands::global_search::resume_search_index,
+            commands::global_search::rebuild_search_index,
+            commands::global_search::get_search_settings,
+            commands::global_search::update_search_settings,
+            commands::terminal::terminal_spawn,
+            commands::terminal::terminal_write,
+            commands::terminal::terminal_resize,
+            commands::terminal::terminal_close,
+            commands::terminal::terminal_list,
+            commands::terminal::terminal_list_shells,
+            commands::terminal::terminal_history_record,
+            commands::terminal::terminal_history_list,
+            commands::terminal::terminal_history_clear,
             commands::project_runtime::detect_project_runtime,
             commands::project_runtime::prepare_run_confirmation,
             commands::project_runtime::confirm_run_config,
@@ -225,14 +300,21 @@ pub fn run() {
             commands::project_runtime::stop_project_process,
             commands::project_runtime::restart_project_process,
             commands::project_runtime::get_project_run,
-            commands::project_runtime::get_process_logs
-            ,
-            commands::project_preview::open_project_preview
-            ,
+            commands::project_runtime::list_project_runs_by_project,
+            commands::project_runtime::get_process_logs,
+            commands::project_preview::open_project_preview,
             commands::run_center::list_project_runs
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // 应用退出兜底：终止所有终端会话与项目运行进程，避免孤儿进程。
+            if let tauri::RunEvent::Exit = event {
+                let state = app.state::<AppState>();
+                services::terminal_service::shutdown_all(&state.terminal);
+                state.runtime.shutdown_all();
+            }
+        });
 }
 
 #[cfg(test)]

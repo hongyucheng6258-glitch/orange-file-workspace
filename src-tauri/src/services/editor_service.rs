@@ -120,6 +120,47 @@ pub fn discard_session(conn: &Connection, resource_id: &str) -> SqliteResult<()>
     Ok(())
 }
 
+/// 保存编辑草稿：写入会话的 draft_content 并置 is_dirty=1。
+/// 会话不存在时以当前磁盘状态为基准创建会话（用于崩溃恢复）。
+pub fn save_draft(
+    conn: &Connection,
+    resource_id: &str,
+    path: &Path,
+    content: &str,
+) -> Result<(), AppError> {
+    let changed = conn.execute(
+        "UPDATE editor_sessions
+         SET draft_content = ?1, is_dirty = 1, updated_at = ?2
+         WHERE resource_id = ?3",
+        params![content, now_unix(), resource_id],
+    )?;
+    if changed == 0 {
+        // 无会话：以磁盘状态为基准创建会话后再置 dirty
+        let (size, modified) = fsutil::stat_basic(path)?;
+        upsert_session(conn, resource_id, path, size, modified, content, now_unix())?;
+        conn.execute(
+            "UPDATE editor_sessions
+             SET draft_content = ?1, is_dirty = 1, updated_at = ?2
+             WHERE resource_id = ?3",
+            params![content, now_unix(), resource_id],
+        )?;
+    }
+    Ok(())
+}
+
+/// 读取未保存草稿（is_dirty=1 且非空）。无草稿时返回 None。
+pub fn get_draft(conn: &Connection, resource_id: &str) -> Result<Option<String>, AppError> {
+    let draft: Option<String> = conn
+        .query_row(
+            "SELECT draft_content FROM editor_sessions
+             WHERE resource_id = ?1 AND is_dirty = 1",
+            [resource_id],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(draft.filter(|d| !d.is_empty()))
+}
+
 fn get_session(
     conn: &Connection,
     resource_id: &str,
@@ -318,6 +359,31 @@ mod tests {
 
         let err = open_session(&conn, "r1", &path).expect_err("should reject");
         assert_eq!(err.code, "file_too_large");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn save_draft_then_get_returns_content() {
+        let conn = conn();
+        seed_resource(&conn, "r1");
+        let path = std::env::temp_dir().join(format!("nexus-eddraft-{}", crate::db::models::new_id()));
+        std::fs::write(&path, "v1").expect("write");
+
+        // 无会话时 save_draft 创建会话并置 dirty
+        save_draft(&conn, "r1", &path, "draft-v2").expect("save draft");
+        let draft = get_draft(&conn, "r1").expect("get draft");
+        assert_eq!(draft.as_deref(), Some("draft-v2"), "应能读到未保存草稿");
+
+        // 覆盖更新
+        save_draft(&conn, "r1", &path, "draft-v3").expect("save draft again");
+        let draft = get_draft(&conn, "r1").expect("get draft again");
+        assert_eq!(draft.as_deref(), Some("draft-v3"));
+
+        // 保存成功后草稿被清理（save_session 置 is_dirty=0）
+        save_session(&conn, "r1", &path, "v3", false).expect("save");
+        let draft = get_draft(&conn, "r1").expect("get draft after save");
+        assert_eq!(draft, None, "保存后不应有草稿残留");
 
         let _ = std::fs::remove_file(&path);
     }

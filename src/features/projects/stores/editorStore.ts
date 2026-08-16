@@ -8,6 +8,9 @@ export interface OpenFile {
   path: string;
 }
 
+// 草稿防抖保存定时器（模块级，避免跨实例重复计时）
+let draftTimer: ReturnType<typeof setTimeout> | null = null;
+
 interface EditorState {
   openFile: OpenFile | null;
   content: string;
@@ -17,6 +20,7 @@ interface EditorState {
   openError: string | null;
   pendingOpenId: string | null;
   pendingClose: boolean;
+  pendingDraft: string | null;
 
   open: (resourceId: string) => Promise<"opened" | "confirm">;
   setContent: (content: string) => void;
@@ -28,6 +32,7 @@ interface EditorState {
   cancelPending: () => void;
   clearError: () => void;
   discardSession: () => Promise<void>;
+  resolveDraft: (restore: boolean) => void;
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -39,6 +44,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   openError: null,
   pendingOpenId: null,
   pendingClose: false,
+  pendingDraft: null,
 
   open: async (resourceId) => {
     const { dirty } = get();
@@ -48,7 +54,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
     set({ openError: null });
     try {
-      const data = await call<OpenFile & { session: unknown }>("open_file", { resourceId });
+      const data = await call<OpenFile & { session: unknown; draft?: string | null }>(
+        "open_file",
+        { resourceId },
+      );
       set({
         openFile: { resource: data.resource, content: data.content, path: data.path },
         content: data.content,
@@ -56,6 +65,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         conflict: null,
         pendingOpenId: null,
       });
+      // 存在未保存草稿（上次编辑未保存即关闭/崩溃）时提示恢复
+      if (data.draft && data.draft !== data.content) {
+        set({ pendingDraft: data.draft });
+      }
       return "opened";
     } catch (e) {
       const err = e as { code?: string; message?: string };
@@ -65,6 +78,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       }
       throw e;
     }
+  },
+
+  resolveDraft: (restore) => {
+    const { pendingDraft } = get();
+    if (!restore || !pendingDraft) {
+      set({ pendingDraft: null });
+      return;
+    }
+    const { openFile } = get();
+    set({
+      content: pendingDraft,
+      dirty: true,
+      pendingDraft: null,
+      openFile: openFile ? { ...openFile, content: pendingDraft } : openFile,
+    });
   },
 
   resolveOpen: async (save) => {
@@ -90,6 +118,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setContent: (content) => {
     const { openFile } = get();
     set({ content, dirty: content !== (openFile?.content ?? "") });
+    // 防抖保存草稿：编辑停止 800ms 后写入会话，用于崩溃恢复
+    if (openFile && content !== openFile.content) {
+      if (draftTimer) clearTimeout(draftTimer);
+      draftTimer = setTimeout(() => {
+        draftTimer = null;
+        void call("save_draft", { resourceId: openFile.resource.id, content }).catch(() => {});
+      }, 800);
+    }
   },
 
   save: async () => {
@@ -106,6 +142,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           conflict: { message: res.message ?? "文件已被外部修改", current_size: res.current_size ?? 0 },
         });
         return "conflict";
+      }
+      if (draftTimer) {
+        clearTimeout(draftTimer);
+        draftTimer = null;
       }
       set({ dirty: false, openFile: { ...openFile, content } });
       return "saved";
@@ -132,12 +172,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   close: async () => {
     const { dirty, openFile } = get();
+    if (draftTimer) {
+      clearTimeout(draftTimer);
+      draftTimer = null;
+    }
     if (dirty && openFile) {
       set({ pendingClose: true });
       return "confirm";
     }
     await get().discardSession();
-    set({ openFile: null, content: "", dirty: false, conflict: null, pendingClose: false });
+    set({ openFile: null, content: "", dirty: false, conflict: null, pendingClose: false, pendingDraft: null });
     return "closed";
   },
 

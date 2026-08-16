@@ -32,12 +32,32 @@ pub fn open_file(
     }
 
     let (content, session) = editor_service::open_session(&conn, &resource_id, &path)?;
+    // 打开后读取未保存草稿（若有），供前端提示恢复
+    let draft = editor_service::get_draft(&conn, &resource_id)?;
     Ok(serde_json::json!({
         "resource": resource,
         "content": content,
         "session": session,
         "path": loc.path,
+        "draft": draft,
     }))
+}
+
+/// 保存编辑草稿（前端编辑时防抖调用，用于崩溃恢复）。
+#[tauri::command]
+pub fn save_draft(
+    state: State<AppState>,
+    resource_id: String,
+    content: String,
+) -> CommandResult<()> {
+    let conn = lock_db(&state);
+    let locations = crate::db::repositories::list_locations(&conn, &resource_id)?;
+    let Some(loc) = locations.first() else {
+        return Err(AppError::new("location_missing", "资源缺少物理位置"));
+    };
+    let path = std::path::PathBuf::from(&loc.path);
+    editor_service::save_draft(&conn, &resource_id, &path, &content)?;
+    Ok(())
 }
 
 /// 保存文件。磁盘指纹未变化则写回，变化时返回 conflict。

@@ -69,7 +69,7 @@ function langFor(name: string) {
 }
 
 export function CodeEditor() {
-  const { openFile, content, dirty, saving, conflict, openError, setContent, save, forceSave, close, resolveClose, cancelPending, clearError } =
+  const { openFile, content, dirty, saving, conflict, openError, pendingDraft, setContent, save, forceSave, close, resolveClose, cancelPending, clearError, resolveDraft } =
     useEditorStore();
   const [showUnsaved, setShowUnsaved] = useState(false);
 
@@ -198,6 +198,16 @@ export function CodeEditor() {
             cancelPending();
             setShowUnsaved(false);
           }}
+        />
+      )}
+
+      {pendingDraft && (
+        <ConfirmDialog
+          title="发现未保存的草稿"
+          message="检测到上次编辑未保存的内容，是否恢复草稿继续编辑？"
+          onSave={() => resolveDraft(true)}
+          onDiscard={() => resolveDraft(false)}
+          onCancel={() => resolveDraft(false)}
         />
       )}
     </div>
