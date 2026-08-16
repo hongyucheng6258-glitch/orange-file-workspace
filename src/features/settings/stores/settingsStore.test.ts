@@ -7,6 +7,7 @@ const base: AppSettings = {
     default_import_mode: "managed",
     duplicate_policy: "skip",
     preview_size_limit_mb: 256,
+    minimize_to_tray: true,
   },
   appearance: { theme_mode: "system", density: "comfortable" },
   terminal: { font_size: 14, cursor_style: "bar", theme: "campbell" },

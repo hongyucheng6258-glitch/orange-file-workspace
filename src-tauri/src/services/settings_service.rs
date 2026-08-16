@@ -31,6 +31,8 @@ pub struct GeneralSettings {
     pub duplicate_policy: String,
     /// 文本预览大小上限（MB），1..=1024
     pub preview_size_limit_mb: u32,
+    /// 关闭窗口时最小化到系统托盘
+    pub minimize_to_tray: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -95,6 +97,7 @@ pub const KEY_LAUNCH_BEHAVIOR: &str = "general.launch_behavior";
 pub const KEY_DEFAULT_IMPORT_MODE: &str = "general.default_import_mode";
 pub const KEY_DUPLICATE_POLICY: &str = "general.duplicate_policy";
 pub const KEY_PREVIEW_SIZE_LIMIT_MB: &str = "general.preview_size_limit_mb";
+pub const KEY_MINIMIZE_TO_TRAY: &str = "general.minimize_to_tray";
 pub const KEY_THEME_MODE: &str = "appearance.theme_mode";
 pub const KEY_DENSITY: &str = "appearance.density";
 pub const KEY_TERMINAL_FONT_SIZE: &str = "terminal.font_size";
@@ -115,6 +118,7 @@ pub fn default_settings() -> AppSettings {
             default_import_mode: "managed".into(),
             duplicate_policy: "skip".into(),
             preview_size_limit_mb: 256,
+            minimize_to_tray: true,
         },
         appearance: AppearanceSettings {
             theme_mode: "system".into(),
@@ -150,6 +154,7 @@ pub fn category_keys(category: &str) -> Option<&'static [&'static str]> {
             KEY_DEFAULT_IMPORT_MODE,
             KEY_DUPLICATE_POLICY,
             KEY_PREVIEW_SIZE_LIMIT_MB,
+            KEY_MINIMIZE_TO_TRAY,
         ]),
         "appearance" => Some(&[KEY_THEME_MODE, KEY_DENSITY]),
         "terminal" => Some(&[
@@ -184,6 +189,7 @@ pub fn load_settings(conn: &rusqlite::Connection) -> Result<AppSettings, AppErro
         KEY_PREVIEW_SIZE_LIMIT_MB,
         s.general.preview_size_limit_mb,
     )?;
+    s.general.minimize_to_tray = read_bool(conn, KEY_MINIMIZE_TO_TRAY, s.general.minimize_to_tray)?;
     s.appearance.theme_mode = read_str(conn, KEY_THEME_MODE, &s.appearance.theme_mode)?;
     s.appearance.density = read_str(conn, KEY_DENSITY, &s.appearance.density)?;
     s.terminal.font_size = read_u32(conn, KEY_TERMINAL_FONT_SIZE, s.terminal.font_size)?;
@@ -283,6 +289,10 @@ fn validate_and_encode(key: &str, value: Value) -> Result<String, AppError> {
                 return Err(bad("取值范围 1..=1024"));
             }
             Ok(serde_json::to_string(&(n as u32))?)
+        }
+        KEY_MINIMIZE_TO_TRAY => {
+            let b = value.as_bool().ok_or_else(|| bad("必须是布尔值"))?;
+            Ok(serde_json::to_string(&b)?)
         }
         KEY_THEME_MODE => {
             let s = value.as_str().ok_or_else(|| bad("必须是字符串"))?;
@@ -486,6 +496,32 @@ mod tests {
         assert!(update_setting(&c, KEY_PREVIEW_SIZE_LIMIT_MB, Value::from(0)).is_err());
         assert!(update_setting(&c, KEY_BACKUP_RUN_TIME, Value::String("25:00".into())).is_err());
         assert!(update_setting(&c, KEY_BACKUP_RUN_TIME, Value::String("12:99".into())).is_err());
+    }
+
+    #[test]
+    fn minimize_to_tray_defaults_true_and_updates() {
+        let c = conn();
+        let s = load_settings(&c).expect("load");
+        assert!(s.general.minimize_to_tray);
+        let s = update_setting(&c, KEY_MINIMIZE_TO_TRAY, Value::Bool(false)).expect("update");
+        assert!(!s.general.minimize_to_tray);
+        let reloaded = load_settings(&c).expect("reload");
+        assert!(!reloaded.general.minimize_to_tray);
+    }
+
+    #[test]
+    fn minimize_to_tray_rejects_non_bool() {
+        let c = conn();
+        assert!(update_setting(&c, KEY_MINIMIZE_TO_TRAY, Value::from(1)).is_err());
+        assert!(update_setting(&c, KEY_MINIMIZE_TO_TRAY, Value::String("yes".into())).is_err());
+    }
+
+    #[test]
+    fn reset_general_restores_minimize_to_tray_default() {
+        let c = conn();
+        let _ = update_setting(&c, KEY_MINIMIZE_TO_TRAY, Value::Bool(false));
+        let s = reset_category(&c, "general").expect("reset");
+        assert!(s.general.minimize_to_tray);
     }
 
     #[test]

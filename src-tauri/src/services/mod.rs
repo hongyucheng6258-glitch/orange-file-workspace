@@ -1,4 +1,5 @@
 pub mod app_index;
+pub mod autostart;
 pub mod backup_service;
 pub mod drag_service;
 pub mod editor_service;

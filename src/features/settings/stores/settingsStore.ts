@@ -13,6 +13,7 @@ export interface AppSettings {
     default_import_mode: "managed" | "external";
     duplicate_policy: "skip" | "keep_both";
     preview_size_limit_mb: number;
+    minimize_to_tray: boolean;
   };
   appearance: {
     theme_mode: "system" | "light" | "dark";

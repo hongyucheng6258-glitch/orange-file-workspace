@@ -190,11 +190,83 @@ pub fn run() {
             services::scan_service::start_watchers(app.handle().clone());
             // Keep Tauri's native drop registration intact. The experimental global
             // registration revoked it and regressed both drag-in and window input.
+
+            // 系统托盘：关闭窗口时最小化到托盘，托盘菜单提供打开/退出。
+            {
+                use tauri::{
+                    menu::{Menu, MenuItem},
+                    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+                    WindowEvent,
+                };
+
+                fn show_main_window(app: &tauri::AppHandle) {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.unminimize();
+                        let _ = window.set_focus();
+                    }
+                }
+
+                let show_item = MenuItem::with_id(app, "show", "打开橙子", true, None::<&str>)?;
+                let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+                let mut tray = TrayIconBuilder::with_id("main-tray").tooltip("橙子的工作台");
+                if let Some(icon) = app.default_window_icon() {
+                    tray = tray.icon(icon.clone());
+                }
+                let _tray = tray
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "show" => show_main_window(app),
+                        "quit" => app.exit(0),
+                        _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            show_main_window(tray.app_handle());
+                        }
+                    })
+                    .build(app)?;
+
+                // 关闭窗口：若开启“最小化到托盘”，阻止关闭并隐藏窗口。
+                let close_handle = app.handle().clone();
+                if let Some(window) = app.get_webview_window("main") {
+                    window.on_window_event(move |event| {
+                        if let WindowEvent::CloseRequested { api, .. } = event {
+                            let minimize = close_handle
+                                .state::<AppState>()
+                                .conn
+                                .lock()
+                                .map(|conn| {
+                                    services::settings_service::load_settings(&conn)
+                                        .map(|s| s.general.minimize_to_tray)
+                                        .unwrap_or(true)
+                                })
+                                .unwrap_or(true);
+                            if minimize {
+                                api.prevent_close();
+                                if let Some(w) = close_handle.get_webview_window("main") {
+                                    let _ = w.hide();
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             greet,
             app_info,
+            commands::autostart::set_autostart,
+            commands::autostart::get_autostart,
             commands::resources::list_children,
             commands::resources::get_resource,
             commands::resources::create_folder,

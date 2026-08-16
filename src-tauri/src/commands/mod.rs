@@ -1,3 +1,4 @@
+pub mod autostart;
 pub mod backups;
 pub mod dashboard;
 pub mod drag;
