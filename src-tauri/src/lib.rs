@@ -6,6 +6,9 @@ mod events;
 mod ipc;
 mod services;
 
+#[cfg(test)]
+mod e2e_tests;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64};
