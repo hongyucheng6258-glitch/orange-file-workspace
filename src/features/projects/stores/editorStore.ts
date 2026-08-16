@@ -14,12 +14,14 @@ interface EditorState {
   dirty: boolean;
   saving: boolean;
   conflict: { message: string; current_size: number } | null;
+  openError: string | null;
 
   open: (resourceId: string) => Promise<void>;
   setContent: (content: string) => void;
   save: () => Promise<"saved" | "conflict">;
   forceSave: () => Promise<void>;
   close: () => Promise<void>;
+  clearError: () => void;
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -28,16 +30,29 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   dirty: false,
   saving: false,
   conflict: null,
+  openError: null,
 
   open: async (resourceId) => {
-    const data = await call<OpenFile & { session: unknown }>("open_file", { resourceId });
-    set({
-      openFile: { resource: data.resource, content: data.content, path: data.path },
-      content: data.content,
-      dirty: false,
-      conflict: null,
-    });
+    set({ openError: null });
+    try {
+      const data = await call<OpenFile & { session: unknown }>("open_file", { resourceId });
+      set({
+        openFile: { resource: data.resource, content: data.content, path: data.path },
+        content: data.content,
+        dirty: false,
+        conflict: null,
+      });
+    } catch (e) {
+      const err = e as { code?: string; message?: string };
+      if (err.code === "file_too_large") {
+        set({ openError: err.message ?? "文件过大，仅支持预览" });
+        return;
+      }
+      throw e;
+    }
   },
+
+  clearError: () => set({ openError: null }),
 
   setContent: (content) => {
     const { openFile } = get();

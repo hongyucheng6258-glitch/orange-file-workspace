@@ -68,7 +68,7 @@ function langFor(name: string) {
 }
 
 export function CodeEditor() {
-  const { openFile, content, dirty, saving, conflict, setContent, save, forceSave, close } =
+  const { openFile, content, dirty, saving, conflict, openError, setContent, save, forceSave, close, clearError } =
     useEditorStore();
 
   const extensions = useMemo(
@@ -101,6 +101,14 @@ export function CodeEditor() {
 
   return (
     <div className="code-editor">
+      {openError && (
+        <div className="editor-error-bar">
+          <span>{openError}</span>
+          <button className="icon-btn" onClick={clearError} title="关闭">
+            <X size={13} />
+          </button>
+        </div>
+      )}
       <div className="editor-tabbar">
         <span className="tab-file" title={openFile.path}>
           {openFile.resource.name}

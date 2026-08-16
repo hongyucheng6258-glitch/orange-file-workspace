@@ -41,6 +41,31 @@ pub fn read_text_preview(path: &Path, limit_kb: usize) -> Result<String, AppErro
     }
 }
 
+/// 完整读取 UTF-8 文本文件，供编辑器使用。
+/// 与 read_text_preview 不同：不截断、不追加提示；超过 max_bytes 返回 file_too_large。
+pub fn read_text_full(path: &Path, max_bytes: u64) -> Result<String, AppError> {
+    let meta = std::fs::metadata(path)?;
+    if meta.len() > max_bytes {
+        return Err(AppError::new(
+            "file_too_large",
+            format!("文件过大（{} 字节），超过编辑上限 {}", meta.len(), max_bytes),
+        ));
+    }
+    let mut file = std::fs::File::open(path)?;
+    let mut buf = Vec::with_capacity(meta.len() as usize);
+    file.read_to_end(&mut buf)?;
+
+    let bytes = if buf.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        &buf[3..]
+    } else {
+        &buf[..]
+    };
+    match std::str::from_utf8(bytes) {
+        Ok(s) => Ok(s.to_string()),
+        Err(_) => Err(AppError::new("not_utf8", "文件不是 UTF-8 文本")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,6 +112,31 @@ mod tests {
         let text = read_text_preview(&tmp, 1).expect("read");
         assert!(text.contains("内容过长"), "limit hint expected");
         assert!(text.len() < 2048, "text should be truncated");
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn read_text_full_returns_entire_file() {
+        let tmp = std::env::temp_dir().join(format!("nexus-full-{}", crate::db::models::new_id()));
+        // 300KiB，超过原 256KiB 预览上限
+        let content = vec![b'a'; 300 * 1024];
+        std::fs::write(&tmp, &content).expect("write");
+
+        let text = read_text_full(&tmp, 10 * 1024 * 1024).expect("read");
+        assert_eq!(text.len(), 300 * 1024, "必须返回完整内容");
+        assert!(!text.contains("内容过长"), "不应包含截断提示");
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn read_text_full_rejects_oversize() {
+        let tmp = std::env::temp_dir().join(format!("nexus-over-{}", crate::db::models::new_id()));
+        std::fs::write(&tmp, vec![b'a'; 2048]).expect("write");
+
+        let err = read_text_full(&tmp, 1024).expect_err("should reject");
+        assert_eq!(err.code, "file_too_large");
 
         let _ = std::fs::remove_file(&tmp);
     }

@@ -19,6 +19,9 @@ pub enum SaveOutcome {
     },
 }
 
+/// 编辑器可处理的单文件大小上限（10 MiB）。
+pub const EDITOR_MAX_BYTES: u64 = 10 * 1024 * 1024;
+
 /// 打开文件：读取内容并建立编辑会话（记录基准指纹）。
 /// 返回 (内容, 会话)。
 pub fn open_session(
@@ -29,7 +32,8 @@ pub fn open_session(
     if !path.exists() {
         return Err(AppError::new("path_missing", "文件路径不可用"));
     }
-    let content = preview_service::read_text_preview(path, 256 * 1024)?;
+    // 编辑必须完整读取；超过上限返回 file_too_large，绝不截断（预览读取与编辑读取分离）
+    let content = preview_service::read_text_full(path, EDITOR_MAX_BYTES)?;
     let (size, modified) = fsutil::stat_basic(path)?;
     let now = now_unix();
 
@@ -54,6 +58,16 @@ pub fn save_session(
     force: bool,
 ) -> Result<SaveOutcome, AppError> {
     let existing = get_session(conn, resource_id)?;
+    // 防御：历史遗留的截断会话（基准大小超限）拒绝保存，避免覆盖造成数据丢失
+    if existing
+        .as_ref()
+        .is_some_and(|s| s.base_size > EDITOR_MAX_BYTES as i64)
+    {
+        return Err(AppError::new(
+            "file_too_large",
+            "该文件超出编辑上限，请重新打开后操作",
+        ));
+    }
     let base = existing.unwrap_or(EditorSession {
         id: new_id(),
         resource_id: resource_id.to_string(),
@@ -270,6 +284,40 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM editor_sessions", [], |r| r.get(0))
             .expect("count");
         assert_eq!(count, 0);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn open_reads_full_content_beyond_preview_limit() {
+        let conn = conn();
+        seed_resource(&conn, "r1");
+        let path = std::env::temp_dir().join(format!("nexus-edbig-{}", crate::db::models::new_id()));
+        let content = vec![b'x'; 300 * 1024]; // 超过 256KiB 预览上限
+        std::fs::write(&path, &content).expect("write");
+
+        let (text, _session) = open_session(&conn, "r1", &path).expect("open");
+        assert_eq!(text.len(), 300 * 1024, "编辑会话必须包含完整内容");
+        assert!(!text.contains("内容过长"), "编辑内容不应带截断提示");
+
+        // 保存后磁盘内容完整
+        let outcome = save_session(&conn, "r1", &path, &text, false).expect("save");
+        assert!(matches!(outcome, SaveOutcome::Saved));
+        let on_disk = std::fs::read_to_string(&path).expect("read");
+        assert_eq!(on_disk.len(), 300 * 1024, "保存后原文件必须保持完整");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn open_rejects_file_over_edit_limit() {
+        let conn = conn();
+        seed_resource(&conn, "r1");
+        let path = std::env::temp_dir().join(format!("nexus-edhuge-{}", crate::db::models::new_id()));
+        std::fs::write(&path, vec![b'x'; (EDITOR_MAX_BYTES + 1) as usize]).expect("write");
+
+        let err = open_session(&conn, "r1", &path).expect_err("should reject");
+        assert_eq!(err.code, "file_too_large");
 
         let _ = std::fs::remove_file(&path);
     }
