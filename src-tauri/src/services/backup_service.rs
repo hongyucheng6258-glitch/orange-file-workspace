@@ -196,41 +196,63 @@ pub fn restore_from_dir(state: &AppState, backup_dir: &Path) -> Result<(), AppEr
         ));
     }
 
-    // 3. 恢复托管文件（若备份含托管文件）
+    // 3. 恢复托管文件（若备份含托管文件）；任何失败都会同时回滚数据库
     let managed_src = backup_dir.join("managed-files");
     if managed_src.exists() {
-        // 先把当前托管目录整体移动到保护位置（移动不占双份空间）
         let protect_managed = protect_dir.join("managed-files-current");
         let managed_dst = state.managed_dir.lock().expect("dir lock").clone();
-        if managed_dst.exists() {
-            std::fs::rename(&managed_dst, &protect_managed)?;
-        }
-        if let Err(e) = copy_dir_all(&managed_src, &managed_dst) {
-            // 回滚：删除不完整的恢复目录，把原目录移回
-            let _ = std::fs::remove_dir_all(&managed_dst);
-            if protect_managed.exists() {
-                let _ = std::fs::rename(&protect_managed, &managed_dst);
-            }
-            return Err(AppError::new(
-                "restore_failed",
-                format!("托管文件恢复失败，已回滚: {e}"),
-            ));
-        }
-        // 校验恢复结果：文件数一致
-        let src_count = count_files(&managed_src);
-        let dst_count = count_files(&managed_dst);
-        if src_count != dst_count {
-            let _ = std::fs::remove_dir_all(&managed_dst);
-            if protect_managed.exists() {
-                let _ = std::fs::rename(&protect_managed, &managed_dst);
-            }
-            return Err(AppError::new(
-                "restore_failed",
-                "托管文件恢复校验不一致，已回滚",
-            ));
+        if let Err(e) = restore_managed_files(state, &managed_src, &managed_dst, &protect_managed, &protect_dir) {
+            return Err(e);
         }
     }
 
+    Ok(())
+}
+
+/// 恢复托管文件，任何失败都回滚文件与数据库，保证库与磁盘一致。
+fn restore_managed_files(
+    state: &AppState,
+    managed_src: &Path,
+    managed_dst: &Path,
+    protect_managed: &Path,
+    protect_dir: &Path,
+) -> Result<(), AppError> {
+    // 先把当前托管目录整体移动到保护位置（移动不占双份空间）
+    if managed_dst.exists() {
+        if let Err(e) = std::fs::rename(managed_dst, protect_managed) {
+            let _ = restore_db_snapshot(state, protect_dir);
+            return Err(AppError::new(
+                "restore_failed",
+                format!("托管目录移动失败，数据库已回滚: {e}"),
+            ));
+        }
+    }
+    if let Err(e) = copy_dir_all(managed_src, managed_dst) {
+        // 回滚：删除不完整的恢复目录，把原目录移回，并回滚数据库
+        let _ = std::fs::remove_dir_all(managed_dst);
+        if protect_managed.exists() {
+            let _ = std::fs::rename(protect_managed, managed_dst);
+        }
+        let _ = restore_db_snapshot(state, protect_dir);
+        return Err(AppError::new(
+            "restore_failed",
+            format!("托管文件恢复失败，数据库已回滚: {e}"),
+        ));
+    }
+    // 校验恢复结果：文件数与总字节数一致
+    let (src_count, src_bytes) = count_files_and_bytes(managed_src);
+    let (dst_count, dst_bytes) = count_files_and_bytes(managed_dst);
+    if src_count != dst_count || src_bytes != dst_bytes {
+        let _ = std::fs::remove_dir_all(managed_dst);
+        if protect_managed.exists() {
+            let _ = std::fs::rename(protect_managed, managed_dst);
+        }
+        let _ = restore_db_snapshot(state, protect_dir);
+        return Err(AppError::new(
+            "restore_failed",
+            "托管文件恢复校验不一致，数据库已回滚",
+        ));
+    }
     Ok(())
 }
 
@@ -290,23 +312,25 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), AppError> {
     Ok(())
 }
 
-/// 统计目录内文件数（含子目录）。
-fn count_files(dir: &Path) -> u64 {
-    fn walk(d: &Path, n: &mut u64) {
+/// 统计目录内文件数与总字节数（含子目录）。
+fn count_files_and_bytes(dir: &Path) -> (u64, u64) {
+    fn walk(d: &Path, n: &mut u64, b: &mut u64) {
         if let Ok(entries) = std::fs::read_dir(d) {
             for e in entries.flatten() {
                 let p = e.path();
                 if p.is_dir() {
-                    walk(&p, n);
+                    walk(&p, n, b);
                 } else {
                     *n += 1;
+                    *b += e.metadata().map(|m| m.len()).unwrap_or(0);
                 }
             }
         }
     }
     let mut n = 0;
-    walk(dir, &mut n);
-    n
+    let mut b = 0;
+    walk(dir, &mut n, &mut b);
+    (n, b)
 }
 
 /// 备份目录名用的时间戳（Unix 秒）。
@@ -450,6 +474,13 @@ mod tests {
                 sampler: std::sync::Mutex::new(
                     crate::services::system_service::SystemSampler::new(),
                 ),
+                search: crate::SearchRuntime {
+                    active_queries: std::sync::Mutex::new(std::collections::HashMap::new()),
+                    next_query_id: std::sync::atomic::AtomicU64::new(1),
+                    scan_paused: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                    scan_trigger: std::sync::atomic::AtomicU64::new(0),
+                },
+                terminal: crate::services::terminal_service::TerminalRuntime::default(),
                 runtime: std::sync::Arc::new(crate::services::project_runtime::RuntimeManager::new(
                     std::sync::Arc::new(crate::services::process_api::Win32ProcessApiImpl),
                     std::sync::Arc::new(crate::services::project_runtime::NullRunEventSink),
@@ -664,6 +695,59 @@ mod tests {
             )
             .expect("count");
         assert_eq!(remaining, 2, "only newest two remain");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn restore_managed_move_failure_rolls_back_db() {
+        let (state, dir) = test_state();
+
+        // 当前托管目录：有一个文件
+        let managed = state.managed_dir.lock().expect("lock").clone();
+        std::fs::create_dir_all(&managed).unwrap();
+        std::fs::write(managed.join("current.txt"), "cur").unwrap();
+
+        // 备份源：managed-files 含一个文件
+        let src = dir.join("backup-src").join("managed-files");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("a.txt"), "a").unwrap();
+
+        // 恢复前数据库含 r2（应存在于保护快照）
+        {
+            let conn = state.conn.lock().expect("lock");
+            conn.execute(
+                "INSERT INTO resources (id, kind, name, created_at, updated_at)
+                 VALUES ('r2', 'file', 'b.txt', 1, 1)",
+                [],
+            )
+            .expect("insert r2");
+            // 保护快照 = 当前数据库（含 r2）
+            let protect = dir.join("protect");
+            std::fs::create_dir_all(&protect).unwrap();
+            conn.backup("main", protect.join("workspace.db"), None).unwrap();
+        }
+
+        // 制造移动失败：protect 目标已存在同名非空目录 → rename 失败
+        let protect = dir.join("protect");
+        let protect_managed = protect.join("managed-files-current");
+        std::fs::create_dir_all(&protect_managed).unwrap();
+        std::fs::write(protect_managed.join("conflict.txt"), "x").unwrap();
+
+        let err = restore_managed_files(&state, &src, &managed, &protect_managed, &protect)
+            .expect_err("should fail");
+        assert!(
+            err.message.contains("数据库已回滚"),
+            "移动失败必须回滚数据库，实际: {}",
+            err.message
+        );
+
+        // 数据库回滚到保护快照：r2 仍在
+        let conn = state.conn.lock().expect("lock");
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM resources WHERE id='r2'", [], |r| r.get(0))
+            .expect("count");
+        assert_eq!(count, 1, "数据库应回滚，r2 必须保留");
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
