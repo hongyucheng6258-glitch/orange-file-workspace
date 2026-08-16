@@ -117,6 +117,7 @@ export function IndexStatusBar() {
             title={v.status === "error" && v.last_error ? v.last_error : undefined}
           >
             {v.root_path} · {STATUS_LABEL[v.status] ?? v.status} · {v.indexed_count.toLocaleString()}
+            {v.skipped_count > 0 ? ` · 跳过 ${v.skipped_count.toLocaleString()}` : ""}
             {v.completed_at ? ` · ${formatTime(v.completed_at)} 更新` : ""}
             {v.status === "error" && v.last_error ? ` · ${v.last_error}` : ""}
           </span>

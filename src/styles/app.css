@@ -1693,6 +1693,44 @@ input {
   font-size: 13px;
 }
 
+.recent-files {
+  padding: 8px 8px 4px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.recent-files-title {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 2px 6px 6px;
+}
+
+.recent-file-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.recent-file-item:hover {
+  background: var(--surface-hover);
+}
+
+.recent-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .project-list-body,
 .project-tree-body {
   flex: 1;

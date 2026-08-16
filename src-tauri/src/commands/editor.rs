@@ -60,6 +60,19 @@ pub fn save_draft(
     Ok(())
 }
 
+/// 最近打开的文件（编辑器会话按更新时间倒序）。
+#[tauri::command]
+pub fn list_recent_files(state: State<AppState>) -> CommandResult<Vec<serde_json::Value>> {
+    let conn = lock_db(&state);
+    let rows = editor_service::list_recent_files(&conn, 20)?;
+    Ok(rows
+        .into_iter()
+        .map(|(id, name, path, updated_at)| {
+            serde_json::json!({ "id": id, "name": name, "path": path, "updated_at": updated_at })
+        })
+        .collect())
+}
+
 /// 保存文件。磁盘指纹未变化则写回，变化时返回 conflict。
 #[tauri::command]
 pub fn save_file(

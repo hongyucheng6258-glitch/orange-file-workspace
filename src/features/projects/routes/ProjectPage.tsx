@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Code2, Folder, File as FileIcon, FolderOpen, ChevronRight, ChevronDown, Plus, Trash2, TerminalSquare } from "lucide-react";
+import { Code2, Folder, File as FileIcon, FolderOpen, ChevronRight, ChevronDown, Plus, Trash2, TerminalSquare, FileCode2 } from "lucide-react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { Resource } from "../../../lib/types";
 import { call } from "../../../lib/tauri";
@@ -99,6 +99,9 @@ export function ProjectPage() {
   const [tree, setTree] = useState<Resource[]>([]);
   const [importing, setImporting] = useState(false);
   const [showUnsaved, setShowUnsaved] = useState(false);
+  const [recentFiles, setRecentFiles] = useState<
+    { id: string; name: string; path: string; updated_at: number }[]
+  >([]);
   const openFile = useEditorStore((s) => s.open);
   const resolveOpen = useEditorStore((s) => s.resolveOpen);
   const cancelPending = useEditorStore((s) => s.cancelPending);
@@ -110,9 +113,18 @@ export function ProjectPage() {
     setProjects(list);
   }, []);
 
+  const loadRecent = useCallback(async () => {
+    try {
+      setRecentFiles(await call("list_recent_files", {}));
+    } catch {
+      /* 会话表未就绪时静默 */
+    }
+  }, []);
+
   useEffect(() => {
     loadProjects();
-  }, []);
+    loadRecent();
+  }, [loadProjects, loadRecent]);
 
   const selectProject = useCallback(async (p: Resource) => {
     setCurrent(p);
@@ -131,8 +143,9 @@ export function ProjectPage() {
     async (id: string) => {
       const res = await openFile(id);
       if (res === "confirm") setShowUnsaved(true);
+      else loadRecent();
     },
-    [openFile],
+    [openFile, loadRecent],
   );
 
   // 从收藏跳转打开指定项目。
@@ -233,6 +246,22 @@ export function ProjectPage() {
         <div className="project-tree-head">
           <span>{current?.name ?? "文件"}</span>
         </div>
+        {recentFiles.length > 0 && (
+          <div className="recent-files">
+            <div className="recent-files-title">最近打开</div>
+            {recentFiles.slice(0, 6).map((f) => (
+              <button
+                key={f.id}
+                className="recent-file-item"
+                title={f.path}
+                onClick={() => handleOpenFile(f.id)}
+              >
+                <FileCode2 size={12} />
+                <span className="recent-file-name">{f.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="project-tree-body">
           {tree.map((r) => (
           <TreeNode

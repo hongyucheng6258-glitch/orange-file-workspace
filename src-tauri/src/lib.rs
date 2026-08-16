@@ -225,6 +225,7 @@ pub fn run() {
             commands::editor::save_file_force,
             commands::editor::discard_session,
             commands::editor::save_draft,
+            commands::editor::list_recent_files,
             commands::resources::toggle_favorite,
             commands::resources::list_favorites,
             commands::resources::get_ancestors,

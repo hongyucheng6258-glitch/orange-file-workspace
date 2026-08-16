@@ -161,6 +161,35 @@ pub fn get_draft(conn: &Connection, resource_id: &str) -> Result<Option<String>,
     Ok(draft.filter(|d| !d.is_empty()))
 }
 
+/// 最近打开的文件（按会话更新时间倒序，排除已删除资源）。
+/// 返回 (resource_id, 文件名, 路径, 更新时间)。
+pub fn list_recent_files(
+    conn: &Connection,
+    limit: usize,
+) -> Result<Vec<(String, String, String, i64)>, AppError> {
+    let limit = limit.clamp(1, 100) as i64;
+    let mut stmt = conn.prepare(
+        "SELECT r.id, r.name, l.path, s.updated_at
+         FROM editor_sessions s
+         JOIN resources r ON r.id = s.resource_id
+         LEFT JOIN resource_locations l ON l.resource_id = r.id
+         WHERE r.is_deleted = 0 AND l.path IS NOT NULL
+         ORDER BY s.updated_at DESC
+         LIMIT ?1",
+    )?;
+    let rows = stmt
+        .query_map([limit], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 fn get_session(
     conn: &Connection,
     resource_id: &str,
@@ -386,5 +415,60 @@ mod tests {
         assert_eq!(draft, None, "保存后不应有草稿残留");
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn list_recent_files_orders_by_session_update() {
+        let conn = conn();
+        seed_resource(&conn, "r1");
+        seed_resource(&conn, "r2");
+        let p1 = std::env::temp_dir().join(format!("nexus-edr1-{}", crate::db::models::new_id()));
+        let p2 = std::env::temp_dir().join(format!("nexus-edr2-{}", crate::db::models::new_id()));
+        std::fs::write(&p1, "a").expect("write");
+        std::fs::write(&p2, "b").expect("write");
+        // 补充物理位置（list_recent_files 需要关联 location）
+        for (rid, p) in [("r1", &p1), ("r2", &p2)] {
+            conn.execute(
+                "INSERT INTO resource_locations
+                 (id, resource_id, source_type, path, canonical_path, created_at)
+                 VALUES (?1, ?2, 'managed', ?3, ?4, 1)",
+                rusqlite::params![
+                    crate::db::models::new_id(),
+                    rid,
+                    p.to_string_lossy().to_lowercase().replace('/', "\\"),
+                    format!("managed://{rid}"),
+                ],
+            )
+            .expect("seed location");
+        }
+
+        // 先打开 r2（更晚的会话更新时间应排前）
+        open_session(&conn, "r2", &p2).expect("open r2");
+        open_session(&conn, "r1", &p1).expect("open r1");
+
+        // 手动调整 updated_at 以确定顺序：r1 设为旧时间戳（r2 保持最新）
+        conn.execute(
+            "UPDATE editor_sessions SET updated_at = 1000 WHERE resource_id = 'r1'",
+            [],
+        )
+        .expect("touch r1");
+
+        let recent = list_recent_files(&conn, 10).expect("recent");
+        assert_eq!(recent.len(), 2, "两个文件都应出现在最近列表");
+        assert_eq!(recent[0].0, "r2", "较新更新的会话排最前");
+        assert_eq!(recent[0].1, "test.txt");
+
+        // 软删除 r1 后不再出现在列表
+        conn.execute(
+            "UPDATE resources SET is_deleted = 1, deleted_at = ?1, updated_at = ?1 WHERE id = 'r1'",
+            rusqlite::params![now_unix()],
+        )
+        .expect("trash r1");
+        let recent = list_recent_files(&conn, 10).expect("recent after trash");
+        assert_eq!(recent.len(), 1, "已删除资源不应出现在最近列表");
+        assert_eq!(recent[0].0, "r2");
+
+        let _ = std::fs::remove_file(&p1);
+        let _ = std::fs::remove_file(&p2);
     }
 }
