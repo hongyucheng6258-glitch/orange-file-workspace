@@ -178,7 +178,7 @@ pub fn build_env_block(
     }
     let mut block = Vec::new();
     let mut sorted = map;
-    sorted.sort_by(|a, b| a.0.to_uppercase().cmp(&b.0.to_uppercase()));
+    sorted.sort_by_key(|(k, _)| k.to_uppercase());
     for (key, value) in sorted {
         for unit in format!("{key}={value}").encode_utf16() {
             block.push(unit);

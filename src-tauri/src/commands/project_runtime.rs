@@ -65,7 +65,7 @@ fn project_root(conn: &rusqlite::Connection, project_id: &str) -> Result<PathBuf
     Ok(PathBuf::from(&loc.path))
 }
 
-fn runtime<'a>(state: &'a AppState) -> Arc<RuntimeManager> {
+fn runtime(state: &AppState) -> Arc<RuntimeManager> {
     state.runtime.clone()
 }
 

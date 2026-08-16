@@ -143,6 +143,7 @@ pub trait RunEventSink: Send + Sync {
 }
 
 /// 空事件输出（测试与无 UI 场景）。
+#[allow(dead_code)] // 备份等模块的测试构造 AppState 时使用
 pub struct NullRunEventSink;
 
 impl RunEventSink for NullRunEventSink {
