@@ -238,11 +238,21 @@ fn detect_node(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) {
     }
 
     if !named.is_empty() {
+        // Windows 上 runner 常以无扩展名 shim 与 .cmd 并存（如 npm / npm.cmd），
+        // 必须解析到真实可执行（.cmd/.exe），否则 CreateProcess 会报错误 193。
+        let runner_exe = fs
+            .resolve_on_path(runner)
+            .unwrap_or_else(|| PathBuf::from(runner));
         for (label, confidence) in named {
             let mut parts = label.split_whitespace();
-            let executable = parts.next().unwrap_or(runner).to_string();
+            let _first = parts.next().unwrap_or(runner);
             let args: Vec<String> = parts.map(|s| s.to_string()).collect();
-            result.push_candidate(label, executable, args, confidence);
+            result.push_candidate(
+                label,
+                runner_exe.to_string_lossy().to_string(),
+                args,
+                confidence,
+            );
         }
         return;
     }

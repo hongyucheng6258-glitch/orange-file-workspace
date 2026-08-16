@@ -412,16 +412,22 @@ fn find_on_path(name: &Path, dirs: &[PathBuf]) -> Option<PathBuf> {
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
         .collect();
+    // 优先按 PATHEXT 扩展名匹配：Windows 上的无扩展名文件通常是 shell shim
+    //（如 Node 安装目录里的 `npm`），CreateProcessW 无法直接执行，会报
+    // ERROR_BAD_EXE_FORMAT (193)；扩展名文件（npm.cmd / npm.exe）才可执行。
     for dir in dirs {
-        let direct = dir.join(name);
-        if direct.is_file() {
-            return Some(direct);
-        }
         for ext in &exts {
             let cand = dir.join(format!("{}{}", name.to_string_lossy(), ext));
             if cand.is_file() {
                 return Some(cand);
             }
+        }
+    }
+    // 兜底：仅当该名称确实指向文件时使用（例如用户自建的无扩展名可执行）。
+    for dir in dirs {
+        let direct = dir.join(name);
+        if direct.is_file() {
+            return Some(direct);
         }
     }
     None
