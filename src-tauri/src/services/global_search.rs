@@ -69,9 +69,21 @@ fn authority_rank(source: &str) -> i64 {
     }
 }
 
-/// 按评分降序排序；同分按名称字节序升序（tie-break）。
+/// 类型加权：应用、页面、项目在同分时略优先（设计 §6 排序优先级 5）。
+fn kind_bonus(kind: &str) -> i64 {
+    match kind {
+        "app" | "page" | "project" => 10,
+        _ => 0,
+    }
+}
+
+/// 按评分降序排序；同分按类型加权后按名称字节序升序（tie-break）。
 pub fn sort_hits(hits: &mut Vec<GlobalSearchHit>) {
-    hits.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.name.cmp(&b.name)));
+    hits.sort_by(|a, b| {
+        let wa = a.score + kind_bonus(&a.kind);
+        let wb = b.score + kind_bonus(&b.kind);
+        wb.cmp(&wa).then_with(|| a.name.cmp(&b.name))
+    });
 }
 
 /// 探测并确保 FTS5 trigram 索引可用；不可用时静默返回 false（查询走 LIKE）。
@@ -123,20 +135,25 @@ fn row_to_hit(row: &rusqlite::Row<'_>, q: &str) -> rusqlite::Result<GlobalSearch
     let kind: String = row.get("entry_kind")?;
     let ql = q.to_lowercase();
     let nl = name.to_lowercase();
-    let score = if nl == ql {
+    let matched_field = if nl.contains(&ql) { "name" } else { "path" };
+    let mut score = if nl == ql {
         200
     } else if nl.starts_with(&ql) {
         160
     } else {
         120
     };
+    // 路径匹配低于名称包含（设计 §6 优先级 3>4）：命中字段为 path 时降 10 分
+    if matched_field == "path" {
+        score -= 10;
+    }
     Ok(GlobalSearchHit {
         key: canonical_key(&path),
         kind: kind.clone(),
         name,
         path: Some(path),
         source: "local_index".to_string(),
-        matched_field: if nl.contains(&ql) { "name".into() } else { "path".into() },
+        matched_field: matched_field.to_string(),
         modified_at: row.get("modified_at")?,
         icon_source: None,
         is_offline: row.get::<_, i64>("is_offline")? != 0,
@@ -262,6 +279,27 @@ pub fn merge_nexus_hits(
             score: 90,
         });
     }
+}
+
+/// 读取排除目录设置（app_settings 表 global_search_excluded_dirs 键，JSON 数组）。
+/// 未设置时返回默认排除列表：回收站、系统卷信息（相对目录名，任意盘生效）、临时目录（绝对路径）。
+/// Windows 目录不默认排除——相对名 "windows" 组件匹配会误伤用户目录，而绝对路径只覆盖 C 盘，
+/// 收益与风险不成比例；需要排除时由用户在设置中显式添加。
+pub fn get_excluded_dirs(conn: &Connection) -> rusqlite::Result<Vec<String>> {
+    match crate::db::repositories::get_setting(conn, "global_search_excluded_dirs")? {
+        Some(v) => Ok(serde_json::from_str(&v).unwrap_or_default()),
+        None => Ok(vec![
+            "$Recycle.Bin".to_string(),
+            "System Volume Information".to_string(),
+            std::env::temp_dir().to_string_lossy().to_string(),
+        ]),
+    }
+}
+
+/// 写入排除目录设置（JSON 数组）。
+pub fn set_excluded_dirs(conn: &Connection, dirs: &[String]) -> rusqlite::Result<()> {
+    let value = serde_json::to_string(dirs).unwrap_or_else(|_| "[]".into());
+    crate::db::repositories::set_setting(conn, "global_search_excluded_dirs", &value)
 }
 
 #[cfg(test)]

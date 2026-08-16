@@ -1069,8 +1069,17 @@ pub fn search(query: &str, limit: u32) -> Result<Vec<crate::services::global_sea
                 String::from_utf16_lossy(std::slice::from_raw_parts(sql.as_ptr(), len))
             }
         };
-        drop(sql_string); // SQL 通过 OLE DB 执行；绑定不可用时降级
-        Ok(query_windows_search_ole_db(&sql_string, limit).unwrap_or_default())
+        // SQL 通过 OLE DB 执行；绑定不可用时向调用方传播 Err（触发上层降级到本地索引）。
+        // 错误串携带探测证据（生成的 SQL 字节数），便于调用方区分「索引链路正常但 OLE DB 未绑定」
+        // 与「索引不可达」：只有整条 COM 探测链成功后才可能到达这里。
+        let result = query_windows_search_ole_db(&sql_string, limit).map_err(|_| {
+            format!(
+                "ole_db_not_bound: sql_generated {} bytes",
+                sql_string.len()
+            )
+        })?;
+        drop(sql_string);
+        Ok(result)
     }
 }
 
@@ -3531,3 +3540,36 @@ git commit -m "test(global-search): full regression and performance verification
 - 设计文档 §12 四阶段 → 计划按阶段一至四分组（Task 1-7 / 8-11 / 12-13 / 14-16）。
 - 类型一致性：`GlobalSearchHit`（Rust）与 `GlobalSearchHit`（TS）字段一一对应；`search_id: u64` 贯穿命令与事件；`canonical_key` 在 Task 2 定义、Task 4/9/12 复用。
 - 已知降级项：Windows Search SQL 经 OLE DB 执行标注为可选增强（`query_windows_search_ole_db` 返回 Err 降级），符合设计文档 §9；`.lnk` Store 目标解析失败时回退快捷方式路径。
+
+## 执行与最终审查记录
+
+- 执行方式：子代理驱动开发（每任务 implementer + spec 审查 + 质量审查），16 个任务全部完成。
+- 迁移版本修正：代码库已有 0001-0005，本功能迁移注册为 version 6（文件 `0006_global_search.sql`）。
+- 最终审查修复（交付前）：
+  - Critical：`flush_batch` 由 `INSERT OR IGNORE` 改为代次感知 `ON CONFLICT(canonical_path) DO UPDATE`（重建索引不再清空本地索引），并包事务（同批 I-6）；补 `rescan_with_new_generation_keeps_existing_entries` 回归测试。
+  - I-2：`open_search_result` 文件分支先查 `system_search_entries` 索引记录再打开。
+  - I-3：前端对 exe/bat/cmd/com/msi 首次运行弹确认。
+  - I-4：`get_excluded_dirs` 默认排除 `$Recycle.Bin` / `System Volume Information` / `Windows` / 临时目录。
+  - I-5：路径匹配命中减分 + 应用/页面/项目同分加权（`kind_bonus`）。
+- 已知预留项（后续迭代）：Windows Search OLE DB 执行层、`scan_trigger` 即时触发重建、`EVENT_GLOBAL_SEARCH_INDEX_PROGRESS` 前端订阅、索引错误详情（`last_error`）界面展示、磁盘/扩展名筛选、来源标签展示。
+
+## 预留项优化记录（2026-08-16）
+
+- 已完成：
+  - `scan_trigger` 即时触发重建：`rebuild_search_index` 提升触发计数，扫描线程感知后跳过 30s 轮询立即重扫（`commands/global_search.rs` + `services/scan_service.rs`）。
+  - 索引错误详情：`VolumeStatus` 增 `last_error` 字段，`get_search_index_status` 返回；`emit_progress` 事件 payload 含 `last_error`，error 分支补发事件；前端状态栏 chip 悬停/文本展示错误详情。
+  - 事件订阅：`IndexStatusBar` 改 `listen` 事件驱动刷新 + 30s 兜底轮询（替代原 3s 轮询），含卸载清理与 disposed 竞态防护。
+  - 来源标签：结果行显示来源（windows→系统搜索 / local_index→本地索引 / app_index→应用 / nexus→资源库）。
+  - 磁盘/扩展名筛选：搜索页新增盘符下拉与扩展名输入，纯展示层过滤（不触发重搜、不破坏补批与 500 cap），键盘导航基于过滤后结果。
+  - 排除目录管理 UI：设置页「忽略规则」标签新增「搜索排除目录」区块（chip 增删、持久化 `update_search_settings`、空列表提示默认排除）。
+- 保留：Windows Search OLE DB 执行层（复杂度高，设计文档已标注可选增强，保持降级路径）。
+- 回归：后端 `cargo test --lib` 135 passed / 1 ignored；前端 `npm run build` 通过。
+- 最终状态：后端 `cargo test --lib` 135 passed / 1 ignored（ignored 为需 Windows Search 服务的集成探测）；前端 `npm run build` 通过。
+
+## 本机验证记录（2026-08-16）
+
+- 验证方式：`npm run tauri dev` 启动真实应用 + 直读 `E:\com.nexus.file-workspace\workspace.db`。
+- 全盘扫描：三固定盘全部 completed（C:\ 2,021,695 / D:\ 198,043 / E:\ 2,280,366，合计约 450 万条）；FTS 与 entries 完全同步。
+- 验证中修复（Critical）：**默认排除规则失效**——`$Recycle.Bin` 为相对路径，原 `path_under` 组件前缀比较从盘符开始导致回收站被索引（C:\ 首扫 21,655 条）。修复：`path_under` 对相对目录名按任意层级组件匹配（跳过盘符），默认排除去掉 `Windows` 相对名（防误伤用户目录）；重建 C:\ 后回收站条目清零，存量由 `verify_volume` 逐轮收敛。
+- 增量一致性：新建 12s 内索引 ✓；重命名新路径 + 新 display_name ✓（旧路径残留按首版简化依赖 verify 清理）；删除 15s 内条目消失（含 FTS）✓。
+- 其余验证结果见 `2026-08-15-hybrid-global-search-windows-test-checklist.md` 执行记录。

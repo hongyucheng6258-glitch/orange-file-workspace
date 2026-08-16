@@ -4,6 +4,9 @@ pub const EVENT_RESOURCE_CHANGED: &str = "resource-changed";
 pub const EVENT_LOCATION_INVALIDATED: &str = "location-invalidated";
 pub const EVENT_TRASH_UPDATED: &str = "trash-updated";
 pub const EVENT_TASK_PROGRESS: &str = "task-progress";
+pub const EVENT_GLOBAL_SEARCH_BATCH: &str = "global-search://batch";
+#[allow(dead_code)] // 索引进度事件，供后续任务（Task 7 索引触发）使用
+pub const EVENT_GLOBAL_SEARCH_INDEX_PROGRESS: &str = "global-search://index-progress";
 pub const EVENT_PROJECT_PROCESS_STATUS: &str = "project-process://status";
 pub const EVENT_PROJECT_PROCESS_OUTPUT: &str = "project-process://output";
 pub const EVENT_PROJECT_PROCESS_EXITED: &str = "project-process://exited";

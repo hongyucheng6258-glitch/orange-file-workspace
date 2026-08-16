@@ -20,7 +20,7 @@ export function Topbar() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索文件、页面、项目…"
+          placeholder="搜索文件、应用、页面、项目…"
         />
         <button type="submit" className="search-kbd" title="搜索">
           <SlidersHorizontal size={14} />

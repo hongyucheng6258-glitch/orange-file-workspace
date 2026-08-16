@@ -1,7 +1,5 @@
-// 枚举入口（collect_apps / resolve_lnk_target）待 Task 6 命令层接入；
-// 在此之前保持 dead_code 允许，接入后移除本属性。
-#![allow(dead_code)]
-
+// 应用索引：枚举（collect_apps / resolve_lnk_target）与查询（query_apps）已由
+// 命令层（commands/global_search.rs）与启动后台构建（lib.rs setup）接入。
 use rusqlite::Connection;
 
 /// 应用索引条目。

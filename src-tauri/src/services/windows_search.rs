@@ -51,8 +51,15 @@ pub fn search(query: &str, limit: u32) -> Result<Vec<GlobalSearchHit>, String> {
             CoTaskMemFree(Some(sql.as_ptr() as *const _));
             s
         };
-        // SQL 通过 OLE DB 执行；绑定不可用时向调用方传播 Err（触发上层降级到本地索引）
-        let result = query_windows_search_ole_db(&sql_string, limit)?;
+        // SQL 通过 OLE DB 执行；绑定不可用时向调用方传播 Err（触发上层降级到本地索引）。
+        // 错误串携带探测证据（生成的 SQL 字节数），便于调用方区分「索引链路正常但 OLE DB 未绑定」
+        // 与「索引不可达」：只有整条 COM 探测链成功后才可能到达这里。
+        let result = query_windows_search_ole_db(&sql_string, limit).map_err(|_| {
+            format!(
+                "ole_db_not_bound: sql_generated {} bytes",
+                sql_string.len()
+            )
+        })?;
         drop(sql_string);
         Ok(result)
     }
@@ -112,5 +119,19 @@ mod tests {
     fn wide_encoder_appends_nul() {
         let v = wide("abc");
         assert_eq!(v, vec![97, 98, 99, 0]);
+    }
+
+    /// 集成探测：只有 CoCreateInstance→GetCatalog→GetQueryHelper→GenerateSQLFromUserQuery
+    /// 全部成功才会走到 OLE DB 占位错误。需本机运行 Windows Search 服务时手工执行。
+    #[test]
+    #[cfg(windows)]
+    #[ignore = "requires Windows Search service running"]
+    fn com_probe_reaches_sql_generation() {
+        let r = search("filetype:txt", 10);
+        let err = r.unwrap_err();
+        assert!(
+            err.starts_with("ole_db_not_bound"),
+            "探测链应在 OLE DB 占位处失败，实际错误：{err}"
+        );
     }
 }
