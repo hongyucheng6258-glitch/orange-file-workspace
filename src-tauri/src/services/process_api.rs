@@ -62,7 +62,9 @@ pub struct JobHandle {
 
 impl Clone for JobHandle {
     fn clone(&self) -> Self {
-        Self { inner: self.inner.clone() }
+        Self {
+            inner: self.inner.clone(),
+        }
     }
 }
 
@@ -295,7 +297,9 @@ mod win32 {
             if handle.is_invalid() {
                 return Err(api_error("创建 Job Object"));
             }
-            Ok(JobHandle { inner: Arc::new(JobInner { handle }) })
+            Ok(JobHandle {
+                inner: Arc::new(JobInner { handle }),
+            })
         }
 
         fn set_job_kill_on_close(&self, job: &JobHandle) -> Result<(), ProcessApiError> {
@@ -534,7 +538,9 @@ impl JobInner {
     fn test_new() -> Self {
         #[cfg(windows)]
         {
-            Self { handle: windows::Win32::Foundation::HANDLE(std::ptr::null_mut()) }
+            Self {
+                handle: windows::Win32::Foundation::HANDLE(std::ptr::null_mut()),
+            }
         }
         #[cfg(not(windows))]
         {
@@ -545,8 +551,8 @@ impl JobInner {
 
 // Windows 内核句柄只是指针，可在线程间移动；Drop 从任意线程 CloseHandle 均安全。
 // 运行管理器会把句柄所有权传入协调线程，因此必须标记 Send/Sync。
-unsafe impl Send for JobHandle {}
-unsafe impl Sync for JobHandle {}
+unsafe impl Send for JobInner {}
+unsafe impl Sync for JobInner {}
 unsafe impl Send for SuspendedProcess {}
 
 #[cfg(test)]
