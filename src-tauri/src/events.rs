@@ -8,3 +8,4 @@ pub const EVENT_PROJECT_PROCESS_STATUS: &str = "project-process://status";
 pub const EVENT_PROJECT_PROCESS_OUTPUT: &str = "project-process://output";
 pub const EVENT_PROJECT_PROCESS_EXITED: &str = "project-process://exited";
 pub const EVENT_PROJECT_PROCESS_ERROR: &str = "project-process://error";
+pub const EVENT_PROJECT_PREVIEW_READY: &str = "project-preview://ready";

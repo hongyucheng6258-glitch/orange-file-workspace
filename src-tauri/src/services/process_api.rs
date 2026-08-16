@@ -10,6 +10,7 @@
 
 use std::io::Read;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 /// 创建子进程所需的全部参数（已由运行配置规范化）。
@@ -51,10 +52,23 @@ pub enum WaitResult {
     Failed(ProcessApiError),
 }
 
-/// Job Object 句柄所有权包装。
+/// Job Object 句柄所有权包装（引用计数共享）。
+///
+/// 运行状态机与预览服务可能同时持有同一 Job 的句柄（端口归属校验），
+/// 因此按引用计数共享底层 HANDLE，引用归零才 `CloseHandle`。
 pub struct JobHandle {
+    inner: Arc<JobInner>,
+}
+
+impl Clone for JobHandle {
+    fn clone(&self) -> Self {
+        Self { inner: self.inner.clone() }
+    }
+}
+
+struct JobInner {
     #[cfg(windows)]
-    inner: windows::Win32::Foundation::HANDLE,
+    handle: windows::Win32::Foundation::HANDLE,
 }
 
 impl std::fmt::Debug for JobHandle {
@@ -104,6 +118,8 @@ pub trait Win32ProcessApi: Send + Sync {
     fn wait_process_exit(&self, process: &SuspendedProcess, timeout: Duration) -> WaitResult;
     /// 查询 Job Object 内活动进程数。
     fn query_job_process_count(&self, job: &JobHandle) -> Result<u32, ProcessApiError>;
+    /// 查询 Job Object 内全部进程 PID（用于端口归属校验）。
+    fn query_job_process_ids(&self, job: &JobHandle) -> Result<Vec<u32>, ProcessApiError>;
 }
 
 /// 标准 argv 引号规则（CommandLineToArgvW 兼容）。
@@ -226,10 +242,10 @@ mod win32 {
         }
     }
 
-    impl Drop for JobHandle {
+    impl Drop for JobInner {
         fn drop(&mut self) {
             unsafe {
-                let _ = CloseHandle(self.inner);
+                let _ = CloseHandle(self.handle);
             }
         }
     }
@@ -279,7 +295,7 @@ mod win32 {
             if handle.is_invalid() {
                 return Err(api_error("创建 Job Object"));
             }
-            Ok(JobHandle { inner: handle })
+            Ok(JobHandle { inner: Arc::new(JobInner { handle }) })
         }
 
         fn set_job_kill_on_close(&self, job: &JobHandle) -> Result<(), ProcessApiError> {
@@ -287,7 +303,7 @@ mod win32 {
             info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
             unsafe {
                 SetInformationJobObject(
-                    job.inner,
+                    job.inner.handle,
                     windows::Win32::System::JobObjects::JobObjectExtendedLimitInformation,
                     &info as *const _ as *const core::ffi::c_void,
                     std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
@@ -394,7 +410,7 @@ mod win32 {
             job: &JobHandle,
             process: &SuspendedProcess,
         ) -> Result<(), ProcessApiError> {
-            unsafe { AssignProcessToJobObject(job.inner, process.process) }
+            unsafe { AssignProcessToJobObject(job.inner.handle, process.process) }
                 .map_err(|_| api_error("AssignProcessToJobObject"))
         }
 
@@ -407,7 +423,8 @@ mod win32 {
         }
 
         fn terminate_job(&self, job: &JobHandle) -> Result<(), ProcessApiError> {
-            unsafe { TerminateJobObject(job.inner, 1) }.map_err(|_| api_error("TerminateJobObject"))
+            unsafe { TerminateJobObject(job.inner.handle, 1) }
+                .map_err(|_| api_error("TerminateJobObject"))
         }
 
         fn terminate_process(&self, process: &SuspendedProcess) -> Result<(), ProcessApiError> {
@@ -442,7 +459,7 @@ mod win32 {
             let mut info: JOBOBJECT_BASIC_ACCOUNTING_INFORMATION = unsafe { std::mem::zeroed() };
             unsafe {
                 QueryInformationJobObject(
-                    Some(job.inner),
+                    Some(job.inner.handle),
                     JobObjectBasicAccountingInformation,
                     &mut info as *mut _ as *mut core::ffi::c_void,
                     std::mem::size_of::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>() as u32,
@@ -451,6 +468,50 @@ mod win32 {
             }
             .map_err(|_| api_error("QueryInformationJobObject"))?;
             Ok(info.ActiveProcesses)
+        }
+
+        fn query_job_process_ids(&self, job: &JobHandle) -> Result<Vec<u32>, ProcessApiError> {
+            use windows::Win32::System::JobObjects::{
+                JobObjectBasicProcessIdList, JOBOBJECT_BASIC_PROCESS_ID_LIST,
+            };
+            // 第一次查询获取进程数量。
+            let mut probe: JOBOBJECT_BASIC_PROCESS_ID_LIST = unsafe { std::mem::zeroed() };
+            unsafe {
+                QueryInformationJobObject(
+                    Some(job.inner.handle),
+                    JobObjectBasicProcessIdList,
+                    &mut probe as *mut _ as *mut core::ffi::c_void,
+                    std::mem::size_of::<JOBOBJECT_BASIC_PROCESS_ID_LIST>() as u32,
+                    None,
+                )
+            }
+            .map_err(|_| api_error("QueryInformationJobObject"))?;
+            let count = probe.NumberOfProcessIdsInList as usize;
+            if count == 0 {
+                return Ok(Vec::new());
+            }
+            // 分配容纳全部 PID 的缓冲区再查询。
+            let list_bytes = std::mem::size_of::<usize>() * count;
+            let total = std::mem::size_of::<JOBOBJECT_BASIC_PROCESS_ID_LIST>() + list_bytes;
+            let mut buf: Vec<u8> = vec![0u8; total];
+            unsafe {
+                QueryInformationJobObject(
+                    Some(job.inner.handle),
+                    JobObjectBasicProcessIdList,
+                    buf.as_mut_ptr() as *mut core::ffi::c_void,
+                    total as u32,
+                    None,
+                )
+            }
+            .map_err(|_| api_error("QueryInformationJobObject"))?;
+            let list = buf.as_ptr() as *const JOBOBJECT_BASIC_PROCESS_ID_LIST;
+            let assigned = unsafe { (*list).NumberOfAssignedProcesses } as usize;
+            let pids_ptr = unsafe { &(*list).ProcessIdList[0] } as *const usize;
+            let mut pids = Vec::with_capacity(assigned);
+            for i in 0..assigned {
+                pids.push(unsafe { *pids_ptr.add(i) } as u32);
+            }
+            Ok(pids)
         }
     }
 }
@@ -462,11 +523,18 @@ pub use win32::Win32ProcessApiImpl;
 #[cfg(test)]
 impl JobHandle {
     pub(crate) fn test_new() -> Self {
+        Self {
+            inner: Arc::new(JobInner::test_new()),
+        }
+    }
+}
+
+impl JobInner {
+    #[cfg(test)]
+    fn test_new() -> Self {
         #[cfg(windows)]
         {
-            Self {
-                inner: windows::Win32::Foundation::HANDLE(std::ptr::null_mut()),
-            }
+            Self { handle: windows::Win32::Foundation::HANDLE(std::ptr::null_mut()) }
         }
         #[cfg(not(windows))]
         {
@@ -570,6 +638,12 @@ impl Win32ProcessApi for Win32ProcessApiImpl {
         ))
     }
     fn query_job_process_count(&self, _job: &JobHandle) -> Result<u32, ProcessApiError> {
+        Err(ProcessApiError::new(
+            "unsupported",
+            "当前平台不支持查询 Job",
+        ))
+    }
+    fn query_job_process_ids(&self, _job: &JobHandle) -> Result<Vec<u32>, ProcessApiError> {
         Err(ProcessApiError::new(
             "unsupported",
             "当前平台不支持查询 Job",

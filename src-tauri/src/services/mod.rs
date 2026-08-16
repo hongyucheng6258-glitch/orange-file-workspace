@@ -18,6 +18,9 @@ pub mod settings_service;
 pub mod task_service;
 pub mod system_service;
 pub mod system_windows;
+#[cfg(test)]
+pub mod test_support;
 pub mod thumbnail_service;
 pub mod watcher_service;
+pub mod web_preview_service;
 pub mod windows_search;

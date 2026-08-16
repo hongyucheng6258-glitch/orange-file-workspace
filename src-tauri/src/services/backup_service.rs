@@ -454,6 +454,13 @@ mod tests {
                     std::sync::Arc::new(crate::services::process_api::Win32ProcessApiImpl),
                     std::sync::Arc::new(crate::services::project_runtime::NullRunEventSink),
                 )),
+                preview: std::sync::Arc::new(crate::services::web_preview_service::PreviewService::new(
+                    std::sync::Arc::new(crate::services::project_runtime::RuntimeManager::new(
+                        std::sync::Arc::new(crate::services::process_api::Win32ProcessApiImpl),
+                        std::sync::Arc::new(crate::services::project_runtime::NullRunEventSink),
+                    )),
+                    std::sync::Arc::new(crate::services::web_preview_service::UnsupportedPortProbe),
+                )),
             },
             dir,
         )

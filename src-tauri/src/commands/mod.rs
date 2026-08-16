@@ -7,6 +7,7 @@ pub mod migration;
 pub mod pages;
 pub mod previews;
 pub mod projects;
+pub mod project_preview;
 pub mod project_runtime;
 pub mod resources;
 pub mod search;

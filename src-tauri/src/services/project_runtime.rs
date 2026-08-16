@@ -21,6 +21,7 @@ use crate::services::run_confirmation::{
     canonical_key, ConfirmationGrant, ConfirmationPreview, ConfirmationSession,
     NormalizedRunConfig, RunConfig,
 };
+use crate::services::web_preview_service::{PreviewContext, PreviewTarget};
 
 /// 停止超时上限。
 pub const STOP_TIMEOUT: Duration = Duration::from_secs(5);
@@ -140,6 +141,8 @@ pub trait RunEventSink: Send + Sync {
     fn emit_output(&self, p: &OutputPayload);
     fn emit_exited(&self, p: &ExitedPayload);
     fn emit_error(&self, p: &ErrorPayload);
+    /// 预览就绪事件（端口归属校验完成）。
+    fn emit_preview(&self, p: &crate::services::web_preview_service::PreviewTarget);
 }
 
 /// 空事件输出（测试与无 UI 场景）。
@@ -151,6 +154,7 @@ impl RunEventSink for NullRunEventSink {
     fn emit_output(&self, _p: &OutputPayload) {}
     fn emit_exited(&self, _p: &ExitedPayload) {}
     fn emit_error(&self, _p: &ErrorPayload) {}
+    fn emit_preview(&self, _p: &crate::services::web_preview_service::PreviewTarget) {}
 }
 
 /// 运行错误，映射到 `AppError`。
@@ -305,6 +309,8 @@ struct ActiveRun {
     stop_reason: Option<String>,
     stop_requested: Arc<AtomicBool>,
     bus: LogBus,
+    /// Job 句柄共享引用：供端口归属校验在运行期间查询进程列表。
+    job: Option<JobHandle>,
 }
 
 impl ActiveRun {
@@ -431,6 +437,7 @@ impl RuntimeManager {
                     stop_reason: None,
                     stop_requested: stop_flag.clone(),
                     bus: bus.clone(),
+                    job: None,
                 },
             );
             inner.project_keys.insert(project_key, run_id.clone());
@@ -609,6 +616,13 @@ impl RuntimeManager {
         let Some(stop_flag) = stop_flag else { return };
 
         let mut process = resources.process;
+        // 保留 Job 句柄共享引用供预览服务校验端口归属。
+        {
+            let mut inner = self.inner.lock().unwrap();
+            if let Some(run) = inner.runs.get_mut(&run_id) {
+                run.job = Some(resources.job.clone());
+            }
+        }
         if let Some(reader) = process.stdout.take() {
             let bus = bus.clone();
             let sink = self.sink.clone();
@@ -926,6 +940,45 @@ impl RuntimeManager {
             return Err(RuntimeError::new("run_not_found", "运行实例不存在或已淘汰"));
         };
         Ok(bus.ring.page(after_seq))
+    }
+
+    // ---- 预览支持 ----
+
+    /// 返回活动运行的预览上下文：快照字段、拼接日志、Job 句柄。
+    /// 仅活动运行（starting/running）可预览；终态返回 None。
+    pub fn preview_context(&self, run_id: &str) -> Option<PreviewContext> {
+        let inner = self.inner.lock().unwrap();
+        let run = inner.runs.get(run_id)?;
+        if run.state.is_terminal() {
+            return None;
+        }
+        let log_text = {
+            let page = run.bus.ring.page(0);
+            page.entries
+                .iter()
+                .map(|e| e.text.as_str())
+                .collect::<Vec<_>>()
+                .join("")
+        };
+        Some(PreviewContext {
+            run_id: run.run_id.clone(),
+            project_id: run.project_id.clone(),
+            expected_port: run.config.expected_port,
+            preview_scheme: run.config.preview_scheme.clone(),
+            args: run.config.args.clone(),
+            log_text,
+            job: run.job.clone(),
+        })
+    }
+
+    /// 查询 Job Object 内进程 PID（端口归属校验）。
+    pub fn job_process_ids(&self, job: &JobHandle) -> Result<Vec<u32>, ProcessApiError> {
+        self.api.query_job_process_ids(job)
+    }
+
+    /// 发布预览就绪事件。
+    pub fn emit_preview_ready(&self, target: &PreviewTarget) {
+        self.sink.emit_preview(target);
     }
 
     // ---- 清理 ----

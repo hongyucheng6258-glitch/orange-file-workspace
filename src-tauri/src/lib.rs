@@ -23,6 +23,7 @@ pub struct AppState {
     pub conn: Mutex<rusqlite::Connection>,
     pub sampler: Mutex<services::system_service::SystemSampler>,
     pub runtime: Arc<services::project_runtime::RuntimeManager>,
+    pub preview: Arc<services::web_preview_service::PreviewService>,
 }
 
 /// 启动配置：固定位置 `%APPDATA%\com.nexus.file-workspace\config.json`。
@@ -98,12 +99,16 @@ pub fn run() {
                     app.handle().clone(),
                 )),
             ));
+            // Web 端口预览服务：目标解析 + 监听检测 + Job 归属校验。
+            let preview_service =
+                services::web_preview_service::build_preview_service(runtime_manager.clone());
             app.manage(AppState {
                 data_dir: Mutex::new(data_dir),
                 managed_dir: Mutex::new(managed_dir),
                 conn: Mutex::new(conn),
                 sampler: Mutex::new(services::system_service::SystemSampler::new()),
                 runtime: runtime_manager.clone(),
+                preview: preview_service.clone(),
             });
             // 运行管理器：确认票据过期清理 + 停止超时清理重试。
             {
@@ -214,6 +219,8 @@ pub fn run() {
             commands::project_runtime::restart_project_process,
             commands::project_runtime::get_project_run,
             commands::project_runtime::get_process_logs
+            ,
+            commands::project_preview::open_project_preview
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
