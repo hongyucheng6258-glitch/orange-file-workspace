@@ -6,6 +6,7 @@ import {
   FolderPlus,
   LayoutGrid,
   List,
+  Move,
   RefreshCw,
   Upload,
   ChevronLeft,
@@ -243,6 +244,12 @@ export function FilePage() {
 
         {/* 内容区 */}
         <div className="file-content">
+          {resources.length > 0 && "__TAURI_INTERNALS__" in window && (
+            <div className="file-drag-hint">
+              <Move size={13} />
+              按住文件拖到桌面或文件夹，即可将其导出到系统
+            </div>
+          )}
           {loading ? (
             <div className="empty-state">
               <div className="empty-icon" />

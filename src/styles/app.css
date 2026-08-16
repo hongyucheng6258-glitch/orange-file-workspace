@@ -486,6 +486,20 @@ input {
   padding: 8px 16px 16px;
 }
 
+.file-drag-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-tertiary, #888);
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px dashed rgba(99, 102, 241, 0.25);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  user-select: none;
+}
+
 /* ===== 文件列表 ===== */
 .file-table-wrap {
   height: 100%;
