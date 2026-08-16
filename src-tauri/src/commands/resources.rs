@@ -349,7 +349,8 @@ pub fn get_ancestors(state: State<AppState>, id: String) -> CommandResult<Vec<Re
     Ok(chain)
 }
 
-/// 永久删除（先删磁盘文件/目录，再删除数据库记录）。
+/// 永久删除（先删磁盘文件/目录，全部成功后再删除数据库记录）。
+/// 磁盘删除失败时保留数据库记录并返回错误，供用户重试定位。
 #[tauri::command]
 pub fn delete_permanently(
     state: State<AppState>,
@@ -359,23 +360,42 @@ pub fn delete_permanently(
     let mut conn = lock_db(&state);
     let tx = conn.transaction()?;
     let mut count = 0;
+    let mut errors: Vec<String> = Vec::new();
+
     for id in &ids {
         let locations = repo::list_locations(&tx, id)?;
         for loc in &locations {
             let path = PathBuf::from(&loc.path);
-            if path.exists() {
-                if path.is_dir() {
-                    let _ = std::fs::remove_dir_all(&path);
-                } else {
-                    let _ = std::fs::remove_file(&path);
-                }
+            if !path.exists() {
+                continue;
+            }
+            let res = if path.is_dir() {
+                std::fs::remove_dir_all(&path)
+            } else {
+                std::fs::remove_file(&path)
+            };
+            if let Err(e) = res {
+                // 物理删除失败：保留数据库记录，便于重试
+                errors.push(format!("{}: {e}", loc.path));
             }
         }
-        tx.execute("DELETE FROM file_metadata WHERE resource_id = ?1", [id])?;
-        tx.execute("DELETE FROM resource_locations WHERE resource_id = ?1", [id])?;
-        tx.execute("DELETE FROM resources WHERE id = ?1", [id])?;
-        count += 1;
+        if errors.is_empty() {
+            tx.execute("DELETE FROM file_metadata WHERE resource_id = ?1", [id])?;
+            tx.execute("DELETE FROM resource_locations WHERE resource_id = ?1", [id])?;
+            tx.execute("DELETE FROM resources WHERE id = ?1", [id])?;
+            count += 1;
+        }
     }
+
+    if !errors.is_empty() {
+        let joined = errors.join("; ");
+        drop(tx);
+        return Err(AppError::new(
+            "delete_failed",
+            format!("部分文件删除失败，记录已保留可重试: {joined}"),
+        ));
+    }
+
     tx.commit()?;
     emit_trash_updated(&app);
     Ok(count)

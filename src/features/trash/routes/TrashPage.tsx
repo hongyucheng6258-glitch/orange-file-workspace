@@ -8,6 +8,7 @@ export function TrashPage() {
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<"single" | "batch" | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const list = await call<Resource[]>("list_trash", {});
@@ -51,19 +52,29 @@ export function TrashPage() {
   };
 
   const removeForever = async (id: string) => {
-    await call<number>("delete_permanently", { ids: [id] });
-    setConfirm(null);
-    setConfirmId(null);
-    clearSelection();
-    await load();
+    setError(null);
+    try {
+      await call<number>("delete_permanently", { ids: [id] });
+      setConfirm(null);
+      setConfirmId(null);
+      clearSelection();
+      await load();
+    } catch (e) {
+      setError((e as Error).message ?? String(e));
+    }
   };
 
   const removeSelected = async () => {
     if (selection.size === 0) return;
-    await call<number>("delete_permanently", { ids: [...selection] });
-    setConfirm(null);
-    clearSelection();
-    await load();
+    setError(null);
+    try {
+      await call<number>("delete_permanently", { ids: [...selection] });
+      setConfirm(null);
+      clearSelection();
+      await load();
+    } catch (e) {
+      setError((e as Error).message ?? String(e));
+    }
   };
 
   const icon = (r: Resource) =>
@@ -80,6 +91,15 @@ export function TrashPage() {
   return (
     <div className="list-page">
       <h2>回收站</h2>
+
+      {error && (
+        <div className="editor-error-bar" style={{ margin: "0 0 12px" }}>
+          <span>{error}</span>
+          <button className="icon-btn" onClick={() => setError(null)} title="关闭">
+            <AlertTriangle size={13} />
+          </button>
+        </div>
+      )}
 
       {items.length > 0 && (
         <div className="list-page-toolbar">
