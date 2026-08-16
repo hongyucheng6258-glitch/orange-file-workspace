@@ -9,6 +9,7 @@ pub mod import_service;
 pub mod migration_service;
 pub mod page_service;
 pub mod preview_service;
+pub mod project_detector;
 pub mod project_service;
 pub mod settings_service;
 pub mod task_service;
