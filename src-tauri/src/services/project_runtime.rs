@@ -21,6 +21,7 @@ use crate::services::run_confirmation::{
     canonical_key, ConfirmationGrant, ConfirmationPreview, ConfirmationSession,
     NormalizedRunConfig, RunConfig,
 };
+use crate::services::run_history::RunHistoryStore;
 use crate::services::web_preview_service::{PreviewContext, PreviewTarget};
 
 /// 停止超时上限。
@@ -338,20 +339,26 @@ struct RuntimeInner {
     cleanup: Vec<CleanupEntry>,
 }
 
-/// 运行管理器：项目级单实例 + 生命周期 + 日志。
+/// 运行管理器：项目级单实例 + 生命周期 + 日志 + 运行历史。
 pub struct RuntimeManager {
     api: Arc<dyn Win32ProcessApi>,
     sink: Arc<dyn RunEventSink>,
+    history: Arc<dyn RunHistoryStore>,
     session: ConfirmationSession,
     start_lock: Mutex<()>,
     inner: Mutex<RuntimeInner>,
 }
 
 impl RuntimeManager {
-    pub fn new(api: Arc<dyn Win32ProcessApi>, sink: Arc<dyn RunEventSink>) -> Self {
+    pub fn new(
+        api: Arc<dyn Win32ProcessApi>,
+        sink: Arc<dyn RunEventSink>,
+        history: Arc<dyn RunHistoryStore>,
+    ) -> Self {
         Self {
             api,
             sink,
+            history,
             session: ConfirmationSession::default(),
             start_lock: Mutex::new(()),
             inner: Mutex::new(RuntimeInner {
@@ -361,6 +368,86 @@ impl RuntimeManager {
                 cleanup: Vec::new(),
             }),
         }
+    }
+
+    /// 启动时加载已退出历史到内存（仅终态，不误报为运行中）。
+    pub fn load_history(&self) {
+        let entries = self.history.list(500);
+        let mut inner = self.inner.lock().unwrap();
+        for entry in entries {
+            if inner.runs.contains_key(&entry.run_id)
+                || inner.cleanup.iter().any(|c| c.run_id == entry.run_id)
+                || inner.recent.contains_key(&entry.project_key)
+            {
+                continue;
+            }
+            let snap = entry.to_snapshot();
+            inner.recent.insert(
+                entry.project_key.clone(),
+                RecentRun {
+                    run_id: entry.run_id,
+                    snapshot: snap,
+                    bus: LogBus::new(),
+                    config: NormalizedRunConfig {
+                        version: 1,
+                        project_id: String::new(),
+                        executable: String::new(),
+                        args: Vec::new(),
+                        cwd: String::new(),
+                        env_overrides: Vec::new(),
+                        expected_port: None,
+                        preview_scheme: "http".to_string(),
+                    },
+                },
+            );
+        }
+    }
+
+    /// 运行列表：活动实例 + 清理中 + （可选）已退出记录（内存 recent + 落库历史）。
+    pub fn list_runs(&self, include_exited: bool) -> Vec<RunSnapshot> {
+        let mut out: Vec<RunSnapshot> = Vec::new();
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        {
+            let inner = self.inner.lock().unwrap();
+            for run in inner.runs.values() {
+                let snap = run.snapshot();
+                seen.insert(snap.run_id.clone());
+                out.push(snap);
+            }
+            for c in &inner.cleanup {
+                if !seen.contains(&c.run_id) {
+                    seen.insert(c.run_id.clone());
+                    out.push(c.snapshot.clone());
+                }
+            }
+            if include_exited {
+                for r in inner.recent.values() {
+                    if !seen.contains(&r.run_id) {
+                        seen.insert(r.run_id.clone());
+                        out.push(r.snapshot.clone());
+                    }
+                }
+            }
+        }
+        if include_exited {
+            for h in self.history.list(500) {
+                if !seen.contains(&h.run_id) {
+                    seen.insert(h.run_id.clone());
+                    out.push(h.to_snapshot());
+                }
+            }
+        }
+        out.sort_by(|a, b| {
+            let sa = a.started_at.unwrap_or(0);
+            let sb = b.started_at.unwrap_or(0);
+            sb.cmp(&sa)
+        });
+        out
+    }
+
+    /// 记录已退出运行到历史（忽略存储错误，不阻塞运行状态机）。
+    fn record_history(&self, snap: &RunSnapshot, project_key: &str) {
+        let _ = self.history.record(snap, project_key);
     }
 
     // ---- 确认协议委托 ----
@@ -496,6 +583,7 @@ impl RuntimeManager {
                             config: run.config.clone(),
                         },
                     );
+                    self.record_history(&snap, &run.project_key);
                 }
                 Err(e)
             }
@@ -527,6 +615,7 @@ impl RuntimeManager {
                     config: run.config.clone(),
                 },
             );
+            self.record_history(&snap, &run.project_key);
             snap
         } else {
             RunSnapshot {
@@ -725,6 +814,7 @@ impl RuntimeManager {
                     config: run.config.clone(),
                 },
             );
+            self.record_history(&snap, &run.project_key);
             self.emit_status_payload(&snap);
             self.sink.emit_exited(&ExitedPayload {
                 run_id: snap.run_id.clone(),
@@ -809,11 +899,12 @@ impl RuntimeManager {
                 run.project_key.clone(),
                 RecentRun {
                     run_id,
-                    snapshot: snap,
+                    snapshot: snap.clone(),
                     bus,
                     config: run.config.clone(),
                 },
             );
+            self.record_history(&snap, &run.project_key);
         } else {
             drop(job);
             drop(process);
@@ -1024,7 +1115,7 @@ impl RuntimeManager {
             let mut inner = self.inner.lock().unwrap();
             inner.project_keys.remove(&project_key);
             inner.recent.insert(
-                project_key,
+                project_key.clone(),
                 RecentRun {
                     run_id,
                     snapshot: snapshot.clone(),
@@ -1033,6 +1124,7 @@ impl RuntimeManager {
                 },
             );
             drop(inner);
+            self.record_history(&snapshot, &project_key);
             self.emit_status_payload(&snapshot);
             self.sink.emit_exited(&ExitedPayload {
                 run_id: snapshot.run_id.clone(),

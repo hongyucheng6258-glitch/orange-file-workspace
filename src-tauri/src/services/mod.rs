@@ -14,6 +14,7 @@ pub mod project_detector;
 pub mod project_runtime;
 pub mod project_service;
 pub mod run_confirmation;
+pub mod run_history;
 pub mod settings_service;
 pub mod task_service;
 pub mod system_service;

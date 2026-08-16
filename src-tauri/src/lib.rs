@@ -92,13 +92,20 @@ pub fn run() {
                 let _ = scope.allow_directory(&data_dir, true);
                 let _ = scope.allow_directory(&managed_dir, true);
             }
-            // 项目运行管理器：确认协议 + 进程生命周期 + 日志。
+            // 项目运行管理器：确认协议 + 进程生命周期 + 日志 + 运行历史。
+            // 历史存储使用独立连接（WAL 支持多连接并发读写）。
+            let history_store = Arc::new(services::run_history::SqliteRunHistoryStore::new(
+                open(&db_path)?,
+            ));
             let runtime_manager = Arc::new(services::project_runtime::RuntimeManager::new(
                 Arc::new(services::process_api::Win32ProcessApiImpl),
                 Arc::new(commands::project_runtime::AppRunEventSink::new(
                     app.handle().clone(),
                 )),
+                history_store,
             ));
+            // 启动时加载已退出历史（仅终态，不误报为运行中）。
+            runtime_manager.load_history();
             // Web 端口预览服务：目标解析 + 监听检测 + Job 归属校验。
             let preview_service =
                 services::web_preview_service::build_preview_service(runtime_manager.clone());
@@ -221,6 +228,8 @@ pub fn run() {
             commands::project_runtime::get_process_logs
             ,
             commands::project_preview::open_project_preview
+            ,
+            commands::run_center::list_project_runs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

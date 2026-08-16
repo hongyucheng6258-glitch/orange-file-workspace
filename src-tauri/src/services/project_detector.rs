@@ -14,6 +14,9 @@ pub enum RuntimeKind {
     Node,
     Python,
     Rust,
+    Java,
+    Makefile,
+    Docker,
 }
 
 /// 候选运行命令：结构化程序和参数。
@@ -335,6 +338,88 @@ fn detect_python(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) 
     result.push_diag("未找到 main.py / app.py / manage.py 入口文件");
 }
 
+/// Java：Maven/Gradle + Spring Boot 插件可确认时生成候选；否则只出诊断，不猜测目标。
+fn detect_java(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) {
+    if fs.is_file(&root.join("pom.xml")) {
+        let text = fs.read_to_string(&root.join("pom.xml")).unwrap_or_default();
+        let has_boot = text.contains("spring-boot-maven-plugin");
+        if let Some(mvn) = fs.resolve_on_path("mvn") {
+            if has_boot {
+                result.push_candidate(
+                    "mvn spring-boot:run",
+                    mvn.to_string_lossy().to_string(),
+                    vec!["spring-boot:run".to_string()],
+                    80,
+                );
+            } else {
+                result.push_diag(
+                    "pom.xml 未包含 spring-boot-maven-plugin，不自动猜测运行目标，请手动配置命令",
+                );
+            }
+        } else {
+            result.push_diag("检测到 Maven 项目但 PATH 中未解析到 mvn");
+        }
+    }
+    let gradle_file = ["build.gradle", "build.gradle.kts"]
+        .iter()
+        .map(|f| root.join(f))
+        .find(|p| fs.is_file(p));
+    if let Some(gf) = gradle_file {
+        let text = fs.read_to_string(&gf).unwrap_or_default();
+        let has_boot = text.contains("org.springframework.boot");
+        if let Some(gradle) = fs.resolve_on_path("gradle") {
+            if has_boot {
+                result.push_candidate(
+                    "gradle bootRun",
+                    gradle.to_string_lossy().to_string(),
+                    vec!["bootRun".to_string()],
+                    80,
+                );
+            } else {
+                result.push_diag(
+                    "build.gradle 未包含 spring-boot 插件，不自动猜测运行目标，请手动配置命令",
+                );
+            }
+        } else {
+            result.push_diag("检测到 Gradle 项目但 PATH 中未解析到 gradle");
+        }
+    }
+}
+
+/// Makefile：存在 make 时提供默认目标候选。
+fn detect_makefile(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) {
+    if let Some(make) = fs.resolve_on_path("make") {
+        result.push_candidate("make", make.to_string_lossy().to_string(), vec![], 60);
+    } else {
+        result.push_diag("检测到 Makefile 但 PATH 中未解析到 make；默认目标由 Makefile 决定");
+    }
+}
+
+/// Docker：compose 配置可确认时生成候选；仅有 Dockerfile 时只出诊断。
+fn detect_docker(fs: &dyn ProjectFs, root: &Path, result: &mut DetectionResult) {
+    let compose = ["docker-compose.yml", "compose.yaml", "compose.yml"]
+        .iter()
+        .any(|f| fs.is_file(&root.join(f)));
+    if compose {
+        if let Some(docker) = fs.resolve_on_path("docker") {
+            result.push_candidate(
+                "docker compose up",
+                docker.to_string_lossy().to_string(),
+                vec!["compose".to_string(), "up".to_string()],
+                70,
+            );
+        } else {
+            result.push_diag("检测到 docker-compose 配置但 PATH 中未解析到 docker");
+        }
+    } else if fs.is_file(&root.join("Dockerfile")) {
+        if fs.resolve_on_path("docker").is_some() {
+            result.push_diag("检测到 Dockerfile：构建与运行方式依赖镜像配置，请手动配置命令");
+        } else {
+            result.push_diag("检测到 Dockerfile 但 PATH 中未解析到 docker");
+        }
+    }
+}
+
 /// 主入口：检测项目根目录下的运行时并生成候选命令。
 pub fn detect(fs: &dyn ProjectFs, root: &Path) -> DetectionResult {
     let root = normalize_lexical(root);
@@ -350,8 +435,30 @@ pub fn detect(fs: &dyn ProjectFs, root: &Path) -> DetectionResult {
     if has_python_marker(fs, &root) {
         kinds.push(RuntimeKind::Python);
     }
+    if fs.exists(&root.join("pom.xml"))
+        || fs.exists(&root.join("build.gradle"))
+        || fs.exists(&root.join("build.gradle.kts"))
+    {
+        kinds.push(RuntimeKind::Java);
+    }
+    if fs.exists(&root.join("Makefile"))
+        || fs.exists(&root.join("makefile"))
+        || fs.exists(&root.join("GNUmakefile"))
+    {
+        kinds.push(RuntimeKind::Makefile);
+    }
+    if fs.exists(&root.join("Dockerfile"))
+        || fs.exists(&root.join("docker-compose.yml"))
+        || fs.exists(&root.join("compose.yaml"))
+        || fs.exists(&root.join("compose.yml"))
+    {
+        kinds.push(RuntimeKind::Docker);
+    }
     if kinds.is_empty() {
-        result.diagnostics.push("未识别到受支持的运行时配置文件（package.json / Cargo.toml / pyproject.toml / requirements.txt / Python 入口）".to_string());
+        result.diagnostics.push(
+            "未识别到受支持的运行时配置文件（package.json / Cargo.toml / pyproject.toml / requirements.txt / Python 入口 / pom.xml / build.gradle / Makefile / Dockerfile）"
+                .to_string(),
+        );
         return result;
     }
 
@@ -361,6 +468,9 @@ pub fn detect(fs: &dyn ProjectFs, root: &Path) -> DetectionResult {
             RuntimeKind::Node => detect_node(fs, &root, &mut result),
             RuntimeKind::Rust => detect_rust(fs, &root, &mut result),
             RuntimeKind::Python => detect_python(fs, &root, &mut result),
+            RuntimeKind::Java => detect_java(fs, &root, &mut result),
+            RuntimeKind::Makefile => detect_makefile(fs, &root, &mut result),
+            RuntimeKind::Docker => detect_docker(fs, &root, &mut result),
         }
     }
     result
@@ -659,5 +769,118 @@ cli = "demo.cli:main"
                 "识别器不应读取 {p:?}"
             );
         }
+    }
+
+    // ---- Java / Makefile / Docker ----
+
+    #[test]
+    fn java_maven_spring_boot_candidate() {
+        let fs = FakeFs::new()
+            .file(
+                root().join("pom.xml"),
+                "<project><build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>",
+            )
+            .path_exe("mvn");
+        let r = detect(&fs, &root());
+        assert_eq!(r.runtime_kind, Some(RuntimeKind::Java));
+        let cand = r
+            .candidates
+            .iter()
+            .find(|c| c.label == "mvn spring-boot:run");
+        assert!(cand.is_some(), "应生成 mvn spring-boot:run 候选");
+        assert_eq!(cand.unwrap().args, vec!["spring-boot:run"]);
+        assert_eq!(cand.unwrap().confidence, 80);
+    }
+
+    #[test]
+    fn java_maven_without_plugin_only_diag() {
+        let fs = FakeFs::new()
+            .file(
+                root().join("pom.xml"),
+                "<project><groupId>x</groupId></project>",
+            )
+            .path_exe("mvn");
+        let r = detect(&fs, &root());
+        assert!(r.candidates.is_empty(), "不猜测运行目标");
+        assert!(r
+            .diagnostics
+            .iter()
+            .any(|d| d.contains("spring-boot-maven-plugin")));
+    }
+
+    #[test]
+    fn java_maven_without_mvn_diag() {
+        let fs = FakeFs::new().file(root().join("pom.xml"), "<project/>");
+        let r = detect(&fs, &root());
+        assert!(r.candidates.is_empty());
+        assert!(r.diagnostics.iter().any(|d| d.contains("mvn")));
+    }
+
+    #[test]
+    fn java_gradle_spring_boot_candidate() {
+        let fs = FakeFs::new()
+            .file(
+                root().join("build.gradle"),
+                "plugins { id 'org.springframework.boot' }",
+            )
+            .path_exe("gradle");
+        let r = detect(&fs, &root());
+        let cand = r.candidates.iter().find(|c| c.label == "gradle bootRun");
+        assert!(cand.is_some(), "应生成 gradle bootRun 候选");
+        assert_eq!(cand.unwrap().confidence, 80);
+    }
+
+    #[test]
+    fn makefile_candidate_with_make() {
+        let fs = FakeFs::new()
+            .file(root().join("Makefile"), "all:\n\t@echo hi")
+            .path_exe("make");
+        let r = detect(&fs, &root());
+        assert_eq!(r.runtime_kind, Some(RuntimeKind::Makefile));
+        let cand = r.candidates.iter().find(|c| c.label == "make");
+        assert!(cand.is_some());
+        assert_eq!(cand.unwrap().args.len(), 0);
+    }
+
+    #[test]
+    fn makefile_without_make_diag() {
+        let fs = FakeFs::new().file(root().join("Makefile"), "all:");
+        let r = detect(&fs, &root());
+        assert!(r.candidates.is_empty());
+        assert!(r.diagnostics.iter().any(|d| d.contains("make")));
+    }
+
+    #[test]
+    fn docker_compose_candidate() {
+        let fs = FakeFs::new()
+            .file(root().join("docker-compose.yml"), "services: {}")
+            .path_exe("docker");
+        let r = detect(&fs, &root());
+        assert_eq!(r.runtime_kind, Some(RuntimeKind::Docker));
+        let cand = r.candidates.iter().find(|c| c.label == "docker compose up");
+        assert!(cand.is_some());
+        assert_eq!(cand.unwrap().args, vec!["compose", "up"]);
+    }
+
+    #[test]
+    fn dockerfile_only_diag() {
+        let fs = FakeFs::new()
+            .file(root().join("Dockerfile"), "FROM node:20")
+            .path_exe("docker");
+        let r = detect(&fs, &root());
+        assert!(r.candidates.is_empty(), "仅 Dockerfile 不自动猜测构建命令");
+        assert!(r.diagnostics.iter().any(|d| d.contains("Dockerfile")));
+    }
+
+    #[test]
+    fn multi_marker_priority_node_first() {
+        // package.json + pom.xml 同时存在 → 主类型为 Node，Java 也参与识别。
+        let fs = FakeFs::new()
+            .file(root().join("package.json"), node_pkg(r#"{"dev":"vite"}"#))
+            .file(root().join("pom.xml"), "<project/>")
+            .path_exe("mvn");
+        let r = detect(&fs, &root());
+        assert_eq!(r.runtime_kind, Some(RuntimeKind::Node));
+        assert!(r.candidates.iter().any(|c| c.label.contains("npm run dev")));
     }
 }

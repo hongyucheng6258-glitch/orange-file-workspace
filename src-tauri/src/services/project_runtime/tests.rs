@@ -4,6 +4,7 @@ use super::*;
 use std::sync::atomic::AtomicU32;
 use std::sync::mpsc;
 
+use crate::services::run_history::InMemoryRunHistoryStore;
 use crate::services::test_support::*;
 
 // ---- 基础生命周期 ----
@@ -427,4 +428,149 @@ fn shutdown_all_terminates_running() {
     manager.shutdown_all();
     let after = manager.get_run(&snap.run_id).unwrap();
     assert!(after.state.is_terminal());
+}
+
+// ---- 运行列表与历史 ----
+
+#[test]
+fn list_runs_includes_active_runs() {
+    let api = FakeApi::new();
+    let sink = TestSink::new();
+    let manager = make_manager(api.clone(), sink.clone());
+    let root1 = tmp_root("list-a");
+    let root2 = tmp_root("list-b");
+    let snap1 = start_run(&manager, &root1, &base_config(&root1));
+    let snap2 = start_run(&manager, &root2, &base_config(&root2));
+    assert_eq!(snap1.state, RunState::Running);
+    assert_eq!(snap2.state, RunState::Running);
+
+    let active = manager.list_runs(false);
+    assert_eq!(active.len(), 2);
+    let ids: Vec<&str> = active.iter().map(|s| s.run_id.as_str()).collect();
+    assert!(ids.contains(&snap1.run_id.as_str()));
+    assert!(ids.contains(&snap2.run_id.as_str()));
+    // 不含已退出记录。
+    assert!(active.iter().all(|s| !s.state.is_terminal()));
+}
+
+#[test]
+fn list_runs_includes_exited_and_dedupes() {
+    let api = FakeApi::new();
+    let sink = TestSink::new();
+    let manager = make_manager(api.clone(), sink.clone());
+    let root = tmp_root("list-exited");
+    api.set_natural_exit(0);
+    let snap = start_run(&manager, &root, &base_config(&root));
+    assert!(wait_until(
+        || manager
+            .get_run(&snap.run_id)
+            .map(|s| s.state.is_terminal())
+            .unwrap_or(false),
+        Duration::from_secs(3)
+    ));
+    let all = manager.list_runs(true);
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].run_id, snap.run_id);
+    assert!(all[0].state.is_terminal());
+    // run_id 不重复。
+    let ids: Vec<&str> = all.iter().map(|s| s.run_id.as_str()).collect();
+    assert_eq!(
+        ids.len(),
+        ids.iter().collect::<std::collections::HashSet<_>>().len()
+    );
+    // include_exited=false 时不含已退出。
+    let active = manager.list_runs(false);
+    assert!(active.iter().all(|s| !s.state.is_terminal()) || active.is_empty());
+}
+
+#[test]
+fn history_recorded_on_terminal() {
+    let api = FakeApi::new();
+    let sink = TestSink::new();
+    let history = Arc::new(InMemoryRunHistoryStore::new());
+    let manager = make_manager_with(api.clone(), sink.clone(), history.clone());
+    let root = tmp_root("hist");
+    api.set_natural_exit(0);
+    let snap = start_run(&manager, &root, &base_config(&root));
+    assert!(wait_until(
+        || manager
+            .get_run(&snap.run_id)
+            .map(|s| s.state.is_terminal())
+            .unwrap_or(false),
+        Duration::from_secs(3)
+    ));
+    let recorded = history.list(10);
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].run_id, snap.run_id);
+    assert!(recorded[0].state.is_terminal());
+}
+
+#[test]
+fn load_history_restores_terminal_only() {
+    let api = FakeApi::new();
+    let sink = TestSink::new();
+    let history = Arc::new(InMemoryRunHistoryStore::new());
+    // 第一个会话：运行并退出 → 历史记录。
+    {
+        let manager = make_manager_with(api.clone(), sink.clone(), history.clone());
+        let root = tmp_root("hist-load");
+        api.set_natural_exit(0);
+        let snap = start_run(&manager, &root, &base_config(&root));
+        assert!(wait_until(
+            || manager
+                .get_run(&snap.run_id)
+                .map(|s| s.state.is_terminal())
+                .unwrap_or(false),
+            Duration::from_secs(3)
+        ));
+        manager.shutdown_all();
+    }
+    // 模拟应用重启：新 manager 加载历史。
+    let manager2 = make_manager_with(api.clone(), sink.clone(), history.clone());
+    manager2.load_history();
+    let all = manager2.list_runs(true);
+    assert_eq!(all.len(), 1);
+    assert!(all[0].state.is_terminal());
+    assert_eq!(all[0].pid, None, "历史记录不得报告运行中 PID");
+    // 不允许误报为活动实例。
+    assert!(manager2
+        .list_runs(false)
+        .iter()
+        .all(|s| !s.state.is_terminal()));
+}
+
+#[test]
+fn history_keeps_project_run_out_of_active() {
+    let api = FakeApi::new();
+    let sink = TestSink::new();
+    let history = Arc::new(InMemoryRunHistoryStore::new());
+    let manager = make_manager_with(api.clone(), sink.clone(), history.clone());
+    // 预置历史记录（exited）。
+    let hist_snap = RunSnapshot {
+        run_id: "hist-run-1".into(),
+        project_id: "p1".into(),
+        state: RunState::Exited,
+        cwd: "C:\\proj".into(),
+        pid: None,
+        started_at: Some(1),
+        exit_code: Some(0),
+        error_code: None,
+        error_message: None,
+        stop_reason: None,
+        summary: serde_json::json!({
+            "executable": "node",
+            "args": [],
+            "cwd": "C:\\proj",
+            "env": {},
+            "expected_port": null,
+            "preview_scheme": "http",
+        }),
+    };
+    history.record(&hist_snap, "key-hist").unwrap();
+    manager.load_history();
+    // 历史中的 run_id 在活动列表中不存在。
+    let active = manager.list_runs(false);
+    assert!(active.iter().all(|s| s.run_id != "hist-run-1"));
+    let all = manager.list_runs(true);
+    assert!(all.iter().any(|s| s.run_id == "hist-run-1"));
 }

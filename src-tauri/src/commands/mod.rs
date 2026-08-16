@@ -10,6 +10,7 @@ pub mod projects;
 pub mod project_preview;
 pub mod project_runtime;
 pub mod resources;
+pub mod run_center;
 pub mod search;
 pub mod settings;
 pub mod system;

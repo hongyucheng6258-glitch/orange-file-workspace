@@ -21,6 +21,7 @@ use crate::services::project_runtime::{
     StatusPayload,
 };
 use crate::services::run_confirmation::{canonical_key, RunConfig};
+use crate::services::run_history::{InMemoryRunHistoryStore, RunHistoryStore};
 use crate::services::web_preview_service::PreviewTarget;
 
 /// 注入式进程 API：按标志注入失败、按通道注入屏障、记录调用日志。
@@ -307,7 +308,19 @@ pub fn start_run(manager: &Arc<RuntimeManager>, root: &Path, config: &RunConfig)
 }
 
 pub fn make_manager(api: Arc<FakeApi>, sink: Arc<TestSink>) -> Arc<RuntimeManager> {
-    Arc::new(RuntimeManager::new(api, sink))
+    Arc::new(RuntimeManager::new(
+        api,
+        sink,
+        Arc::new(InMemoryRunHistoryStore::new()),
+    ))
+}
+
+pub fn make_manager_with(
+    api: Arc<FakeApi>,
+    sink: Arc<TestSink>,
+    history: Arc<dyn RunHistoryStore>,
+) -> Arc<RuntimeManager> {
+    Arc::new(RuntimeManager::new(api, sink, history))
 }
 
 pub fn wait_until<F: Fn() -> bool>(f: F, timeout: Duration) -> bool {
