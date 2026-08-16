@@ -9,6 +9,7 @@ import {
   ListTodo,
   Settings,
   MonitorSmartphone,
+  Activity,
 } from "lucide-react";
 
 const NAV = [
