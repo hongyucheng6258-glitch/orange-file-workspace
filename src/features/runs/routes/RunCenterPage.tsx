@@ -26,10 +26,10 @@ function isActive(snap: RunSnapshot): boolean {
 /** 运行中心：活动实例 + 已退出记录 + 日志查看。 */
 export function RunCenterPage() {
   const store = useRunCenterStore();
+  useRunCenterEvents();
 
   useEffect(() => {
     void store.load();
-    useRunCenterEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
