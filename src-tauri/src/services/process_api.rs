@@ -175,6 +175,20 @@ pub fn build_command_line(executable: &str, args: &[String]) -> String {
     parts.join(" ")
 }
 
+/// 限制 Job Object PID 列表的读取数量，避免内核计数变化导致越界。
+fn safe_process_id_count(assigned: usize, in_list: usize, capacity: usize) -> usize {
+    assigned.min(in_list).min(capacity)
+}
+
+/// 扩容 Job PID 缓冲区容量：翻倍增长直至上限；已达上限返回 None。
+fn next_pid_capacity(current: usize, max: usize) -> Option<usize> {
+    if current >= max {
+        None
+    } else {
+        Some((current * 2).min(max))
+    }
+}
+
 /// 由基础环境 + 覆盖构造子进程环境块（UTF-16 双 NUL 结尾）。
 /// 值 None 表示删除对应变量。
 pub fn build_env_block(
@@ -226,9 +240,11 @@ mod win32 {
     };
     use windows::Win32::System::Pipes::CreatePipe;
     use windows::Win32::System::Threading::{
-        CreateProcessW, GetExitCodeProcess, ResumeThread, TerminateProcess, WaitForSingleObject,
-        CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, PROCESS_INFORMATION,
-        STARTF_USESTDHANDLES, STARTUPINFOW,
+        CreateProcessW, DeleteProcThreadAttributeList, GetExitCodeProcess,
+        InitializeProcThreadAttributeList, ResumeThread, TerminateProcess, UpdateProcThreadAttribute,
+        WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
+        LPPROC_THREAD_ATTRIBUTE_LIST, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, PROCESS_INFORMATION,
+        STARTF_USESTDHANDLES, STARTUPINFOEXW, STARTUPINFOW,
     };
 
     fn last_win32_error() -> u32 {
@@ -257,6 +273,37 @@ mod win32 {
             unsafe {
                 let _ = CloseHandle(self.process);
                 let _ = CloseHandle(self.thread);
+            }
+        }
+    }
+
+    /// RAII 守卫：Drop 时自动关闭原始句柄；`into_raw` 放弃所有权并返回句柄。
+    /// 用于进程创建流程：中间步骤失败时自动清理已创建的句柄，防止泄漏。
+    struct RawHandleGuard(HANDLE);
+
+    impl RawHandleGuard {
+        fn into_raw(self) -> HANDLE {
+            let h = self.0;
+            std::mem::forget(self);
+            h
+        }
+    }
+
+    impl Drop for RawHandleGuard {
+        fn drop(&mut self) {
+            unsafe {
+                let _ = CloseHandle(self.0);
+            }
+        }
+    }
+
+    /// 进程线程属性列表守卫：Drop 时调用 DeleteProcThreadAttributeList。
+    struct ProcAttributeGuard(LPPROC_THREAD_ATTRIBUTE_LIST);
+
+    impl Drop for ProcAttributeGuard {
+        fn drop(&mut self) {
+            if !self.0 .0.is_null() {
+                unsafe { DeleteProcThreadAttributeList(self.0) };
             }
         }
     }
@@ -321,30 +368,68 @@ mod win32 {
             spec: &ProcessSpec,
         ) -> Result<SuspendedProcess, ProcessApiError> {
             // 输出管道：子进程继承写端，父进程持有读端。
+            // 每个句柄创建后立即由 RAII 守卫接管；任何中间步骤失败时守卫自动关闭，
+            // 避免多次启动失败累积泄漏系统句柄。全部成功后才移交所有权。
             let mut out_read: HANDLE = Default::default();
             let mut out_write: HANDLE = Default::default();
             unsafe { CreatePipe(&mut out_read, &mut out_write, None, 0) }
                 .map_err(|_| api_error("创建 stdout 管道"))?;
+            let out_read_g = RawHandleGuard(out_read);
+            let out_write_g = RawHandleGuard(out_write);
             make_inheritable(out_write)?;
+
             let mut err_read: HANDLE = Default::default();
             let mut err_write: HANDLE = Default::default();
             unsafe { CreatePipe(&mut err_read, &mut err_write, None, 0) }
                 .map_err(|_| api_error("创建 stderr 管道"))?;
+            let err_read_g = RawHandleGuard(err_read);
+            let err_write_g = RawHandleGuard(err_write);
             make_inheritable(err_write)?;
 
             let nul_in = open_nul_read_handle()?;
+            let nul_g = RawHandleGuard(nul_in);
+
+            // 显式句柄继承白名单：仅 stdin/stdout/stderr，避免应用内其他可继承
+            // 句柄（文件、管道、同步对象）被意外传给项目代码。
+            let inherit_handles = [nul_in, out_write, err_write];
+            let mut attr_size: usize = 0;
+            // 第一次调用仅查询所需大小（必然返回缓冲区不足，忽略结果）。
+            let _ = unsafe { InitializeProcThreadAttributeList(None, 1, None, &mut attr_size) };
+            if attr_size == 0 {
+                return Err(api_error("初始化句柄属性列表"));
+            }
+            let mut attr_buf: Vec<u8> = vec![0u8; attr_size];
+            let attr_list = LPPROC_THREAD_ATTRIBUTE_LIST(attr_buf.as_mut_ptr() as *mut _);
+            unsafe {
+                InitializeProcThreadAttributeList(Some(attr_list), 1, None, &mut attr_size)
+                    .map_err(|_| api_error("初始化句柄属性列表"))?;
+            }
+            let attr_guard = ProcAttributeGuard(attr_list);
+            unsafe {
+                UpdateProcThreadAttribute(
+                    attr_list,
+                    0,
+                    PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
+                    Some(inherit_handles.as_ptr() as *const core::ffi::c_void),
+                    std::mem::size_of_val(&inherit_handles),
+                    None,
+                    None,
+                )
+                .map_err(|_| api_error("设置句柄继承列表"))?;
+            }
 
             let cmd_line = build_command_line(&spec.executable, &spec.args);
             let mut cmd_wide: Vec<u16> =
                 cmd_line.encode_utf16().chain(std::iter::once(0)).collect();
             let env_block = build_env_block(std::env::vars(), &spec.env_overrides);
 
-            let mut startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
-            startup.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
-            startup.dwFlags = STARTF_USESTDHANDLES;
-            startup.hStdInput = nul_in;
-            startup.hStdOutput = out_write;
-            startup.hStdError = err_write;
+            let mut startup_ex: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
+            startup_ex.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
+            startup_ex.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+            startup_ex.StartupInfo.hStdInput = nul_in;
+            startup_ex.StartupInfo.hStdOutput = out_write;
+            startup_ex.StartupInfo.hStdError = err_write;
+            startup_ex.lpAttributeList = attr_list;
 
             let cwd_wide: Vec<u16> = spec
                 .cwd
@@ -374,30 +459,20 @@ mod win32 {
                     flags,
                     Some(env_block.as_ptr() as *const core::ffi::c_void),
                     cwd_ptr,
-                    &startup,
+                    &startup_ex as *const STARTUPINFOEXW as *const STARTUPINFOW,
                     &mut pi,
                 )
             }
             .is_ok();
 
-            // 父进程侧关闭不再需要的写端和 stdin。
-            unsafe {
-                let _ = CloseHandle(out_write);
-                let _ = CloseHandle(err_write);
-                let _ = CloseHandle(nul_in);
-            }
             if !created {
-                unsafe {
-                    let _ = CloseHandle(out_read);
-                    let _ = CloseHandle(err_read);
-                }
                 return Err(api_error("创建子进程"));
             }
-
+            // 成功：读端所有权移交给 File；写端与 NUL 句柄随守卫在函数返回时关闭。
             let stdout: Option<Box<dyn Read + Send>> =
-                unsafe { Some(Box::new(std::fs::File::from_raw_handle(out_read.0 as _))) };
+                unsafe { Some(Box::new(std::fs::File::from_raw_handle(out_read_g.into_raw().0 as _))) };
             let stderr: Option<Box<dyn Read + Send>> =
-                unsafe { Some(Box::new(std::fs::File::from_raw_handle(err_read.0 as _))) };
+                unsafe { Some(Box::new(std::fs::File::from_raw_handle(err_read_g.into_raw().0 as _))) };
             let pid = pi.dwProcessId;
 
             Ok(SuspendedProcess {
@@ -478,44 +553,63 @@ mod win32 {
             use windows::Win32::System::JobObjects::{
                 JobObjectBasicProcessIdList, JOBOBJECT_BASIC_PROCESS_ID_LIST,
             };
-            // 第一次查询获取进程数量。
-            let mut probe: JOBOBJECT_BASIC_PROCESS_ID_LIST = unsafe { std::mem::zeroed() };
+            const MAX_PIDS: usize = 4096;
+            let header_bytes = std::mem::size_of::<JOBOBJECT_BASIC_PROCESS_ID_LIST>()
+                - std::mem::size_of::<usize>();
+            // 从 1 个 PID 槽位开始，缓冲区不足（ERROR_MORE_DATA）时翻倍扩容。
+            let mut pid_capacity = 1usize;
+            loop {
+                let total = header_bytes + std::mem::size_of::<usize>() * pid_capacity;
+                let mut buf: Vec<u8> = vec![0u8; total];
+                let queried = unsafe {
+                    QueryInformationJobObject(
+                        Some(job.inner.handle),
+                        JobObjectBasicProcessIdList,
+                        buf.as_mut_ptr() as *mut core::ffi::c_void,
+                        total as u32,
+                        None,
+                    )
+                };
+                match queried {
+                    Ok(()) => {
+                        let list = buf.as_ptr() as *const JOBOBJECT_BASIC_PROCESS_ID_LIST;
+                        let assigned = unsafe { (*list).NumberOfAssignedProcesses } as usize;
+                        let in_list = unsafe { (*list).NumberOfProcessIdsInList } as usize;
+                        let capacity = (total - header_bytes) / std::mem::size_of::<usize>();
+                        let readable = safe_process_id_count(assigned, in_list, capacity);
+                        let pids_ptr = unsafe { &(*list).ProcessIdList[0] } as *const usize;
+                        let mut pids = Vec::with_capacity(readable);
+                        for i in 0..readable {
+                            pids.push(unsafe { *pids_ptr.add(i) } as u32);
+                        }
+                        return Ok(pids);
+                    }
+                    Err(_) => match next_pid_capacity(pid_capacity, MAX_PIDS) {
+                        Some(next) => pid_capacity = next,
+                        None => return Err(api_error("QueryInformationJobObject")),
+                    },
+                }
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn raw_handle_guard_into_raw_keeps_handle_alive() {
+            // into_raw 必须放弃所有权并返回原句柄，供成功路径接管。
+            let mut r: HANDLE = Default::default();
+            let mut w: HANDLE = Default::default();
+            unsafe { CreatePipe(&mut r, &mut w, None, 0) }.unwrap();
+            let guard = RawHandleGuard(r);
+            let raw = guard.into_raw();
+            assert_eq!(raw, r);
             unsafe {
-                QueryInformationJobObject(
-                    Some(job.inner.handle),
-                    JobObjectBasicProcessIdList,
-                    &mut probe as *mut _ as *mut core::ffi::c_void,
-                    std::mem::size_of::<JOBOBJECT_BASIC_PROCESS_ID_LIST>() as u32,
-                    None,
-                )
+                let _ = CloseHandle(raw);
+                let _ = CloseHandle(w);
             }
-            .map_err(|_| api_error("QueryInformationJobObject"))?;
-            let count = probe.NumberOfProcessIdsInList as usize;
-            if count == 0 {
-                return Ok(Vec::new());
-            }
-            // 分配容纳全部 PID 的缓冲区再查询。
-            let list_bytes = std::mem::size_of::<usize>() * count;
-            let total = std::mem::size_of::<JOBOBJECT_BASIC_PROCESS_ID_LIST>() + list_bytes;
-            let mut buf: Vec<u8> = vec![0u8; total];
-            unsafe {
-                QueryInformationJobObject(
-                    Some(job.inner.handle),
-                    JobObjectBasicProcessIdList,
-                    buf.as_mut_ptr() as *mut core::ffi::c_void,
-                    total as u32,
-                    None,
-                )
-            }
-            .map_err(|_| api_error("QueryInformationJobObject"))?;
-            let list = buf.as_ptr() as *const JOBOBJECT_BASIC_PROCESS_ID_LIST;
-            let assigned = unsafe { (*list).NumberOfAssignedProcesses } as usize;
-            let pids_ptr = unsafe { &(*list).ProcessIdList[0] } as *const usize;
-            let mut pids = Vec::with_capacity(assigned);
-            for i in 0..assigned {
-                pids.push(unsafe { *pids_ptr.add(i) } as u32);
-            }
-            Ok(pids)
         }
     }
 }
@@ -710,6 +804,23 @@ mod tests {
             .join("|");
         assert_eq!(text, "KEEP=1|PATH=C:\\new");
         assert!(block.ends_with(&[0, 0]));
+    }
+
+    #[test]
+    fn process_id_count_never_exceeds_list_or_buffer_capacity() {
+        assert_eq!(safe_process_id_count(3, 1, 4), 1);
+        assert_eq!(safe_process_id_count(3, 3, 2), 2);
+        assert_eq!(safe_process_id_count(2, 2, 4), 2);
+    }
+
+    #[test]
+    fn pid_capacity_grows_exponentially_up_to_max() {
+        assert_eq!(next_pid_capacity(1, 4096), Some(2));
+        assert_eq!(next_pid_capacity(2, 4096), Some(4));
+        assert_eq!(next_pid_capacity(1024, 4096), Some(2048));
+        assert_eq!(next_pid_capacity(2048, 4096), Some(4096));
+        assert_eq!(next_pid_capacity(4096, 4096), None);
+        assert_eq!(next_pid_capacity(4096, 256), None);
     }
 
     #[test]

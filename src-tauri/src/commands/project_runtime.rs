@@ -90,6 +90,7 @@ pub fn prepare_run_confirmation(
     project_id: String,
     config: RunConfig,
 ) -> CommandResult<ConfirmationPreview> {
+    ensure_project_matches(&project_id, &config)?;
     let conn = lock_db(&state);
     let root = project_root(&conn, &project_id)?;
     drop(conn);
@@ -97,6 +98,17 @@ pub fn prepare_run_confirmation(
     manager
         .prepare_confirmation(&config, &root)
         .map_err(Into::into)
+}
+
+/// 校验运行配置归属的项目与命令参数一致，防止跨项目污染。
+fn ensure_project_matches(project_id: &str, config: &RunConfig) -> Result<(), AppError> {
+    if config.project_id != project_id {
+        return Err(AppError::new(
+            "project_mismatch",
+            "运行配置的项目与当前项目不一致",
+        ));
+    }
+    Ok(())
 }
 
 /// 兑换一次性确认票据并签发确认哈希。
@@ -118,6 +130,7 @@ pub fn start_project_process(
     config: RunConfig,
     confirmation_hash: String,
 ) -> CommandResult<RunSnapshot> {
+    ensure_project_matches(&project_id, &config)?;
     let conn = lock_db(&state);
     let root = project_root(&conn, &project_id)?;
     drop(conn);
@@ -158,6 +171,71 @@ pub fn get_project_run(
     let runtime = runtime(&state);
     let by_key = runtime.get_run_by_project_key(&key);
     Ok(by_key.or_else(|| runtime.get_run_by_project_id(&project_id)))
+}
+
+/// 项目运行实例条目：快照 + 相对项目根的 cwd（与运行候选对齐，空串 = 根）。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectRunEntry {
+    pub run_id: String,
+    pub cwd_rel: String,
+    pub snapshot: RunSnapshot,
+}
+
+/// 查询项目的全部运行实例（活动 + 各 cwd 最近终态），用于页面恢复并行子项目。
+/// 每个 cwd 只返回最新一条，按启动时间倒序。
+#[tauri::command]
+pub fn list_project_runs_by_project(
+    state: State<AppState>,
+    project_id: String,
+) -> CommandResult<Vec<ProjectRunEntry>> {
+    use std::collections::HashMap;
+
+    let conn = lock_db(&state);
+    let root = project_root(&conn, &project_id)?;
+    drop(conn);
+    let root_key = crate::services::run_confirmation::canonical_key(&root)
+        .ok_or_else(|| AppError::new("invalid_working_directory", "项目根目录无法解析"))?;
+
+    let mut all = runtime(&state).list_runs(true);
+    all.retain(|s| s.project_id == project_id);
+    // list_runs 已按 started_at 倒序，首个即该 cwd 最新。
+    let mut by_cwd: HashMap<String, RunSnapshot> = HashMap::new();
+    for snap in all {
+        let rel = cwd_relative_to(&root_key, &snap.cwd);
+        by_cwd.entry(rel).or_insert(snap);
+    }
+    let mut entries: Vec<ProjectRunEntry> = by_cwd
+        .into_iter()
+        .map(|(cwd_rel, snapshot)| ProjectRunEntry {
+            run_id: snapshot.run_id.clone(),
+            cwd_rel,
+            snapshot,
+        })
+        .collect();
+    entries.sort_by(|a, b| {
+        let sa = a.snapshot.started_at.unwrap_or(0);
+        let sb = b.snapshot.started_at.unwrap_or(0);
+        sb.cmp(&sa)
+    });
+    Ok(entries)
+}
+
+/// 计算绝对 cwd 相对项目根的路径（空串表示根目录）。
+fn cwd_relative_to(root: &PathBuf, cwd_abs: &str) -> String {
+    use crate::services::run_confirmation::canonical_key;
+    let canon = canonical_key(std::path::Path::new(cwd_abs)).unwrap_or_default();
+    match canon.strip_prefix(root) {
+        Ok(rel) => {
+            let s = rel.to_string_lossy().replace('\\', "/");
+            if s.is_empty() {
+                String::new()
+            } else {
+                s
+            }
+        }
+        Err(_) => cwd_abs.to_string(),
+    }
 }
 
 /// 获取运行实例当前保留的日志分页。

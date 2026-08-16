@@ -68,6 +68,22 @@ fn local_url_from_log_takes_first() {
 }
 
 #[test]
+fn local_url_from_log_handles_multibyte_utf8_without_panic() {
+    // 中文等非 ASCII 日志中夹杂 URL，不得 panic 且能正确识别。
+    let log = "服务已启动 http://127.0.0.1:5173/ 正在监听中……";
+    let c = local_url_from_log(log).expect("url");
+    assert_eq!(c.port, 5173);
+    assert_eq!(c.path, "/");
+}
+
+#[test]
+fn local_url_from_log_multibyte_before_and_after_url() {
+    let log = "前端开发服务器\n  ➜  Local:   http://localhost:1420/\n    网络: http://192.168.1.5:1420/（忽略远程）";
+    let c = local_url_from_log(log).expect("url");
+    assert_eq!(c.port, 1420);
+}
+
+#[test]
 fn resolve_target_priority_config_then_args_then_log() {
     let args = ["--port".to_string(), "8080".to_string()];
     let log = "http://localhost:5173/".to_string();

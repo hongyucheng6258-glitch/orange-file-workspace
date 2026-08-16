@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ChevronDown,
   ChevronRight,
@@ -16,12 +17,13 @@ import {
   Trash2,
   Pencil,
   FolderInput,
+  TerminalSquare,
 } from "lucide-react";
 import { useFileStore } from "../stores/fileStore";
 import type { Resource } from "../../../lib/types";
 import { fileTypeName, formatSize, formatTime } from "../../../lib/tauri";
 import { startDragOut } from "../../../lib/dragOut";
-import { openResourceExternally } from "../../../lib/openResource";
+import { openResourceExternally, getResourcePath } from "../../../lib/openResource";
 import { FileIconThumb } from "../../../components/FileIconThumb";
 
 interface FileTableProps {
@@ -61,6 +63,13 @@ export function FileTable({ onOpen, onSelect, onRename, onTrash }: FileTableProp
   const { resources, selection, toggleSelect, clearSelection, selectMany, sortKey, sortAsc, setSort, toggleFavorite } =
     useFileStore();
   const [menu, setMenu] = useState<{ x: number; y: number; resource: Resource } | null>(null);
+  const navigate = useNavigate();
+
+  /** “在终端打开”：解析资源物理路径后跳转终端页（无可用路径则用默认目录）。 */
+  const openTerminal = async (r: Resource) => {
+    const path = await getResourcePath(r.id);
+    navigate(path ? `/terminal?cwd=${encodeURIComponent(path)}` : "/terminal");
+  };
 
   const onRowClick = (r: Resource, e: React.MouseEvent) => {
     if (e.shiftKey && selection.size > 0) {
@@ -153,6 +162,18 @@ export function FileTable({ onOpen, onSelect, onRename, onTrash }: FileTableProp
                 </span>
                 <span className="col-time">{formatTime(r.updated_at)}</span>
                 <span className="col-actions">
+                  {r.kind === "folder" && (
+                    <button
+                      className="icon-btn"
+                      title="在终端打开"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void openTerminal(r);
+                      }}
+                    >
+                      <TerminalSquare size={14} />
+                    </button>
+                  )}
                   <button
                     className="icon-btn"
                     title={r.is_favorite ? "取消收藏" : "收藏"}
@@ -214,6 +235,17 @@ export function FileTable({ onOpen, onSelect, onRename, onTrash }: FileTableProp
           >
             <Pencil size={14} /> 重命名
           </button>
+          {menu.resource.kind === "folder" && (
+            <button
+              className="menu-item"
+              onClick={() => {
+                void openTerminal(menu.resource);
+                setMenu(null);
+              }}
+            >
+              <TerminalSquare size={14} /> 在终端打开
+            </button>
+          )}
           <div className="menu-sep" />
           <button
             className="menu-item danger"

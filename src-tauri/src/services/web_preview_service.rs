@@ -116,15 +116,16 @@ pub fn port_from_args(args: &[String]) -> Option<u16> {
 }
 
 /// 扫描文本中的 URL（http:// 或 https://，大小写不敏感，空白/引号/<> 终止）。
+/// 全程按字节处理，避免多字节 UTF-8 字符导致字符串切片 panic。
 fn scan_urls(text: &str) -> Vec<String> {
-    let lower = text.to_ascii_lowercase();
     let bytes = text.as_bytes();
     let mut urls = Vec::new();
     let mut i = 0usize;
     while i < bytes.len() {
-        let scheme_len = if lower[i..].starts_with("https://") {
+        let scheme_len = if bytes[i..].len() >= 8 && bytes[i..i + 8].eq_ignore_ascii_case(b"https://")
+        {
             8
-        } else if lower[i..].starts_with("http://") {
+        } else if bytes[i..].len() >= 7 && bytes[i..i + 7].eq_ignore_ascii_case(b"http://") {
             7
         } else {
             0
@@ -140,7 +141,8 @@ fn scan_urls(text: &str) -> Vec<String> {
                 end += 1;
             }
             if end > start + scheme_len {
-                urls.push(text[start..end].to_string());
+                // URL 由 ASCII 组成，按字节切片恢复字符串是安全的。
+                urls.push(String::from_utf8_lossy(&bytes[start..end]).to_string());
             }
             i = end;
         } else {

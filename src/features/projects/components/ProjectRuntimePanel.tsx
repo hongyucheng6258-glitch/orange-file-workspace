@@ -6,12 +6,23 @@ import { ownershipLabel, previewSourceLabel, subscribePreviewReady } from "../li
 import { ProjectLogViewer } from "./ProjectLogViewer";
 import { RunConfirmationDialog } from "./RunConfirmationDialog";
 
-/** 项目页运行面板：识别、配置、确认、启动/停止/重启、Web 预览、日志。 */
+/** 项目页运行面板：识别、配置、确认、启动/停止/重启、Web 预览、日志。
+ *  以浮层形式覆盖在编辑器上，默认收起为悬浮按钮，不遮挡代码。 */
 export function ProjectRuntimePanel() {
   const store = useProjectRuntimeStore();
   const preview = useProjectPreviewStore();
   const [showConfirm, setShowConfirm] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    const v = localStorage.getItem("run-panel-collapsed");
+    return v == null ? true : v === "1";
+  });
+
+  const toggleCollapsed = () => {
+    setCollapsed((c) => {
+      localStorage.setItem("run-panel-collapsed", c ? "0" : "1");
+      return !c;
+    });
+  };
 
   const projectId = store.projectId;
   const detection = store.detection;
@@ -29,6 +40,22 @@ export function ProjectRuntimePanel() {
   }, [run]);
 
   const canPreview = run?.state === "running";
+
+  // 悬浮按钮指示灯：任一运行中 → 绿；启动/停止中 → 橙；存在失败 → 红。
+  const activeRuns = Object.values(store.runs).filter(
+    (r) => r.state === "running" || r.state === "starting",
+  );
+  const failedRun = Object.values(store.runs).find(
+    (r) => r.state === "failed" || (r.state === "exited" && r.exitCode !== 0),
+  );
+  const dotState =
+    activeRuns.length > 0
+      ? "running"
+      : failedRun
+        ? "failed"
+        : Object.values(store.runs).some((r) => r.state === "stopping")
+          ? "busy"
+          : "idle";
 
   // 启动成功后自动等待端口就绪并打开页面。
   const lastStartedRunId = store.lastStartedRunId;
@@ -69,6 +96,8 @@ export function ProjectRuntimePanel() {
     failed: "失败",
   };
 
+  const busy = store.busyByCwd[store.activeCwd] ?? false;
+
   const [envRows, setEnvRows] = useState<{ key: string; value: string; remove: boolean }[]>([]);
 
   // 环境变量编辑行与配置同步。
@@ -93,7 +122,8 @@ export function ProjectRuntimePanel() {
     const overrides: Record<string, string | null> = {};
     for (const row of rows) {
       if (!row.key.trim()) continue;
-      overrides[row.key] = row.remove || row.value === "" ? null : row.value;
+      // 仅“删除变量”开关置空值（null）；空字符串是合法值，不再误删。
+      overrides[row.key] = row.remove ? null : row.value;
     }
     store.setConfig({ envOverrides: overrides });
   };
@@ -119,23 +149,23 @@ export function ProjectRuntimePanel() {
         )}
         <button
           className="icon-btn run-panel-toggle"
-          title={collapsed ? "展开运行面板" : "折叠运行面板"}
-          onClick={() => setCollapsed(!collapsed)}
+          title={collapsed ? "展开运行面板" : "收起运行面板（不遮挡代码）"}
+          onClick={toggleCollapsed}
         >
           {collapsed ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
         </button>
       </div>
 
       {collapsed ? (
-        <div className="run-collapsed-summary">
-          {Object.entries(store.runs).filter(([, r]) => r.state === "running" || r.state === "starting").length > 0 ? (
-            <span>
-              运行中：{Object.entries(store.runs).filter(([, r]) => r.state === "running" || r.state === "starting").length} 个
-            </span>
-          ) : (
-            <span>无运行中的服务</span>
-          )}
-        </div>
+        <button
+          className="run-float-button"
+          title="展开运行面板"
+          onClick={toggleCollapsed}
+        >
+          <TerminalSquare size={13} color="var(--primary)" />
+          <span>运行</span>
+          <span className={`run-float-dot ${dotState}`} />
+        </button>
       ) : (
         <>
           {store.error && (
@@ -198,13 +228,20 @@ export function ProjectRuntimePanel() {
                   />
                 </div>
                 <div className="run-field">
-                  <label>参数</label>
-                  <input
-                    value={config.args.join(" ")}
-                    onChange={(e) =>
-                      store.setConfig({ args: e.target.value.split(/\s+/).filter(Boolean) })
-                    }
-                    placeholder="空格分隔，例如 run dev"
+                  <label>参数（每行一个）</label>
+                  <textarea
+                    className="run-args-input"
+                    rows={Math.min(6, Math.max(2, config.args.length + 1))}
+                    value={config.args.join("\n")}
+                    onChange={(e) => {
+                      const args = e.target.value
+                        .split("\n")
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+                      store.setConfig({ args });
+                    }}
+                    placeholder={"每行一个参数，例如：\nrun\ndev"}
+                    spellCheck={false}
                   />
                 </div>
                 <div className="run-field">
@@ -248,10 +285,11 @@ export function ProjectRuntimePanel() {
                   <label>环境变量</label>
                   <div className="run-env-list">
                     {envRows.map((row, i) => (
-                      <div key={i} className="run-env-row">
+                      <div key={i} className={`run-env-row ${row.remove ? "removed" : ""}`}>
                         <input
                           value={row.key}
                           placeholder="变量名"
+                          disabled={row.remove}
                           onChange={(e) => {
                             const rows = envRows.map((r, j) => (j === i ? { ...r, key: e.target.value } : r));
                             applyEnvRows(rows);
@@ -259,15 +297,29 @@ export function ProjectRuntimePanel() {
                         />
                         <input
                           value={row.value}
-                          placeholder="值（留空表示删除该变量）"
+                          placeholder="值（留空 = 空字符串）"
+                          disabled={row.remove}
                           onChange={(e) => {
                             const rows = envRows.map((r, j) => (j === i ? { ...r, value: e.target.value } : r));
                             applyEnvRows(rows);
                           }}
                         />
+                        <label className="run-env-remove-toggle" title="从环境中删除此变量">
+                          <input
+                            type="checkbox"
+                            checked={row.remove}
+                            onChange={(e) => {
+                              const rows = envRows.map((r, j) =>
+                                j === i ? { ...r, remove: e.target.checked } : r,
+                              );
+                              applyEnvRows(rows);
+                            }}
+                          />
+                          删除
+                        </label>
                         <button
                           className="icon-btn"
-                          title="删除变量"
+                          title="移除该行"
                           onClick={() => applyEnvRows(envRows.filter((_, j) => j !== i))}
                         >
                           <Trash2 size={12} />
@@ -286,21 +338,21 @@ export function ProjectRuntimePanel() {
                 <div className="run-actions">
                   <button
                     className="btn-primary run-btn-start"
-                    disabled={!actions.canStart || store.busy || !config.executable.trim()}
+                    disabled={!actions.canStart || busy || !config.executable.trim()}
                     onClick={() => void handleStart()}
                   >
                     <Play size={13} /> 启动
                   </button>
                   <button
                     className="btn-secondary"
-                    disabled={!actions.canStop || store.busy}
+                    disabled={!actions.canStop || busy}
                     onClick={() => void store.stop()}
                   >
                     <Square size={13} /> 停止
                   </button>
                   <button
                     className="btn-secondary"
-                    disabled={!actions.canRestart || store.busy}
+                    disabled={!actions.canRestart || busy}
                     onClick={() => void store.restart()}
                   >
                     <RotateCw size={13} /> 重启
@@ -358,8 +410,12 @@ export function ProjectRuntimePanel() {
       {showConfirm && store.confirmation && (
         <RunConfirmationDialog
           preview={store.confirmation}
-          busy={store.busy}
-          onCancel={() => setShowConfirm(false)}
+          busy={busy}
+          onCancel={() => {
+            // 取消 = 撤销授权意图：确认票据必须失效，下次启动重新确认。
+            useProjectRuntimeStore.setState({ confirmation: null });
+            setShowConfirm(false);
+          }}
           onConfirm={() => {
             void store.startWithConfirmation(store.confirmation!.confirmationId);
             setShowConfirm(false);

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { LogEntry, RunSnapshot } from "../../projects/lib/projectRuntime";
@@ -68,8 +69,11 @@ export const useRunCenterStore = create<RunCenterState>((set, get) => ({
     set({ expandedRunId: runId, logs: [], error: null });
     try {
       const page = await getProcessLogs(runId, 0);
+      // 响应写入前校验当前展开项，避免慢请求覆盖新展开的日志。
+      if (get().expandedRunId !== runId) return;
       set({ logs: page.entries });
     } catch (e) {
+      if (get().expandedRunId !== runId) return;
       // 历史运行日志不跨会话持久化。
       set({ logs: [], error: (e as Error).message });
     }
@@ -120,16 +124,21 @@ export const useRunCenterStore = create<RunCenterState>((set, get) => ({
   },
 }));
 
-/** 页面挂载时启动事件订阅（返回取消函数）。 */
-export function useRunCenterEvents(): () => void {
-  const store = useRunCenterStore;
-  if (!unlistenRef) {
-    void startRunCenterEvents(store).then((off) => {
-      unlistenRef = off;
+/** 页面挂载时启动事件订阅；严格模式下重复挂载也能正确清理，不泄漏。 */
+export function useRunCenterEvents(): void {
+  useEffect(() => {
+    let disposed = false;
+    let off: (() => void) | null = null;
+    void startRunCenterEvents(useRunCenterStore).then((unlisten) => {
+      if (disposed) {
+        unlisten();
+      } else {
+        off = unlisten;
+      }
     });
-  }
-  return () => {
-    unlistenRef?.();
-    unlistenRef = null;
-  };
+    return () => {
+      disposed = true;
+      off?.();
+    };
+  }, []);
 }

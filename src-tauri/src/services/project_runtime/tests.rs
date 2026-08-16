@@ -1,7 +1,7 @@
 //! 运行状态机测试：注入式进程 API + 事件收集 sink（替身见 `test_support`）。
 
 use super::*;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc;
 
 use crate::services::run_history::InMemoryRunHistoryStore;
@@ -45,6 +45,43 @@ fn start_natural_exit_emits_single_terminal() {
     let exited = sink.exited();
     assert_eq!(exited.len(), 1);
     assert_eq!(exited[0].exit_code, 0);
+    assert!(exited[0].stop_reason.is_none());
+}
+
+#[test]
+fn parent_exit_waits_until_job_children_finish() {
+    // 主进程退出但 Job 内仍有活动子进程（如 npm → node）时不得提前终态，
+    // 必须等整个进程树退出后才报告 Exited。
+    let api = FakeApi::new();
+    let sink = TestSink::new();
+    let manager = make_manager(api.clone(), sink.clone());
+    let root = tmp_root("tree");
+    let config = base_config(&root);
+    // 主进程先退出，子进程继续存活。
+    api.set_natural_exit(0);
+    api.job_children_active.store(true, Ordering::SeqCst);
+    let snap = start_run(&manager, &root, &config);
+    assert_eq!(snap.state, RunState::Running);
+    // 等待一小段时间，确认不会提前终态。
+    std::thread::sleep(Duration::from_millis(400));
+    let mid = manager.get_run(&snap.run_id).unwrap();
+    assert_eq!(mid.state, RunState::Running, "主进程退出但子进程存活时不得终态");
+    // 子进程随后退出 → 整个进程树空闲，才进入终态。
+    api.job_children_active.store(false, Ordering::SeqCst);
+    assert!(wait_until(
+        || {
+            manager
+                .get_run(&snap.run_id)
+                .map(|s| s.state == RunState::Exited)
+                .unwrap_or(false)
+        },
+        Duration::from_secs(3)
+    ));
+    let final_snap = manager.get_run(&snap.run_id).unwrap();
+    assert_eq!(final_snap.state, RunState::Exited);
+    assert_eq!(final_snap.exit_code, Some(0));
+    let exited = sink.exited();
+    assert_eq!(exited.len(), 1);
     assert!(exited[0].stop_reason.is_none());
 }
 
@@ -374,21 +411,48 @@ fn output_events_seq_monotonic_and_query_no_duplicates() {
 }
 
 #[test]
+fn exited_event_fires_after_output_drained() {
+    let api = FakeApi::new();
+    let sink = TestSink::new();
+    let manager = make_manager(api.clone(), sink.clone());
+    let root = tmp_root("drain");
+    api.spawn_stdout(b"last line before exit\n");
+    api.set_natural_exit(0);
+    let config = base_config(&root);
+    let snap = start_run(&manager, &root, &config);
+    // 等待 exited 事件。
+    assert!(wait_until(
+        || !sink.exited().is_empty(),
+        Duration::from_secs(3)
+    ));
+    // exited 到达时，最后一批输出必须已进入事件总线。
+    let outputs = sink.outputs();
+    assert!(
+        outputs.iter().any(|o| o.text.contains("last line before exit")),
+        "终态事件到达时输出必须已排空，实际输出: {:?}",
+        outputs
+    );
+}
+
+#[test]
 fn log_ring_trims_oldest_with_marker() {
-    let ring = LogRing::new();
-    let mut seq = 1u64;
+    let bus = LogBus::new();
     // 每个事件 32 KiB，超过 2 MiB 上限。
     let chunk = "x".repeat(LOG_CHUNK_BYTES);
     for _ in 0..70 {
-        ring.push(seq, OutputStream::Stdout, chunk.clone(), false);
-        seq += 1;
+        bus.append(OutputStream::Stdout, chunk.clone(), false);
     }
-    let page = ring.page(0);
+    let page = bus.ring.page(0);
     assert!(page.entries.len() < 70, "应淘汰最旧内容");
     assert!(page
         .entries
         .iter()
         .any(|e| e.truncated && e.text.contains("截断")));
+    // 截断 marker 与真实文本各自独立取号，序号全局唯一。
+    let mut seqs: Vec<u64> = page.entries.iter().map(|e| e.seq).collect();
+    seqs.sort();
+    seqs.dedup();
+    assert_eq!(seqs.len(), page.entries.len(), "截断后不得出现重复 seq");
 }
 
 // ---- 事件唯一性 ----

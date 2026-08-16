@@ -62,7 +62,7 @@ beforeEach(() => {
   // 默认行为：识别 + 无运行状态。
   mockCall.mockImplementation((cmd: string) => {
     if (cmd === "detect_project_runtime") return Promise.resolve(detection);
-    if (cmd === "get_project_run") return Promise.resolve(null);
+    if (cmd === "list_project_runs_by_project") return Promise.resolve([]);
     if (cmd === "get_process_logs") return Promise.resolve({ entries: [], nextSeq: 1 });
     return Promise.resolve(undefined);
   });
@@ -93,7 +93,7 @@ describe("projectRuntimeStore", () => {
           : Promise.resolve(undefined),
       )
       .mockImplementation((cmd: string) => {
-        if (cmd === "get_project_run") return Promise.resolve(null);
+        if (cmd === "list_project_runs_by_project") return Promise.resolve([]);
         return Promise.resolve(undefined);
       });
     const preview = await store.getState().prepare();
@@ -122,7 +122,7 @@ describe("projectRuntimeStore", () => {
           diagnostics: [],
         });
       }
-      if (cmd === "get_project_run") return Promise.resolve(null);
+      if (cmd === "list_project_runs_by_project") return Promise.resolve([]);
       return Promise.resolve(undefined);
     });
     await useProjectRuntimeStore.getState().load("p1");
@@ -130,7 +130,6 @@ describe("projectRuntimeStore", () => {
     expect(s.config?.executable).toBe("mvn");
     expect(s.config?.cwd).toBe("backend");
   });
-
   it("pickCandidate applies subproject cwd and clears it for root candidates", async () => {
     mockCall.mockImplementation((cmd: string) => {
       if (cmd === "detect_project_runtime") {
@@ -143,7 +142,7 @@ describe("projectRuntimeStore", () => {
           diagnostics: [],
         });
       }
-      if (cmd === "get_project_run") return Promise.resolve(null);
+      if (cmd === "list_project_runs_by_project") return Promise.resolve([]);
       return Promise.resolve(undefined);
     });
     const store = useProjectRuntimeStore;
@@ -164,7 +163,7 @@ describe("projectRuntimeStore", () => {
       .mockImplementationOnce(() => Promise.resolve({ confirmationId: "c1", confirmationHash: "h1" }))
       .mockImplementationOnce(() => Promise.resolve(runSnapshot))
       .mockImplementation((cmd: string) => {
-        if (cmd === "get_project_run") return Promise.resolve(null);
+        if (cmd === "list_project_runs_by_project") return Promise.resolve([]);
         return Promise.resolve(undefined);
       });
     const preview = await store.getState().prepare();
@@ -266,7 +265,7 @@ describe("projectRuntimeStore", () => {
           diagnostics: [],
         });
       }
-      if (cmd === "get_project_run") return Promise.resolve(null);
+      if (cmd === "list_project_runs_by_project") return Promise.resolve([]);
       return Promise.resolve(undefined);
     });
     const store = useProjectRuntimeStore;
@@ -295,5 +294,85 @@ describe("projectRuntimeStore", () => {
     expect(preview2).not.toBeNull();
     // 后端仍在运行映射中。
     expect(store.getState().runs["web/backend"]?.state).toBe("running");
+  });
+
+  it("load restores multiple run instances keyed by relative cwd", async () => {
+    mockCall.mockImplementation((cmd: string) => {
+      if (cmd === "detect_project_runtime") return Promise.resolve(detection);
+      if (cmd === "list_project_runs_by_project") {
+        return Promise.resolve([
+          {
+            runId: "run-backend",
+            cwdRel: "web/backend",
+            snapshot: { ...runSnapshot, runId: "run-backend", cwd: "C:\\proj\\web\\backend", state: "running", summary: { ...runSnapshot.summary, cwd: "C:\\proj\\web\\backend" } },
+          },
+          {
+            runId: "run-frontend",
+            cwdRel: "web/frontend",
+            snapshot: { ...runSnapshot, runId: "run-frontend", cwd: "C:\\proj\\web\\frontend", state: "running", summary: { ...runSnapshot.summary, cwd: "C:\\proj\\web\\frontend" } },
+          },
+        ]);
+      }
+      if (cmd === "get_process_logs") return Promise.resolve({ entries: [], nextSeq: 1 });
+      return Promise.resolve(undefined);
+    });
+    const store = useProjectRuntimeStore;
+    await store.getState().load("p1");
+    const s = store.getState();
+    expect(s.runs["web/backend"]?.runId).toBe("run-backend");
+    expect(s.runs["web/frontend"]?.runId).toBe("run-frontend");
+    expect(s.runIdToCwd["run-backend"]).toBe("web/backend");
+    expect(s.runIdToCwd["run-frontend"]).toBe("web/frontend");
+    expect(s.activeCwd).toBe("web/backend");
+  });
+
+  it("restart updates runIdToCwd and triggers auto preview for the new run", async () => {
+    const store = useProjectRuntimeStore;
+    await store.getState().load("p1");
+    store.setState({ runs: { "": runSnapshot as never }, runIdToCwd: { "run-1": "" } });
+    const newSnap = { ...runSnapshot, runId: "run-2", state: "running" };
+    mockCall.mockResolvedValueOnce(newSnap);
+    await store.getState().restart();
+    const s = store.getState();
+    expect(s.runIdToCwd["run-1"]).toBeUndefined();
+    expect(s.runIdToCwd["run-2"]).toBe("");
+    expect(s.runs[""]?.runId).toBe("run-2");
+    expect(s.lastStartedRunId).toBe("run-2");
+    expect(s.logs).toEqual([]);
+  });
+
+  it("stale load result does not overwrite a newer project", async () => {
+    const store = useProjectRuntimeStore;
+    // 第一次 load：detect 延迟返回。
+    mockCall.mockImplementation((cmd: string) => {
+      if (cmd === "detect_project_runtime") {
+        return new Promise((resolve) =>
+          setTimeout(() => resolve({ ...detection, runtimeKind: "node" }), 50),
+        );
+      }
+      if (cmd === "list_project_runs_by_project") return Promise.resolve([]);
+      return Promise.resolve(undefined);
+    });
+    const first = store.getState().load("p1");
+    // 第二次 load 立即覆盖（detect 快速返回）。
+    mockCall.mockImplementation((cmd: string) => {
+      if (cmd === "detect_project_runtime") {
+        return Promise.resolve({
+          runtimeKind: "python",
+          candidates: [{ label: "python main.py", executable: "python", args: ["main.py"], confidence: 90 }],
+          diagnostics: [],
+        });
+      }
+      if (cmd === "list_project_runs_by_project") return Promise.resolve([]);
+      return Promise.resolve(undefined);
+    });
+    await store.getState().load("p2");
+    await first;
+    await vi.waitFor(() => {
+      expect(store.getState().detection?.runtimeKind).toBe("python");
+    });
+    // 旧项目的 detect 结果不得覆盖新项目。
+    expect(store.getState().projectId).toBe("p2");
+    expect(store.getState().detection?.runtimeKind).toBe("python");
   });
 });

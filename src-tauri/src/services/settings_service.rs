@@ -14,6 +14,7 @@ use crate::error::AppError;
 pub struct AppSettings {
     pub general: GeneralSettings,
     pub appearance: AppearanceSettings,
+    pub terminal: TerminalSettings,
     pub ignore: IgnoreSettings,
     pub backup: BackupSettings,
     pub storage: StorageSettings,
@@ -39,6 +40,18 @@ pub struct AppearanceSettings {
     pub theme_mode: String,
     /// comfortable | compact
     pub density: String,
+}
+
+/// 内置终端外观设置。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub struct TerminalSettings {
+    /// 字号（px），10..=24
+    pub font_size: u32,
+    /// block | bar | underline
+    pub cursor_style: String,
+    /// 配色方案：campbell | vs_dark | one_dark | dracula | solarized_dark
+    pub theme: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -84,6 +97,9 @@ pub const KEY_DUPLICATE_POLICY: &str = "general.duplicate_policy";
 pub const KEY_PREVIEW_SIZE_LIMIT_MB: &str = "general.preview_size_limit_mb";
 pub const KEY_THEME_MODE: &str = "appearance.theme_mode";
 pub const KEY_DENSITY: &str = "appearance.density";
+pub const KEY_TERMINAL_FONT_SIZE: &str = "terminal.font_size";
+pub const KEY_TERMINAL_CURSOR_STYLE: &str = "terminal.cursor_style";
+pub const KEY_TERMINAL_THEME: &str = "terminal.theme";
 pub const KEY_CUSTOM_RULES: &str = "ignore.custom_rules";
 pub const KEY_BACKUP_ENABLED: &str = "backup.enabled";
 pub const KEY_BACKUP_FREQUENCY: &str = "backup.frequency";
@@ -103,6 +119,11 @@ pub fn default_settings() -> AppSettings {
         appearance: AppearanceSettings {
             theme_mode: "system".into(),
             density: "comfortable".into(),
+        },
+        terminal: TerminalSettings {
+            font_size: 14,
+            cursor_style: "bar".into(),
+            theme: "campbell".into(),
         },
         ignore: IgnoreSettings {
             custom_rules: Vec::new(),
@@ -131,6 +152,11 @@ pub fn category_keys(category: &str) -> Option<&'static [&'static str]> {
             KEY_PREVIEW_SIZE_LIMIT_MB,
         ]),
         "appearance" => Some(&[KEY_THEME_MODE, KEY_DENSITY]),
+        "terminal" => Some(&[
+            KEY_TERMINAL_FONT_SIZE,
+            KEY_TERMINAL_CURSOR_STYLE,
+            KEY_TERMINAL_THEME,
+        ]),
         "ignore" => Some(&[KEY_CUSTOM_RULES]),
         "backup" => Some(&[
             KEY_BACKUP_ENABLED,
@@ -155,6 +181,11 @@ pub fn load_settings(conn: &rusqlite::Connection) -> Result<AppSettings, AppErro
         read_u32(conn, KEY_PREVIEW_SIZE_LIMIT_MB, s.general.preview_size_limit_mb)?;
     s.appearance.theme_mode = read_str(conn, KEY_THEME_MODE, &s.appearance.theme_mode)?;
     s.appearance.density = read_str(conn, KEY_DENSITY, &s.appearance.density)?;
+    s.terminal.font_size =
+        read_u32(conn, KEY_TERMINAL_FONT_SIZE, s.terminal.font_size)?;
+    s.terminal.cursor_style =
+        read_str(conn, KEY_TERMINAL_CURSOR_STYLE, &s.terminal.cursor_style)?;
+    s.terminal.theme = read_str(conn, KEY_TERMINAL_THEME, &s.terminal.theme)?;
     s.ignore.custom_rules = read_rules(conn)?;
     s.backup.enabled = read_bool(conn, KEY_BACKUP_ENABLED, s.backup.enabled)?;
     s.backup.frequency = read_str(conn, KEY_BACKUP_FREQUENCY, &s.backup.frequency)?;
@@ -263,6 +294,27 @@ fn validate_and_encode(key: &str, value: Value) -> Result<String, AppError> {
             }
             Ok(serde_json::to_string(s)?)
         }
+        KEY_TERMINAL_FONT_SIZE => {
+            let n = value.as_u64().ok_or_else(|| bad("必须是整数"))?;
+            if !(10..=24).contains(&n) {
+                return Err(bad("取值范围 10..=24"));
+            }
+            Ok(serde_json::to_string(&(n as u32))?)
+        }
+        KEY_TERMINAL_CURSOR_STYLE => {
+            let s = value.as_str().ok_or_else(|| bad("必须是字符串"))?;
+            if !matches!(s, "block" | "bar" | "underline") {
+                return Err(bad("取值应为 block、bar 或 underline"));
+            }
+            Ok(serde_json::to_string(s)?)
+        }
+        KEY_TERMINAL_THEME => {
+            let s = value.as_str().ok_or_else(|| bad("必须是字符串"))?;
+            if !matches!(s, "campbell" | "vs_dark" | "one_dark" | "dracula" | "solarized_dark") {
+                return Err(bad("未知的配色方案"));
+            }
+            Ok(serde_json::to_string(s)?)
+        }
         KEY_CUSTOM_RULES => {
             let arr = value.as_array().ok_or_else(|| bad("必须是数组"))?;
             let mut rules = Vec::with_capacity(arr.len());
@@ -354,6 +406,67 @@ mod tests {
         assert_eq!(s.general.default_import_mode, "managed");
         assert_eq!(s.appearance.theme_mode, "system");
         assert_eq!(s.backup.retention_count, 7);
+        assert_eq!(s.terminal.font_size, 14);
+        assert_eq!(s.terminal.cursor_style, "bar");
+        assert_eq!(s.terminal.theme, "campbell");
+    }
+
+    #[test]
+    fn terminal_settings_update_and_persist() {
+        let c = conn();
+        let s = update_setting(
+            &c,
+            KEY_TERMINAL_FONT_SIZE,
+            Value::from(18),
+        )
+        .expect("update font");
+        assert_eq!(s.terminal.font_size, 18);
+        let s = update_setting(
+            &c,
+            KEY_TERMINAL_CURSOR_STYLE,
+            Value::String("block".into()),
+        )
+        .expect("update cursor");
+        assert_eq!(s.terminal.cursor_style, "block");
+        let s = update_setting(
+            &c,
+            KEY_TERMINAL_THEME,
+            Value::String("dracula".into()),
+        )
+        .expect("update theme");
+        assert_eq!(s.terminal.theme, "dracula");
+        let reloaded = load_settings(&c).expect("reload");
+        assert_eq!(reloaded.terminal.font_size, 18);
+        assert_eq!(reloaded.terminal.cursor_style, "block");
+        assert_eq!(reloaded.terminal.theme, "dracula");
+    }
+
+    #[test]
+    fn invalid_terminal_values_are_rejected() {
+        let c = conn();
+        assert!(update_setting(&c, KEY_TERMINAL_FONT_SIZE, Value::from(8)).is_err());
+        assert!(update_setting(&c, KEY_TERMINAL_FONT_SIZE, Value::from(30)).is_err());
+        assert!(
+            update_setting(&c, KEY_TERMINAL_CURSOR_STYLE, Value::String("dash".into())).is_err()
+        );
+        assert!(
+            update_setting(&c, KEY_TERMINAL_THEME, Value::String("monokai".into())).is_err()
+        );
+    }
+
+    #[test]
+    fn reset_terminal_category_restores_defaults() {
+        let c = conn();
+        let _ = update_setting(&c, KEY_TERMINAL_FONT_SIZE, Value::from(20));
+        let _ = update_setting(
+            &c,
+            KEY_TERMINAL_CURSOR_STYLE,
+            Value::String("underline".into()),
+        );
+        let s = reset_category(&c, "terminal").expect("reset");
+        assert_eq!(s.terminal.font_size, 14);
+        assert_eq!(s.terminal.cursor_style, "bar");
+        assert_eq!(s.terminal.theme, "campbell");
     }
 
     #[test]

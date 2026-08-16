@@ -15,7 +15,8 @@ export function RunConfirmationDialog({
 }) {
   const s = preview.summary;
   const envEntries = Object.entries(s.env ?? {});
-  const commandLine = [s.executable, ...(s.args ?? [])].join(" ");
+  const quoteArg = (a: string) => (/[\s"\\]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a);
+  const commandLine = [s.executable, ...(s.args ?? [])].map(quoteArg).join(" ");
   return (
     <div className="run-confirm-mask">
       <div className="run-confirm-dialog">

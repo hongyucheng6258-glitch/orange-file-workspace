@@ -109,11 +109,19 @@ struct ConfirmationTicket {
     expires_at: Instant,
 }
 
-/// 会话级确认管理：密钥驻留内存，票据单次使用。
+/// 已授权但尚未消费的一次性确认授权。
+struct GrantEntry {
+    canonical_json: Vec<u8>,
+    expires_at: Instant,
+}
+
+/// 会话级确认管理：密钥驻留内存，票据单次使用，授权令牌单次消费。
 pub struct ConfirmationSession {
     secret: [u8; 32],
     ttl: Duration,
     tickets: Mutex<HashMap<String, ConfirmationTicket>>,
+    /// confirmation_hash → 未消费授权。哈希由随机令牌构成，启动成功后立即失效。
+    grants: Mutex<HashMap<String, GrantEntry>>,
     next_id: AtomicU64,
 }
 
@@ -143,6 +151,7 @@ impl ConfirmationSession {
             secret,
             ttl,
             tickets: Mutex::new(HashMap::new()),
+            grants: Mutex::new(HashMap::new()),
             next_id: AtomicU64::new(1),
         }
     }
@@ -175,7 +184,7 @@ impl ConfirmationSession {
         })
     }
 
-    /// 原子兑换一次性票据并签发确认哈希。
+    /// 原子兑换一次性票据并签发一次性确认哈希（随机令牌，单次消费）。
     pub fn confirm(&self, confirmation_id: &str) -> Result<ConfirmationGrant, ConfirmationError> {
         let mut tickets = self.tickets.lock().unwrap();
         let Some(ticket) = tickets.remove(confirmation_id) else {
@@ -188,14 +197,25 @@ impl ConfirmationSession {
                 "确认票据已过期，请重新确认",
             ));
         }
-        let hash = compute_hash(&self.secret, &ticket.canonical_json);
+        // 签发一次性授权令牌：随机生成、绑定票据内容、启动成功后失效。
+        let grant_id = uuid::Uuid::new_v4().to_string();
+        self.grants.lock().unwrap().insert(
+            grant_id.clone(),
+            GrantEntry {
+                canonical_json: ticket.canonical_json,
+                expires_at: Instant::now() + self.ttl,
+            },
+        );
         Ok(ConfirmationGrant {
             confirmation_id: confirmation_id.to_string(),
-            confirmation_hash: hash,
+            confirmation_hash: grant_id,
         })
     }
 
-    /// 校验配置并验证确认哈希；返回后端重新规范化的快照用于启动。
+    /// 校验配置并消费一次性确认哈希；返回后端重新规范化的快照用于启动。
+    ///
+    /// 授权令牌无论校验成败都会被消费：配置漂移、伪造或重放都会使授权立即失效，
+    /// 每次启动都必须是“确认 → 兑换 → 启动”的完整流程。
     pub fn verify(
         &self,
         config: &RunConfig,
@@ -204,9 +224,18 @@ impl ConfirmationSession {
     ) -> Result<NormalizedRunConfig, ConfirmationError> {
         let normalized = normalize(config, project_root)?;
         let canonical_json = canonical_json(&normalized);
-        let expected = compute_hash(&self.secret, &canonical_json);
-        let ok = bool::from(expected.as_bytes().ct_eq(confirmation_hash.as_bytes()));
-        if !ok {
+        let mut grants = self.grants.lock().unwrap();
+        let Some(entry) = grants.remove(confirmation_hash) else {
+            return Err(ConfirmationError::confirmation_required(
+                "确认已失效或已使用，请重新确认",
+            ));
+        };
+        if entry.expires_at <= Instant::now() {
+            return Err(ConfirmationError::confirmation_required(
+                "确认已过期，请重新确认",
+            ));
+        }
+        if entry.canonical_json != canonical_json {
             return Err(ConfirmationError::confirmation_required(
                 "配置已变化或确认已失效，请重新确认",
             ));
@@ -214,13 +243,17 @@ impl ConfirmationSession {
         Ok(normalized)
     }
 
-    /// 清理过期票据。
+    /// 清理过期票据与过期授权。
     pub fn sweep_expired(&self) {
         let now = Instant::now();
         self.tickets
             .lock()
             .unwrap()
             .retain(|_, t| t.expires_at > now);
+        self.grants
+            .lock()
+            .unwrap()
+            .retain(|_, g| g.expires_at > now);
     }
 
     /// 当前有效票据数量（测试与诊断用）。
@@ -288,7 +321,7 @@ fn canonical_json(normalized: &NormalizedRunConfig) -> Vec<u8> {
 }
 
 /// 环境变量名是否匹配敏感模式。
-fn is_sensitive_key(key: &str) -> bool {
+pub(crate) fn is_sensitive_key(key: &str) -> bool {
     let u = key.to_ascii_uppercase();
     ["TOKEN", "SECRET", "PASSWORD", "KEY", "CREDENTIAL", "AUTH"]
         .iter()
@@ -782,6 +815,45 @@ mod tests {
         assert_eq!(session.pending_count(), 0);
         let verified = session.verify(&c, &root, &grant.confirmation_hash).unwrap();
         assert_eq!(verified.project_id, "p1");
+    }
+
+    #[test]
+    fn grant_single_use_consumed_after_start() {
+        let root = make_root("grant-once");
+        std::fs::write(root.join("server.js"), "x").unwrap();
+        let session = ConfirmationSession::new([11u8; 32]);
+        let c = base_config(&root);
+        let preview = session.prepare(&c, &root).unwrap();
+        let grant = session.confirm(&preview.confirmation_id).unwrap();
+        // 第一次启动消费授权。
+        assert!(session.verify(&c, &root, &grant.confirmation_hash).is_ok());
+        // 同一授权令牌不可重放，即使配置完全一致。
+        let err = session
+            .verify(&c, &root, &grant.confirmation_hash)
+            .unwrap_err();
+        assert_eq!(err.code, "confirmation_required");
+    }
+
+    #[test]
+    fn failed_verify_consumes_grant_too() {
+        let root = make_root("grant-fail-consumed");
+        std::fs::write(root.join("server.js"), "x").unwrap();
+        let session = ConfirmationSession::new([12u8; 32]);
+        let mut c = base_config(&root);
+        let preview = session.prepare(&c, &root).unwrap();
+        let grant = session.confirm(&preview.confirmation_id).unwrap();
+        // 配置漂移导致校验失败 → 授权同时失效，禁止配置碰撞探测。
+        c.args = vec!["evil.js".into()];
+        let err = session.verify(&c, &root, &grant.confirmation_hash).unwrap_err();
+        assert_eq!(err.code, "confirmation_required");
+        let original = base_config(&root);
+        assert_eq!(
+            session
+                .verify(&original, &root, &grant.confirmation_hash)
+                .unwrap_err()
+                .code,
+            "confirmation_required"
+        );
     }
 
     #[test]

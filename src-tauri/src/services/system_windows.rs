@@ -1389,6 +1389,80 @@ pub fn is_admin() -> bool {
     false
 }
 
+/// 用系统默认关联打开路径（文件/文件夹/可执行文件）。
+#[cfg(windows)]
+pub fn shell_open_path(path: &str) -> Result<(), String> {
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let file_vec: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+    let op_vec: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe {
+        let res = ShellExecuteW(
+            None,
+            windows::core::PCWSTR(op_vec.as_ptr()),
+            windows::core::PCWSTR(file_vec.as_ptr()),
+            windows::core::PCWSTR::null(),
+            None,
+            SW_SHOWNORMAL,
+        );
+        if res.0 as isize <= 32 {
+            return Err(format!("ShellExecute failed: {}", res.0 as isize));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn shell_open_path(_path: &str) -> Result<(), String> {
+    Err("当前平台不支持".into())
+}
+
+/// 在资源管理器中定位路径。
+#[cfg(windows)]
+pub fn shell_reveal_path(path: &str) -> Result<(), String> {
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let file_vec: Vec<u16> = "explorer.exe"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let params_vec: Vec<u16> = format!("/select,\"{path}\"")
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    unsafe {
+        let res = ShellExecuteW(
+            None,
+            windows::core::PCWSTR::null(),
+            windows::core::PCWSTR(file_vec.as_ptr()),
+            windows::core::PCWSTR(params_vec.as_ptr()),
+            None,
+            SW_SHOWNORMAL,
+        );
+        if res.0 as isize <= 32 {
+            return Err(format!("reveal failed: {}", res.0 as isize));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn shell_reveal_path(_path: &str) -> Result<(), String> {
+    Err("当前平台不支持".into())
+}
+
+/// 通过 AUMID 启动 Store 应用（shell:AppsFolder 协议）。
+#[cfg(windows)]
+pub fn shell_open_aumid(aumid: &str) -> Result<(), String> {
+    let target = format!("shell:AppsFolder\\{aumid}");
+    shell_open_path(&target)
+}
+
+#[cfg(not(windows))]
+pub fn shell_open_aumid(_aumid: &str) -> Result<(), String> {
+    Err("当前平台不支持".into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -29,8 +29,7 @@ export function RunCenterPage() {
 
   useEffect(() => {
     void store.load();
-    const off = useRunCenterEvents();
-    return () => off();
+    useRunCenterEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -36,6 +36,8 @@ pub struct FakeApi {
     pub terminate_marks_exited: AtomicBool,
     pub exited: AtomicBool,
     pub exit_code: AtomicU32,
+    /// 主进程退出后 Job 内是否仍有活动子进程（默认 false：进程树同步退出）。
+    pub job_children_active: AtomicBool,
     /// 阻塞在 assign 内的屏障：Some(receiver) 时 assign 阻塞直到收到信号。
     pub assign_barrier: Mutex<Option<mpsc::Receiver<()>>>,
     pub stdout_data: Mutex<Vec<u8>>,
@@ -57,6 +59,7 @@ impl FakeApi {
             terminate_marks_exited: AtomicBool::new(true),
             exited: AtomicBool::new(false),
             exit_code: AtomicU32::new(0),
+            job_children_active: AtomicBool::new(false),
             assign_barrier: Mutex::new(None),
             stdout_data: Mutex::new(Vec::new()),
             stderr_data: Mutex::new(Vec::new()),
@@ -189,7 +192,7 @@ impl Win32ProcessApi for FakeApi {
 
     fn query_job_process_count(&self, _job: &JobHandle) -> Result<u32, ProcessApiError> {
         self.log("query_job_process_count");
-        if self.exited.load(Ordering::SeqCst) {
+        if self.exited.load(Ordering::SeqCst) && !self.job_children_active.load(Ordering::SeqCst) {
             Ok(0)
         } else {
             Ok(1)

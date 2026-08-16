@@ -10,6 +10,7 @@ import {
   Upload,
   ChevronLeft,
   ChevronRight as ArrowRight,
+  TerminalSquare,
 } from "lucide-react";
 import { useFileStore } from "../stores/fileStore";
 import { FileTable } from "../components/FileTable";
@@ -17,6 +18,7 @@ import { FileGrid } from "../components/FileGrid";
 import { DetailPanel } from "../../../components/DetailPanel";
 import { fetchResourceDetail } from "../stores/fileStore";
 import { call } from "../../../lib/tauri";
+import { getResourcePath } from "../../../lib/openResource";
 import type { Resource } from "../../../lib/types";
 
 export function FilePage() {
@@ -195,6 +197,18 @@ export function FilePage() {
           </div>
 
           <div className="toolbar-right">
+            <button
+              className="icon-btn"
+              disabled={!currentParentId}
+              title="在当前文件夹打开终端"
+              onClick={async () => {
+                if (!currentParentId) return;
+                const path = await getResourcePath(currentParentId);
+                navigate(path ? `/terminal?cwd=${encodeURIComponent(path)}` : "/terminal");
+              }}
+            >
+              <TerminalSquare size={15} />
+            </button>
             <button className="icon-btn" title="刷新" onClick={() => loadChildren(currentParentId)}>
               <RefreshCw size={15} />
             </button>

@@ -154,6 +154,18 @@ export function getProjectRun(projectId: string): Promise<RunSnapshot | null> {
   return call<RunSnapshot | null>("get_project_run", { projectId });
 }
 
+/** 项目运行实例条目：快照 + 相对项目根的 cwd（与运行候选对齐）。 */
+export interface ProjectRunEntry {
+  runId: string;
+  cwdRel: string;
+  snapshot: RunSnapshot;
+}
+
+/** 查询项目全部运行实例（活动 + 各 cwd 最近终态），用于恢复并行子项目。 */
+export function listProjectRunsByProject(projectId: string): Promise<ProjectRunEntry[]> {
+  return call<ProjectRunEntry[]>("list_project_runs_by_project", { projectId });
+}
+
 export function getProcessLogs(runId: string, afterSeq: number): Promise<LogPage> {
   return call<LogPage>("get_process_logs", { runId, afterSeq });
 }

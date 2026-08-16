@@ -18,7 +18,7 @@ use crate::services::process_api::{
     JobHandle, ProcessApiError, ProcessSpec, SuspendedProcess, WaitResult, Win32ProcessApi,
 };
 use crate::services::run_confirmation::{
-    canonical_key, ConfirmationGrant, ConfirmationPreview, ConfirmationSession,
+    canonical_key, is_sensitive_key, ConfirmationGrant, ConfirmationPreview, ConfirmationSession,
     NormalizedRunConfig, RunConfig,
 };
 use crate::services::run_history::RunHistoryStore;
@@ -203,6 +203,52 @@ impl LogBus {
     fn next_seq(&self) -> u64 {
         self.seq.fetch_add(1, Ordering::SeqCst)
     }
+
+    /// 追加一条日志：截断时先写入独立取号的 marker，再写入真实文本。
+    /// 返回真实文本对应的 seq 与文本，供事件发布使用，保证所有 seq 唯一。
+    /// 取号与插入在同一临界区，双流（stdout/stderr）并发时序号仍与插入顺序一致。
+    fn append(&self, stream: OutputStream, text: String, truncated: bool) -> (u64, String) {
+        const MARKER: &str = "[日志已截断，仅保留最近 2 MiB]";
+        let len = text.len();
+        let mut entries = self.ring.entries.lock().unwrap();
+        let mut bytes = self.ring.bytes.lock().unwrap();
+        let mut trimmed = false;
+        while *bytes + len > LOG_RING_BYTES && !entries.is_empty() {
+            if let Some(old) = entries.pop_front() {
+                *bytes = bytes.saturating_sub(old.text.len());
+            }
+            trimmed = true;
+        }
+        if trimmed {
+            let marker_seq = self.next_seq();
+            entries.push_back(LogEntry {
+                seq: marker_seq,
+                stream,
+                text: MARKER.to_string(),
+                truncated: true,
+            });
+            *bytes += MARKER.len();
+            let text_seq = self.next_seq();
+            entries.push_back(LogEntry {
+                seq: text_seq,
+                stream,
+                text: text.clone(),
+                truncated,
+            });
+            *bytes += len;
+            (text_seq, text)
+        } else {
+            let seq = self.next_seq();
+            entries.push_back(LogEntry {
+                seq,
+                stream,
+                text: text.clone(),
+                truncated,
+            });
+            *bytes += len;
+            (seq, text)
+        }
+    }
 }
 
 struct LogRing {
@@ -215,45 +261,6 @@ impl LogRing {
         Self {
             entries: Mutex::new(VecDeque::new()),
             bytes: Mutex::new(0),
-        }
-    }
-
-    fn push(&self, seq: u64, stream: OutputStream, text: String, truncated: bool) {
-        let len = text.len();
-        let mut entries = self.entries.lock().unwrap();
-        let mut bytes = self.bytes.lock().unwrap();
-        let mut trimmed = false;
-        while *bytes + len > LOG_RING_BYTES && !entries.is_empty() {
-            if let Some(old) = entries.pop_front() {
-                *bytes = bytes.saturating_sub(old.text.len());
-            }
-            trimmed = true;
-        }
-        let marker = "[日志已截断，仅保留最近 2 MiB]";
-        if trimmed {
-            entries.push_back(LogEntry {
-                seq,
-                stream,
-                text: marker.to_string(),
-                truncated: true,
-            });
-            *bytes += marker.len();
-            let next = seq + 1;
-            entries.push_back(LogEntry {
-                seq: next,
-                stream,
-                text,
-                truncated,
-            });
-            *bytes += len;
-        } else {
-            entries.push_back(LogEntry {
-                seq,
-                stream,
-                text,
-                truncated,
-            });
-            *bytes += len;
         }
     }
 
@@ -712,33 +719,48 @@ impl RuntimeManager {
                 run.job = Some(resources.job.clone());
             }
         }
+        // 收集输出读取线程句柄：终态前必须排空，避免最后一批日志晚于 exited 事件。
+        let mut reader_handles: Vec<std::thread::JoinHandle<()>> = Vec::new();
         if let Some(reader) = process.stdout.take() {
             let bus = bus.clone();
             let sink = self.sink.clone();
             let rid = run_id.clone();
             let pid = project_id.clone();
-            std::thread::spawn(move || {
+            reader_handles.push(std::thread::spawn(move || {
                 read_stream(reader, OutputStream::Stdout, rid, pid, bus, sink);
-            });
+            }));
         }
         if let Some(reader) = process.stderr.take() {
             let bus = bus.clone();
             let sink = self.sink.clone();
             let rid = run_id.clone();
             let pid = project_id.clone();
-            std::thread::spawn(move || {
+            reader_handles.push(std::thread::spawn(move || {
                 read_stream(reader, OutputStream::Stderr, rid, pid, bus, sink);
-            });
+            }));
         }
+        let readers = Arc::new(Mutex::new(reader_handles));
 
         let manager = self.clone();
         let job = resources.job;
         std::thread::spawn(move || {
-            manager.coordinate(run_id, job, process, stop_flag, bus);
+            manager.coordinate(run_id, job, process, stop_flag, bus, readers);
         });
     }
 
+    /// 等待输出读取线程排空。仅进程树已退出后调用：此时管道写端已关闭，
+    /// read 会立即返回，join 不会阻塞。
+    fn drain_readers(&self, readers: &Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>) {
+        let handles = std::mem::take(&mut *readers.lock().unwrap());
+        for handle in handles {
+            let _ = handle.join();
+        }
+    }
+
     /// 协调线程主循环：等待退出；收到停止请求后终止 Job 并等待，最多 5 秒。
+    ///
+    /// 主进程退出不等于运行结束：Job 内可能仍有活动子进程（如 npm → node），
+    /// 必须等整个进程树空闲后才进入终态，避免误报退出并触发 KILL_ON_JOB_CLOSE。
     fn coordinate(
         self: &Arc<Self>,
         run_id: String,
@@ -746,36 +768,78 @@ impl RuntimeManager {
         process: SuspendedProcess,
         stop_flag: Arc<AtomicBool>,
         bus: LogBus,
+        readers: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
     ) {
         let mut stop_started: Option<Instant> = None;
+        // 主进程退出码；None 表示主进程尚未退出。
+        let mut main_exit: Option<u32> = None;
+        // Job 活动进程数查询连续失败计数（防御性上限，避免死循环）。
+        let mut query_failures: u32 = 0;
         loop {
             if stop_started.is_none() && stop_flag.load(Ordering::SeqCst) {
                 stop_started = Some(Instant::now());
                 let _ = self.api.terminate_job(&job);
             }
-            match self
-                .api
-                .wait_process_exit(&process, Duration::from_millis(200))
-            {
-                WaitResult::Exited { exit_code } => {
+            // 第一层：等待主进程退出。
+            if main_exit.is_none() {
+                match self
+                    .api
+                    .wait_process_exit(&process, Duration::from_millis(200))
+                {
+                    WaitResult::Exited { exit_code } => {
+                        main_exit = Some(exit_code);
+                    }
+                    WaitResult::Timeout => {
+                        if let Some(started) = stop_started {
+                            if started.elapsed() >= STOP_TIMEOUT {
+                                self.finalize_stop_timeout(run_id, job, process, bus);
+                                return;
+                            }
+                        }
+                        continue;
+                    }
+                    WaitResult::Failed(e) => {
+                        self.finalize_error(run_id, &e, job, process, bus);
+                        return;
+                    }
+                }
+            }
+            // 第二层：主进程已退出，等待整个进程树空闲。
+            match self.api.query_job_process_count(&job) {
+                Ok(0) => {
+                    let exit_code = main_exit.unwrap_or(0);
                     let stop_reason = if stop_flag.load(Ordering::SeqCst) {
                         Some("user".to_string())
                     } else {
                         None
                     };
+                    // 先排空输出线程，再发布终态，保证最后一批日志先于 exited 事件。
+                    self.drain_readers(&readers);
                     self.finalize_exited(run_id, exit_code, stop_reason, job, process, bus);
                     return;
                 }
-                WaitResult::Timeout => {
-                    if let Some(started) = stop_started {
-                        if started.elapsed() >= STOP_TIMEOUT {
-                            self.finalize_stop_timeout(run_id, job, process, bus);
-                            return;
-                        }
+                Ok(_) => {
+                    query_failures = 0;
+                }
+                Err(_) => {
+                    query_failures += 1;
+                    // 持续无法查询 Job（句柄失效等）时保守按空闲处理，避免永久挂起。
+                    if query_failures >= 25 {
+                        let exit_code = main_exit.unwrap_or(0);
+                        let stop_reason = if stop_flag.load(Ordering::SeqCst) {
+                            Some("user".to_string())
+                        } else {
+                            None
+                        };
+                        self.drain_readers(&readers);
+                        self.finalize_exited(run_id, exit_code, stop_reason, job, process, bus);
+                        return;
                     }
                 }
-                WaitResult::Failed(e) => {
-                    self.finalize_error(run_id, &e, job, process, bus);
+            }
+            if let Some(started) = stop_started {
+                if started.elapsed() >= STOP_TIMEOUT {
+                    self.finalize_stop_timeout(run_id, job, process, bus);
                     return;
                 }
             }
@@ -1216,8 +1280,7 @@ fn read_stream(
         };
         let text = String::from_utf8_lossy(&buf[..n]).into_owned();
         let truncated = n == LOG_CHUNK_BYTES;
-        let seq = bus.next_seq();
-        bus.ring.push(seq, stream, text.clone(), truncated);
+        let (seq, text) = bus.append(stream, text, truncated);
         sink.emit_output(&OutputPayload {
             run_id: run_id.clone(),
             project_id: project_id.clone(),
@@ -1234,11 +1297,8 @@ fn redacted_summary(config: &NormalizedRunConfig) -> serde_json::Value {
         .env_overrides
         .iter()
         .map(|(k, v)| {
-            let display = if k.contains("TOKEN")
-                || k.contains("SECRET")
-                || k.contains("PASSWORD")
-                || k.contains("KEY")
-            {
+            // 与确认摘要共用同一套敏感规则（含 CREDENTIAL/AUTH），避免脱敏不一致。
+            let display = if is_sensitive_key(k) {
                 v.as_ref().map(|value| {
                     if value.is_empty() {
                         "••••••".to_string()
