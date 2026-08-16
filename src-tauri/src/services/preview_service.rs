@@ -48,7 +48,11 @@ pub fn read_text_full(path: &Path, max_bytes: u64) -> Result<String, AppError> {
     if meta.len() > max_bytes {
         return Err(AppError::new(
             "file_too_large",
-            format!("文件过大（{} 字节），超过编辑上限 {}", meta.len(), max_bytes),
+            format!(
+                "文件过大（{} 字节），超过编辑上限 {}",
+                meta.len(),
+                max_bytes
+            ),
         ));
     }
     let mut file = std::fs::File::open(path)?;

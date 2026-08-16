@@ -241,10 +241,10 @@ mod win32 {
     use windows::Win32::System::Pipes::CreatePipe;
     use windows::Win32::System::Threading::{
         CreateProcessW, DeleteProcThreadAttributeList, GetExitCodeProcess,
-        InitializeProcThreadAttributeList, ResumeThread, TerminateProcess, UpdateProcThreadAttribute,
-        WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
-        LPPROC_THREAD_ATTRIBUTE_LIST, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, PROCESS_INFORMATION,
-        STARTF_USESTDHANDLES, STARTUPINFOEXW, STARTUPINFOW,
+        InitializeProcThreadAttributeList, ResumeThread, TerminateProcess,
+        UpdateProcThreadAttribute, WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED,
+        CREATE_UNICODE_ENVIRONMENT, LPPROC_THREAD_ATTRIBUTE_LIST, PROCESS_INFORMATION,
+        PROC_THREAD_ATTRIBUTE_HANDLE_LIST, STARTF_USESTDHANDLES, STARTUPINFOEXW, STARTUPINFOW,
     };
 
     fn last_win32_error() -> u32 {
@@ -469,10 +469,16 @@ mod win32 {
                 return Err(api_error("创建子进程"));
             }
             // 成功：读端所有权移交给 File；写端与 NUL 句柄随守卫在函数返回时关闭。
-            let stdout: Option<Box<dyn Read + Send>> =
-                unsafe { Some(Box::new(std::fs::File::from_raw_handle(out_read_g.into_raw().0 as _))) };
-            let stderr: Option<Box<dyn Read + Send>> =
-                unsafe { Some(Box::new(std::fs::File::from_raw_handle(err_read_g.into_raw().0 as _))) };
+            let stdout: Option<Box<dyn Read + Send>> = unsafe {
+                Some(Box::new(std::fs::File::from_raw_handle(
+                    out_read_g.into_raw().0 as _,
+                )))
+            };
+            let stderr: Option<Box<dyn Read + Send>> = unsafe {
+                Some(Box::new(std::fs::File::from_raw_handle(
+                    err_read_g.into_raw().0 as _,
+                )))
+            };
             let pid = pi.dwProcessId;
 
             Ok(SuspendedProcess {

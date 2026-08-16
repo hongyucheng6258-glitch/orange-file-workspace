@@ -3,8 +3,8 @@ use std::sync::MutexGuard;
 use rusqlite::Connection;
 use tauri::State;
 
-use crate::AppState;
 use crate::ipc::CommandResult;
+use crate::AppState;
 
 fn lock_db<'a>(state: &'a AppState) -> MutexGuard<'a, Connection> {
     state.conn.lock().expect("db lock poisoned")
@@ -75,10 +75,7 @@ pub fn execute_search(
                 .enumerate()
                 .map(|(i, _)| format!("?{}", i + params.len() + 1))
                 .collect();
-            sql.push_str(&format!(
-                " AND r.kind IN ({})",
-                placeholders.join(",")
-            ));
+            sql.push_str(&format!(" AND r.kind IN ({})", placeholders.join(",")));
             for k in kinds {
                 params.push(Box::new(k.clone()));
             }
@@ -178,8 +175,12 @@ mod tests {
     #[test]
     fn empty_query_returns_nothing() {
         let conn = test_conn();
-        assert!(execute_search(&conn, "", None, false, 50, 0).unwrap().is_empty());
-        assert!(execute_search(&conn, "   ", None, false, 50, 0).unwrap().is_empty());
+        assert!(execute_search(&conn, "", None, false, 50, 0)
+            .unwrap()
+            .is_empty());
+        assert!(execute_search(&conn, "   ", None, false, 50, 0)
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
@@ -213,8 +214,7 @@ mod tests {
     #[test]
     fn kind_filter_works() {
         let conn = test_conn();
-        let hits = execute_search(&conn, "项", Some(&["page".to_string()]), false, 50, 0)
-            .unwrap();
+        let hits = execute_search(&conn, "项", Some(&["page".to_string()]), false, 50, 0).unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].kind, "page");
     }

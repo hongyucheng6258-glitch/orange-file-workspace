@@ -51,13 +51,22 @@ pub fn upsert_volume_state(
            completed_at=NULL,
            last_error=NULL,
            started_at=COALESCE(system_search_scan_state.started_at, excluded.started_at)",
-        params![volume_id, root_path, status, scan_generation, crate::db::connection::now_unix()],
+        params![
+            volume_id,
+            root_path,
+            status,
+            scan_generation,
+            crate::db::connection::now_unix()
+        ],
     )
     .map(|_| ())
 }
 
 /// 读取某卷的扫描状态；不存在时返回 `None`。
-pub fn get_volume_state(conn: &Connection, volume_id: &str) -> rusqlite::Result<Option<VolumeState>> {
+pub fn get_volume_state(
+    conn: &Connection,
+    volume_id: &str,
+) -> rusqlite::Result<Option<VolumeState>> {
     conn.query_row(
         "SELECT volume_id, root_path, status, scan_generation, checkpoint, indexed_count, skipped_count, last_error, completed_at
          FROM system_search_scan_state WHERE volume_id = ?1",
@@ -111,7 +120,12 @@ pub fn set_volume_status(
          SET status = ?1, last_error = ?2,
              completed_at = CASE WHEN ?1 IN ('completed','error') THEN ?3 ELSE completed_at END
          WHERE volume_id = ?4",
-        params![status, last_error, crate::db::connection::now_unix(), volume_id],
+        params![
+            status,
+            last_error,
+            crate::db::connection::now_unix(),
+            volume_id
+        ],
     )
     .map(|_| ())
 }
@@ -167,7 +181,14 @@ pub fn scan_directory(
     queue.push_back(root.to_path_buf());
     let mut indexed: i64 = 0;
     let mut skipped: i64 = 0;
-    let mut batch: Vec<(String, String, String, Option<String>, Option<i64>, Option<i64>)> = Vec::new();
+    let mut batch: Vec<(
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<i64>,
+        Option<i64>,
+    )> = Vec::new();
     let now = crate::db::connection::now_unix();
     // 最近处理的目录：每批 flush 时作为断点写入（含最后一批，保证小目录也可续扫）
     // 注意：checkpoint 只用于进度展示；恢复续扫必须从卷根重新开始（见 scan_start），
@@ -205,7 +226,10 @@ pub fn scan_directory(
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_default();
             let canon = crate::services::global_search::canonical_key(&p.to_string_lossy());
-            if excluded.iter().any(|e| path_under(&p, std::path::Path::new(e))) {
+            if excluded
+                .iter()
+                .any(|e| path_under(&p, std::path::Path::new(e)))
+            {
                 skipped += 1;
                 continue;
             }
@@ -226,20 +250,30 @@ pub fn scan_directory(
                 batch.push((canon, name, "file".into(), ext, size, modified));
             }
             if batch.len() >= 2000 {
-                flush_batch(conn, &batch, volume_id, generation, now)
-                    .map_err(|e| e.to_string())?;
+                flush_batch(conn, &batch, volume_id, generation, now).map_err(|e| e.to_string())?;
                 indexed += batch.len() as i64;
                 // 定期写入断点（绝对计数），供中断后从当前目录续扫
-                let _ = update_volume_progress(conn, volume_id, last_checkpoint.as_deref(), indexed, skipped);
+                let _ = update_volume_progress(
+                    conn,
+                    volume_id,
+                    last_checkpoint.as_deref(),
+                    indexed,
+                    skipped,
+                );
                 batch.clear();
             }
         }
     }
     if !batch.is_empty() {
-        flush_batch(conn, &batch, volume_id, generation, now)
-            .map_err(|e| e.to_string())?;
+        flush_batch(conn, &batch, volume_id, generation, now).map_err(|e| e.to_string())?;
         indexed += batch.len() as i64;
-        let _ = update_volume_progress(conn, volume_id, last_checkpoint.as_deref(), indexed, skipped);
+        let _ = update_volume_progress(
+            conn,
+            volume_id,
+            last_checkpoint.as_deref(),
+            indexed,
+            skipped,
+        );
     }
     Ok((indexed, skipped))
 }
@@ -253,7 +287,10 @@ fn path_under(p: &std::path::Path, excluded: &std::path::Path) -> bool {
         return false;
     }
     let p_parts: Vec<&str> = p_l.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
-    let e_parts: Vec<&str> = e_trimmed.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
+    let e_parts: Vec<&str> = e_trimmed
+        .split(['/', '\\'])
+        .filter(|s| !s.is_empty())
+        .collect();
     let is_absolute = e_l.contains(':') || e_l.starts_with('/') || e_l.starts_with('\\');
     if is_absolute {
         // 绝对排除路径（含盘符）：组件前缀匹配（如 C:\Windows 只匹配 c:\windows\... 不误伤 c:\windows2）
@@ -282,7 +319,14 @@ fn path_under(p: &std::path::Path, excluded: &std::path::Path) -> bool {
 /// 批次整体包一个事务：逐条 upsert + FTS 同步后一次提交，避免逐行隐式事务。
 fn flush_batch(
     conn: &mut Connection,
-    batch: &[(String, String, String, Option<String>, Option<i64>, Option<i64>)],
+    batch: &[(
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<i64>,
+        Option<i64>,
+    )],
     volume_id: &str,
     generation: i64,
     now: i64,
@@ -379,7 +423,8 @@ fn scan_one_volume(app: &AppHandle, vol: &std::path::Path) {
     let (generation, checkpoint, status) = match get_volume_state(&conn, &volume_id) {
         Ok(Some(s)) => (s.scan_generation, s.checkpoint, s.status),
         Ok(None) => {
-            let _ = upsert_volume_state(&mut conn, &volume_id, &vol.to_string_lossy(), "pending", 1);
+            let _ =
+                upsert_volume_state(&mut conn, &volume_id, &vol.to_string_lossy(), "pending", 1);
             (1, None, "pending".to_string())
         }
         Err(_) => return,
@@ -470,11 +515,7 @@ pub fn mark_volume_back_online(conn: &mut Connection, volume_id: &str) -> rusqli
 }
 
 /// 对已完成卷做低频一致性校验：删除磁盘上已不存在的记录（限量）。
-pub fn verify_volume(
-    conn: &mut Connection,
-    volume_id: &str,
-    limit: i64,
-) -> rusqlite::Result<i64> {
+pub fn verify_volume(conn: &mut Connection, volume_id: &str, limit: i64) -> rusqlite::Result<i64> {
     let mut stmt = conn.prepare(
         "SELECT id, canonical_path FROM system_search_entries
          WHERE volume_id = ?1 AND is_offline = 0 LIMIT ?2",
@@ -490,7 +531,8 @@ pub fn verify_volume(
     for (id, path) in rows {
         if !std::path::Path::new(&path).exists() {
             conn.execute("DELETE FROM system_search_entries WHERE id=?1", [id])?;
-            conn.execute("DELETE FROM system_search_entries_fts WHERE rowid=?1", [id]).ok();
+            conn.execute("DELETE FROM system_search_entries_fts WHERE rowid=?1", [id])
+                .ok();
             removed += 1;
         }
     }
@@ -507,11 +549,13 @@ pub fn run_verification_round(app: &AppHandle) {
         .expect("data dir lock")
         .clone()
         .join("workspace.db");
-    let Ok(mut conn) = crate::db::connection::open(&db_path) else { return };
+    let Ok(mut conn) = crate::db::connection::open(&db_path) else {
+        return;
+    };
     let mut volumes: Vec<(String, String, String)> = Vec::new();
-    if let Ok(mut stmt) = conn.prepare(
-        "SELECT volume_id, root_path, status FROM system_search_scan_state",
-    ) {
+    if let Ok(mut stmt) =
+        conn.prepare("SELECT volume_id, root_path, status FROM system_search_scan_state")
+    {
         if let Ok(rows) = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))) {
             volumes = rows.filter_map(|r| r.ok()).collect();
         }
@@ -651,12 +695,11 @@ pub fn apply_watch_events(
                             .file_name()
                             .map(|s| s.to_string_lossy().to_string())
                             .unwrap_or_default();
-                        let id: i64 = tx
-                            .query_row(
-                                "SELECT id FROM system_search_entries WHERE canonical_path = ?1",
-                                [&f],
-                                |r| r.get(0),
-                            )?;
+                        let id: i64 = tx.query_row(
+                            "SELECT id FROM system_search_entries WHERE canonical_path = ?1",
+                            [&f],
+                            |r| r.get(0),
+                        )?;
                         tx.execute(
                             "UPDATE system_search_entries
                              SET canonical_path = ?1, display_name = ?2 WHERE canonical_path = ?3",
@@ -716,7 +759,9 @@ pub fn start_watchers(app: AppHandle) {
                     .expect("data dir lock")
                     .clone()
                     .join("workspace.db");
-                let Ok(conn) = crate::db::connection::open(&db_path) else { continue };
+                let Ok(conn) = crate::db::connection::open(&db_path) else {
+                    continue;
+                };
                 let mut completed: Vec<(String, String)> = Vec::new();
                 if let Ok(mut stmt) = conn.prepare(
                     "SELECT volume_id, root_path FROM system_search_scan_state WHERE status='completed'",
@@ -799,7 +844,12 @@ fn event_volume(e: &WatchEvent) -> String {
         .chars()
         .next()
         .filter(|c| c.is_ascii_alphabetic())
-        .map(|c| format!("{:02x}", volume_hash(std::path::Path::new(&format!("{c}:\\")))))
+        .map(|c| {
+            format!(
+                "{:02x}",
+                volume_hash(std::path::Path::new(&format!("{c}:\\")))
+            )
+        })
         .unwrap_or_default()
 }
 
@@ -863,7 +913,10 @@ mod tests {
         assert_eq!(s.status, "scanning");
         assert_eq!(s.scan_generation, 2);
         // 重置语义：旧完成时间、断点与计数必须清空，避免非终态与旧状态矛盾
-        assert!(s.completed_at.is_none(), "新一轮扫描不应残留旧 completed_at");
+        assert!(
+            s.completed_at.is_none(),
+            "新一轮扫描不应残留旧 completed_at"
+        );
         assert!(s.checkpoint.is_none(), "新一轮扫描不应残留旧 checkpoint");
         assert_eq!(s.indexed_count, 0);
         assert_eq!(s.skipped_count, 0);
@@ -903,7 +956,11 @@ mod tests {
         update_volume_progress(&mut c, "v4", Some("F:\\a\\b"), 10, 2).unwrap();
         update_volume_progress(&mut c, "v4", None, 20, 3).unwrap();
         let s = get_volume_state(&c, "v4").unwrap().unwrap();
-        assert_eq!(s.checkpoint.as_deref(), Some("F:\\a\\b"), "None 应保持原 checkpoint");
+        assert_eq!(
+            s.checkpoint.as_deref(),
+            Some("F:\\a\\b"),
+            "None 应保持原 checkpoint"
+        );
         assert_eq!(s.indexed_count, 20, "计数为绝对覆盖");
         assert_eq!(s.skipped_count, 3);
     }
@@ -955,7 +1012,9 @@ mod tests {
             let _ = std::os::windows::fs::symlink_dir(&root.join("real"), root.join("loop"));
             scan_directory(&mut c, &root, "v2", 1, &[], &ScanControl::default()).unwrap();
             let count: i64 = c
-                .query_row("SELECT count(*) FROM system_search_entries", [], |r| r.get(0))
+                .query_row("SELECT count(*) FROM system_search_entries", [], |r| {
+                    r.get(0)
+                })
                 .unwrap();
             assert!(count < 100, "符号链接循环不应造成爆炸式索引");
             let _ = fs::remove_dir_all(&root);
@@ -990,9 +1049,17 @@ mod tests {
             ("C:\\windows\\system32\\a", "c:\\WINDOWS", true), // 大小写无关
             ("C:\\$Recycle.Bin\\s-1-5\\a.json", "$Recycle.Bin", true), // 相对名：任意盘任意层级
             ("D:\\$recycle.bin\\x", "$Recycle.Bin", true),
-            ("C:\\Users\\me\\Desktop\\$recycle.bin\\f", "$Recycle.Bin", true),
+            (
+                "C:\\Users\\me\\Desktop\\$recycle.bin\\f",
+                "$Recycle.Bin",
+                true,
+            ),
             ("C:\\Users\\me\\docs\\a.txt", "$Recycle.Bin", false),
-            ("E:\\System Volume Information\\x", "System Volume Information", true),
+            (
+                "E:\\System Volume Information\\x",
+                "System Volume Information",
+                true,
+            ),
             ("E:\\Users\\me\\docs", "System Volume Information", false),
         ];
         for (path, excluded, expected) in cases {
@@ -1046,7 +1113,9 @@ mod tests {
         ];
         apply_watch_events(&mut c, "v3", 1, &events).unwrap();
         let count: i64 = c
-            .query_row("SELECT count(*) FROM system_search_entries", [], |r| r.get(0))
+            .query_row("SELECT count(*) FROM system_search_entries", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(count, 2);
         let has_new: bool = c
@@ -1107,7 +1176,11 @@ mod tests {
         .unwrap();
         mark_volume_offline(&mut c, "v4").unwrap();
         let status: String = c
-            .query_row("SELECT status FROM system_search_scan_state WHERE volume_id='v4'", [], |r| r.get(0))
+            .query_row(
+                "SELECT status FROM system_search_scan_state WHERE volume_id='v4'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(status, "offline");
         let offline: i64 = c
@@ -1134,7 +1207,11 @@ mod tests {
         mark_volume_offline(&mut c, "v5").unwrap();
         mark_volume_back_online(&mut c, "v5").unwrap();
         let status: String = c
-            .query_row("SELECT status FROM system_search_scan_state WHERE volume_id='v5'", [], |r| r.get(0))
+            .query_row(
+                "SELECT status FROM system_search_scan_state WHERE volume_id='v5'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(status, "pending", "重新上线后应置回 pending 待重扫");
         let offline: i64 = c
@@ -1217,7 +1294,11 @@ mod tests {
         let removed = verify_volume(&mut c, "v6", 100).unwrap();
         assert_eq!(removed, 1, "应删除磁盘上不存在的记录");
         let remains: i64 = c
-            .query_row("SELECT count(*) FROM system_search_entries WHERE volume_id='v6'", [], |r| r.get(0))
+            .query_row(
+                "SELECT count(*) FROM system_search_entries WHERE volume_id='v6'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(remains, 1, "真实存在的文件应保留");
         let _ = std::fs::remove_dir_all(&tmp);

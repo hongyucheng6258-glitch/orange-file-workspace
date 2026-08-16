@@ -1,7 +1,9 @@
 use rusqlite::{params, Connection, OptionalExtension, Result as SqliteResult};
 
 use crate::db::connection::now_unix;
-use crate::db::models::{new_id, insert_resource, Project, Resource, ResourceKind, ResourceLocation, SourceType};
+use crate::db::models::{
+    insert_resource, new_id, Project, Resource, ResourceKind, ResourceLocation, SourceType,
+};
 use crate::db::repositories as repo;
 use crate::error::AppError;
 use crate::services::file_service as fsutil;
@@ -53,7 +55,10 @@ pub fn create_project(
             resource_id, project_type, language, entry_file,
             readme_resource_id, ignore_patterns_json, save_mode
          ) VALUES (?1, NULL, NULL, NULL, NULL, ?2, 'manual')",
-        params![id, serde_json::to_string(ignore_patterns).unwrap_or_else(|_| "[]".into())],
+        params![
+            id,
+            serde_json::to_string(ignore_patterns).unwrap_or_else(|_| "[]".into())
+        ],
     )?;
 
     let project = Project {

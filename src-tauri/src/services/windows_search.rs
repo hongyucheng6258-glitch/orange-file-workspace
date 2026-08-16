@@ -54,12 +54,8 @@ pub fn search(query: &str, limit: u32) -> Result<Vec<GlobalSearchHit>, String> {
         // SQL 通过 OLE DB 执行；绑定不可用时向调用方传播 Err（触发上层降级到本地索引）。
         // 错误串携带探测证据（生成的 SQL 字节数），便于调用方区分「索引链路正常但 OLE DB 未绑定」
         // 与「索引不可达」：只有整条 COM 探测链成功后才可能到达这里。
-        let result = query_windows_search_ole_db(&sql_string, limit).map_err(|_| {
-            format!(
-                "ole_db_not_bound: sql_generated {} bytes",
-                sql_string.len()
-            )
-        })?;
+        let result = query_windows_search_ole_db(&sql_string, limit)
+            .map_err(|_| format!("ole_db_not_bound: sql_generated {} bytes", sql_string.len()))?;
         drop(sql_string);
         Ok(result)
     }
@@ -72,10 +68,7 @@ fn wide(s: &str) -> Vec<u16> {
 
 /// 通过 OLE DB 执行 Windows Search SQL（Search.CollatorDSO）。
 /// windows crate 未提供完整 OLE DB 绑定时，本函数返回 Err 触发降级。
-fn query_windows_search_ole_db(
-    _sql: &str,
-    _limit: u32,
-) -> Result<Vec<GlobalSearchHit>, String> {
+fn query_windows_search_ole_db(_sql: &str, _limit: u32) -> Result<Vec<GlobalSearchHit>, String> {
     // 首版降级：Windows Search 索引用于即时层可选增强。
     // 完整实现需 IDBInitialize + ICommandText + IRowset（约 300 行 COM 调用），
     // 若后续需要，可在本函数内按 OLE DB provider 文档补齐。
@@ -105,7 +98,10 @@ mod tests {
         #[cfg(not(windows))]
         {
             let r = search("", 10);
-            assert!(r.is_ok() && r.unwrap().is_empty(), "空查询在任何平台都应返回空");
+            assert!(
+                r.is_ok() && r.unwrap().is_empty(),
+                "空查询在任何平台都应返回空"
+            );
         }
     }
 

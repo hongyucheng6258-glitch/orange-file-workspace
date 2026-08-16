@@ -1,12 +1,12 @@
 use tauri::{AppHandle, State};
 
-use crate::AppState;
 use crate::db::models::{new_id, SourceType, Task};
 use crate::error::AppError;
 use crate::ipc::CommandResult;
 use crate::services::import_service::{resolve_shortcut, start_import, ImportRequest};
 use crate::services::migration_service::KEY_INFLIGHT;
 use crate::services::task_service as tasks;
+use crate::AppState;
 
 /// 导入文件/文件夹。mode: "managed" 复制到仓库，或 "external" 仅引用路径。
 /// 传入的 Windows 快捷方式（.lnk）会先解析为目标路径再导入。
@@ -34,7 +34,11 @@ pub fn import_paths(
     // 解析快捷方式：.lnk 指向文件夹时按文件夹导入其内容
     let resolved_paths: Vec<String> = paths
         .iter()
-        .map(|p| resolve_shortcut(std::path::Path::new(p)).to_string_lossy().to_string())
+        .map(|p| {
+            resolve_shortcut(std::path::Path::new(p))
+                .to_string_lossy()
+                .to_string()
+        })
         .collect();
     let source_type = match mode.as_str() {
         "managed" => SourceType::Managed,

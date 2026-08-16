@@ -173,25 +173,27 @@ pub fn category_keys(category: &str) -> Option<&'static [&'static str]> {
 pub fn load_settings(conn: &rusqlite::Connection) -> Result<AppSettings, AppError> {
     let mut s = default_settings();
     s.general.launch_behavior = read_str(conn, KEY_LAUNCH_BEHAVIOR, &s.general.launch_behavior)?;
-    s.general.default_import_mode =
-        read_str(conn, KEY_DEFAULT_IMPORT_MODE, &s.general.default_import_mode)?;
-    s.general.duplicate_policy =
-        read_str(conn, KEY_DUPLICATE_POLICY, &s.general.duplicate_policy)?;
-    s.general.preview_size_limit_mb =
-        read_u32(conn, KEY_PREVIEW_SIZE_LIMIT_MB, s.general.preview_size_limit_mb)?;
+    s.general.default_import_mode = read_str(
+        conn,
+        KEY_DEFAULT_IMPORT_MODE,
+        &s.general.default_import_mode,
+    )?;
+    s.general.duplicate_policy = read_str(conn, KEY_DUPLICATE_POLICY, &s.general.duplicate_policy)?;
+    s.general.preview_size_limit_mb = read_u32(
+        conn,
+        KEY_PREVIEW_SIZE_LIMIT_MB,
+        s.general.preview_size_limit_mb,
+    )?;
     s.appearance.theme_mode = read_str(conn, KEY_THEME_MODE, &s.appearance.theme_mode)?;
     s.appearance.density = read_str(conn, KEY_DENSITY, &s.appearance.density)?;
-    s.terminal.font_size =
-        read_u32(conn, KEY_TERMINAL_FONT_SIZE, s.terminal.font_size)?;
-    s.terminal.cursor_style =
-        read_str(conn, KEY_TERMINAL_CURSOR_STYLE, &s.terminal.cursor_style)?;
+    s.terminal.font_size = read_u32(conn, KEY_TERMINAL_FONT_SIZE, s.terminal.font_size)?;
+    s.terminal.cursor_style = read_str(conn, KEY_TERMINAL_CURSOR_STYLE, &s.terminal.cursor_style)?;
     s.terminal.theme = read_str(conn, KEY_TERMINAL_THEME, &s.terminal.theme)?;
     s.ignore.custom_rules = read_rules(conn)?;
     s.backup.enabled = read_bool(conn, KEY_BACKUP_ENABLED, s.backup.enabled)?;
     s.backup.frequency = read_str(conn, KEY_BACKUP_FREQUENCY, &s.backup.frequency)?;
     s.backup.run_time = read_str(conn, KEY_BACKUP_RUN_TIME, &s.backup.run_time)?;
-    s.backup.retention_count =
-        read_u32(conn, KEY_BACKUP_RETENTION, s.backup.retention_count)?;
+    s.backup.retention_count = read_u32(conn, KEY_BACKUP_RETENTION, s.backup.retention_count)?;
     s.backup.backup_type = read_str(conn, KEY_BACKUP_TYPE, &s.backup.backup_type)?;
     Ok(s)
 }
@@ -243,7 +245,9 @@ fn read_bool(conn: &rusqlite::Connection, key: &str, fallback: bool) -> Result<b
 
 fn read_rules(conn: &rusqlite::Connection) -> Result<Vec<IgnoreRule>, AppError> {
     let raw = get_setting(conn, KEY_CUSTOM_RULES)?;
-    let Some(raw) = raw else { return Ok(Vec::new()) };
+    let Some(raw) = raw else {
+        return Ok(Vec::new());
+    };
     let rules: Vec<IgnoreRule> = serde_json::from_str(&raw).unwrap_or_default();
     Ok(rules)
 }
@@ -310,7 +314,10 @@ fn validate_and_encode(key: &str, value: Value) -> Result<String, AppError> {
         }
         KEY_TERMINAL_THEME => {
             let s = value.as_str().ok_or_else(|| bad("必须是字符串"))?;
-            if !matches!(s, "campbell" | "vs_dark" | "one_dark" | "dracula" | "solarized_dark") {
+            if !matches!(
+                s,
+                "campbell" | "vs_dark" | "one_dark" | "dracula" | "solarized_dark"
+            ) {
                 return Err(bad("未知的配色方案"));
             }
             Ok(serde_json::to_string(s)?)
@@ -319,7 +326,9 @@ fn validate_and_encode(key: &str, value: Value) -> Result<String, AppError> {
             let arr = value.as_array().ok_or_else(|| bad("必须是数组"))?;
             let mut rules = Vec::with_capacity(arr.len());
             for (i, item) in arr.iter().enumerate() {
-                let obj = item.as_object().ok_or_else(|| bad(&format!("第 {i} 项不是对象")))?;
+                let obj = item
+                    .as_object()
+                    .ok_or_else(|| bad(&format!("第 {i} 项不是对象")))?;
                 let kind = obj
                     .get("kind")
                     .and_then(|v| v.as_str())
@@ -340,7 +349,11 @@ fn validate_and_encode(key: &str, value: Value) -> Result<String, AppError> {
                 if pattern.is_empty() || pattern.len() > 200 {
                     return Err(bad(&format!("第 {i} 项 pattern 长度应为 1..=200")));
                 }
-                rules.push(IgnoreRule { kind, pattern, enabled });
+                rules.push(IgnoreRule {
+                    kind,
+                    pattern,
+                    enabled,
+                });
             }
             Ok(serde_json::to_string(&rules)?)
         }
@@ -384,7 +397,10 @@ fn validate_and_encode(key: &str, value: Value) -> Result<String, AppError> {
             }
             Ok(serde_json::to_string(s)?)
         }
-        _ => Err(AppError::new("unknown_setting", format!("未知设置项: {key}"))),
+        _ => Err(AppError::new(
+            "unknown_setting",
+            format!("未知设置项: {key}"),
+        )),
     }
 }
 
@@ -414,26 +430,13 @@ mod tests {
     #[test]
     fn terminal_settings_update_and_persist() {
         let c = conn();
-        let s = update_setting(
-            &c,
-            KEY_TERMINAL_FONT_SIZE,
-            Value::from(18),
-        )
-        .expect("update font");
+        let s = update_setting(&c, KEY_TERMINAL_FONT_SIZE, Value::from(18)).expect("update font");
         assert_eq!(s.terminal.font_size, 18);
-        let s = update_setting(
-            &c,
-            KEY_TERMINAL_CURSOR_STYLE,
-            Value::String("block".into()),
-        )
-        .expect("update cursor");
+        let s = update_setting(&c, KEY_TERMINAL_CURSOR_STYLE, Value::String("block".into()))
+            .expect("update cursor");
         assert_eq!(s.terminal.cursor_style, "block");
-        let s = update_setting(
-            &c,
-            KEY_TERMINAL_THEME,
-            Value::String("dracula".into()),
-        )
-        .expect("update theme");
+        let s = update_setting(&c, KEY_TERMINAL_THEME, Value::String("dracula".into()))
+            .expect("update theme");
         assert_eq!(s.terminal.theme, "dracula");
         let reloaded = load_settings(&c).expect("reload");
         assert_eq!(reloaded.terminal.font_size, 18);
@@ -449,9 +452,7 @@ mod tests {
         assert!(
             update_setting(&c, KEY_TERMINAL_CURSOR_STYLE, Value::String("dash".into())).is_err()
         );
-        assert!(
-            update_setting(&c, KEY_TERMINAL_THEME, Value::String("monokai".into())).is_err()
-        );
+        assert!(update_setting(&c, KEY_TERMINAL_THEME, Value::String("monokai".into())).is_err());
     }
 
     #[test]

@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::AppState;
 use crate::events::EVENT_RESOURCE_CHANGED;
+use crate::AppState;
 
 /// 监听 managed-files 目录的文件变化，向前端广播刷新事件。
 /// 事件先做 500ms 去抖合并，避免高频写文件时刷屏。
@@ -39,10 +39,7 @@ pub fn start_managed_watcher(app: AppHandle) {
             Err(_) => return,
         };
 
-        if watcher
-            .watch(&watch_dir, RecursiveMode::Recursive)
-            .is_err()
-        {
+        if watcher.watch(&watch_dir, RecursiveMode::Recursive).is_err() {
             return;
         }
 
@@ -57,7 +54,10 @@ pub fn start_managed_watcher(app: AppHandle) {
             while rx.try_recv().is_ok() {
                 // 合并窗口内新到达的事件
             }
-            let _ = app.emit(EVENT_RESOURCE_CHANGED, serde_json::json!({ "source": "watcher" }));
+            let _ = app.emit(
+                EVENT_RESOURCE_CHANGED,
+                serde_json::json!({ "source": "watcher" }),
+            );
         }
     });
 }

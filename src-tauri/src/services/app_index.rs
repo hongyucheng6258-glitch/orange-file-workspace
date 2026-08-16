@@ -21,7 +21,10 @@ pub fn canonical_app_target(target: &str) -> String {
 
 /// 判定快捷方式是否指向 Store 应用。
 pub fn is_store_link(target: &str) -> bool {
-    target.trim_start().to_ascii_lowercase().starts_with("shell:appsfolder")
+    target
+        .trim_start()
+        .to_ascii_lowercase()
+        .starts_with("shell:appsfolder")
 }
 
 /// 重建应用索引表（全量替换，单事务）。
@@ -171,12 +174,16 @@ pub mod windows {
         if !visited.insert(canon) {
             return;
         }
-        let Ok(read) = std::fs::read_dir(dir) else { return };
+        let Ok(read) = std::fs::read_dir(dir) else {
+            return;
+        };
         for entry in read.flatten() {
             let p = entry.path();
             if p.is_dir() {
                 walk_lnk_inner(&p, out, visited, depth + 1);
-            } else if p.extension().map(|e| e.to_ascii_lowercase()) == Some(std::ffi::OsString::from("lnk")) {
+            } else if p.extension().map(|e| e.to_ascii_lowercase())
+                == Some(std::ffi::OsString::from("lnk"))
+            {
                 let name = p
                     .file_stem()
                     .map(|s| s.to_string_lossy().to_string())
@@ -184,8 +191,13 @@ pub mod windows {
                 if name.is_empty() {
                     continue;
                 }
-                let target = resolve_lnk_target(&p).unwrap_or_else(|| p.to_string_lossy().to_string());
-                let kind = if is_store_link(&target) { "store" } else { "shortcut" };
+                let target =
+                    resolve_lnk_target(&p).unwrap_or_else(|| p.to_string_lossy().to_string());
+                let kind = if is_store_link(&target) {
+                    "store"
+                } else {
+                    "shortcut"
+                };
                 out.push(AppEntry {
                     app_kind: kind.into(),
                     display_name: name,
@@ -204,17 +216,20 @@ pub mod windows {
     pub fn resolve_lnk_target(lnk: &std::path::Path) -> Option<String> {
         use ::windows::core::{Interface, PCWSTR};
         use ::windows::Win32::System::Com::{
-            CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED, IPersistFile, STGM,
+            CoCreateInstance, CoInitializeEx, IPersistFile, CLSCTX_INPROC_SERVER,
+            COINIT_MULTITHREADED, STGM,
         };
         use ::windows::Win32::UI::Shell::{IShellLinkW, ShellLink, SLGP_RAWPATH};
         let wide = to_wide(&lnk.to_string_lossy());
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-            let link: IShellLinkW = CoCreateInstance(&ShellLink as *const _, None, CLSCTX_INPROC_SERVER).ok()?;
+            let link: IShellLinkW =
+                CoCreateInstance(&ShellLink as *const _, None, CLSCTX_INPROC_SERVER).ok()?;
             let persist: IPersistFile = link.cast().ok()?;
             persist.Load(PCWSTR(wide.as_ptr()), STGM(0)).ok()?;
             let mut buf = [0u16; 1024];
-            link.GetPath(&mut buf, std::ptr::null_mut(), SLGP_RAWPATH.0 as u32).ok()?;
+            link.GetPath(&mut buf, std::ptr::null_mut(), SLGP_RAWPATH.0 as u32)
+                .ok()?;
             let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
             if end == 0 {
                 return None;
@@ -236,9 +251,7 @@ pub mod windows {
         }
         let src = to_wide(input);
         let mut buf = vec![0u16; 4096];
-        let written = unsafe {
-            ExpandEnvironmentStringsW(PCWSTR(src.as_ptr()), Some(&mut buf))
-        };
+        let written = unsafe { ExpandEnvironmentStringsW(PCWSTR(src.as_ptr()), Some(&mut buf)) };
         if written == 0 {
             return input.to_string();
         }
@@ -249,13 +262,23 @@ pub mod windows {
     /// App Paths 注册表。
     fn collect_app_paths(out: &mut Vec<AppEntry>) {
         let roots = [
-            (HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"),
-            (HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"),
+            (
+                HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths",
+            ),
+            (
+                HKEY_CURRENT_USER,
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths",
+            ),
         ];
         for (root, sub) in roots {
-            let Ok(key) = RegKey::predef(root).open_subkey_with_flags(sub, KEY_READ) else { continue };
+            let Ok(key) = RegKey::predef(root).open_subkey_with_flags(sub, KEY_READ) else {
+                continue;
+            };
             for name in key.enum_keys().flatten() {
-                let Ok(sub) = key.open_subkey_with_flags(&name, KEY_READ) else { continue };
+                let Ok(sub) = key.open_subkey_with_flags(&name, KEY_READ) else {
+                    continue;
+                };
                 let default: Option<String> = sub.get_value("").ok();
                 if let Some(target) = default.filter(|t| !t.trim().is_empty()) {
                     out.push(AppEntry {
@@ -278,16 +301,31 @@ pub mod windows {
     /// 卸载注册表中的桌面应用。
     fn collect_uninstall(out: &mut Vec<AppEntry>) {
         let subs = [
-            (HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
-            (HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
-            (HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+            (
+                HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+            ),
+            (
+                HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+            ),
+            (
+                HKEY_CURRENT_USER,
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+            ),
         ];
         for (root, sub) in subs {
-            let Ok(key) = RegKey::predef(root).open_subkey_with_flags(sub, KEY_READ) else { continue };
+            let Ok(key) = RegKey::predef(root).open_subkey_with_flags(sub, KEY_READ) else {
+                continue;
+            };
             for name in key.enum_keys().flatten() {
-                let Ok(sub) = key.open_subkey_with_flags(&name, KEY_READ) else { continue };
+                let Ok(sub) = key.open_subkey_with_flags(&name, KEY_READ) else {
+                    continue;
+                };
                 let display: Option<String> = sub.get_value("DisplayName").ok();
-                let Some(display) = display.filter(|d| !d.trim().is_empty()) else { continue };
+                let Some(display) = display.filter(|d| !d.trim().is_empty()) else {
+                    continue;
+                };
                 let display_icon: String = sub
                     .get_value("DisplayIcon")
                     .ok()
@@ -309,9 +347,13 @@ pub mod windows {
                         p.is_file().then(|| p.to_path_buf())
                     })
                     .or_else(|| {
-                        install_dir.as_deref().map(|i| std::path::Path::new(i).join(format!("{display}.exe")))
+                        install_dir
+                            .as_deref()
+                            .map(|i| std::path::Path::new(i).join(format!("{display}.exe")))
                     });
-                let Some(target) = target.map(|p| p.to_string_lossy().to_string()) else { continue };
+                let Some(target) = target.map(|p| p.to_string_lossy().to_string()) else {
+                    continue;
+                };
                 out.push(AppEntry {
                     app_kind: "win32".into(),
                     display_name: display,
@@ -332,7 +374,9 @@ mod tests {
 
     #[test]
     fn lnk_to_target_extracts_path() {
-        assert!(is_store_link("shell:AppsFolder\\Microsoft.Windows.Photos_8wekyb3d8bbwe!App"));
+        assert!(is_store_link(
+            "shell:AppsFolder\\Microsoft.Windows.Photos_8wekyb3d8bbwe!App"
+        ));
         assert!(!is_store_link("C:\\Program Files\\App\\app.exe"));
     }
 

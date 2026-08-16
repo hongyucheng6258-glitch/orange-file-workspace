@@ -44,8 +44,7 @@ pub fn dedup_hits(hits: &mut Vec<GlobalSearchHit>) {
                 let prev = &mut kept[idx];
                 let prev_authority = authority_rank(&prev.source);
                 let cur_authority = authority_rank(&h.source);
-                if h.score > prev.score
-                    || (h.score == prev.score && cur_authority > prev_authority)
+                if h.score > prev.score || (h.score == prev.score && cur_authority > prev_authority)
                 {
                     *prev = h;
                 }
@@ -175,7 +174,9 @@ pub fn query_local_index(
     }
     let lim = limit.clamp(1, 500);
     let fts = ensure_fts(conn);
-    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if fts && q.chars().count() >= 3 {
+    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if fts
+        && q.chars().count() >= 3
+    {
         (
             "SELECT e.id, e.canonical_path, e.display_name, e.entry_kind, e.modified_at, e.is_offline
              FROM system_search_entries e
@@ -195,7 +196,8 @@ pub fn query_local_index(
                CASE WHEN display_name LIKE ?2 ESCAPE '\\' COLLATE NOCASE THEN 100
                     WHEN display_name LIKE ?3 ESCAPE '\\' COLLATE NOCASE THEN 60
                     ELSE 30 END DESC
-             LIMIT ?4".to_string(),
+             LIMIT ?4"
+                .to_string(),
             vec![
                 Box::new(like.clone()),
                 Box::new(format!("{}%", escape_like(q))),
@@ -222,7 +224,8 @@ pub fn query_local_index(
                CASE WHEN display_name LIKE ?2 ESCAPE '\\' COLLATE NOCASE THEN 100
                     WHEN display_name LIKE ?3 ESCAPE '\\' COLLATE NOCASE THEN 60
                     ELSE 30 END DESC
-             LIMIT ?4".to_string(),
+             LIMIT ?4"
+                .to_string(),
             vec![
                 Box::new(like.clone()),
                 Box::new(format!("{}%", escape_like(q))),
@@ -243,8 +246,10 @@ fn run_local_query(
     q: &str,
 ) -> rusqlite::Result<Vec<GlobalSearchHit>> {
     let mut stmt = conn.prepare(sql)?;
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> =
-        params.iter().map(|b| b.as_ref() as &dyn rusqlite::types::ToSql).collect();
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params
+        .iter()
+        .map(|b| b.as_ref() as &dyn rusqlite::types::ToSql)
+        .collect();
     let rows = stmt.query_map(param_refs.as_slice(), |row| row_to_hit(row, q))?;
     let mut out = Vec::new();
     for r in rows {
@@ -324,8 +329,14 @@ mod tests {
 
     #[test]
     fn canonical_path_is_case_insensitive() {
-        assert_eq!(canonical_key("C:\\Users\\A\\File.Txt"), canonical_key("c:\\users\\a\\file.txt"));
-        assert_eq!(canonical_key("D:/Docs/报告.pdf"), canonical_key("d:\\docs\\报告.pdf"));
+        assert_eq!(
+            canonical_key("C:\\Users\\A\\File.Txt"),
+            canonical_key("c:\\users\\a\\file.txt")
+        );
+        assert_eq!(
+            canonical_key("D:/Docs/报告.pdf"),
+            canonical_key("d:\\docs\\报告.pdf")
+        );
     }
 
     #[test]
@@ -357,7 +368,10 @@ mod tests {
             hit("k1", "file", "report.pdf", 2, "local_index"),
         ];
         sort_hits(&mut hits);
-        assert_eq!(hits[0].key, "k2", "同分时 my_report.pdf 应排在 report.pdf 前");
+        assert_eq!(
+            hits[0].key, "k2",
+            "同分时 my_report.pdf 应排在 report.pdf 前"
+        );
     }
 
     #[test]
@@ -382,7 +396,10 @@ mod tests {
         ];
         dedup_hits(&mut hits);
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].source, "windows", "同分时更权威的 windows 应替换 local_index");
+        assert_eq!(
+            hits[0].source, "windows",
+            "同分时更权威的 windows 应替换 local_index"
+        );
     }
 
     #[test]
@@ -421,7 +438,9 @@ mod tests {
         )
         .unwrap();
         let id: i64 = conn
-            .query_row("SELECT id FROM system_search_entries LIMIT 1", [], |r| r.get(0))
+            .query_row("SELECT id FROM system_search_entries LIMIT 1", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         fts_sync_upsert(&conn, id, "季度报告.docx", "c:\\docs\\季度报告.docx");
         // 3 字符以上查询应走 FTS 分支且命中
@@ -442,7 +461,9 @@ mod tests {
         )
         .unwrap();
         let id: i64 = conn
-            .query_row("SELECT id FROM system_search_entries LIMIT 1", [], |r| r.get(0))
+            .query_row("SELECT id FROM system_search_entries LIMIT 1", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         fts_sync_upsert(&conn, id, "100%完成率.png", "c:\\x\\100%完成率.png");
         // 含 % 的查询在 FTS MATCH 中会报语法错误，应降级 LIKE 而非整体 Err
@@ -462,12 +483,15 @@ mod tests {
         )
         .unwrap();
         let id: i64 = conn
-            .query_row("SELECT id FROM system_search_entries LIMIT 1", [], |r| r.get(0))
+            .query_row("SELECT id FROM system_search_entries LIMIT 1", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         fts_sync_upsert(&conn, id, "已删除.txt", "c:\\docs\\已删除.txt");
         assert_eq!(query_local_index(&conn, "已删除", 10).unwrap().len(), 1);
         // 删除基础记录后，即使 FTS 残留行存在，JOIN 也应自然过滤
-        conn.execute("DELETE FROM system_search_entries WHERE id=?1", [id]).unwrap();
+        conn.execute("DELETE FROM system_search_entries WHERE id=?1", [id])
+            .unwrap();
         assert_eq!(query_local_index(&conn, "已删除", 10).unwrap().len(), 0);
         // 显式调用 fts_sync_delete 后 FTS 表不再有残留
         fts_sync_delete(&conn, id);

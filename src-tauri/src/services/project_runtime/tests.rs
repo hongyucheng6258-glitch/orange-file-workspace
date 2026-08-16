@@ -65,7 +65,11 @@ fn parent_exit_waits_until_job_children_finish() {
     // 等待一小段时间，确认不会提前终态。
     std::thread::sleep(Duration::from_millis(400));
     let mid = manager.get_run(&snap.run_id).unwrap();
-    assert_eq!(mid.state, RunState::Running, "主进程退出但子进程存活时不得终态");
+    assert_eq!(
+        mid.state,
+        RunState::Running,
+        "主进程退出但子进程存活时不得终态"
+    );
     // 子进程随后退出 → 整个进程树空闲，才进入终态。
     api.job_children_active.store(false, Ordering::SeqCst);
     assert!(wait_until(
@@ -428,7 +432,9 @@ fn exited_event_fires_after_output_drained() {
     // exited 到达时，最后一批输出必须已进入事件总线。
     let outputs = sink.outputs();
     assert!(
-        outputs.iter().any(|o| o.text.contains("last line before exit")),
+        outputs
+            .iter()
+            .any(|o| o.text.contains("last line before exit")),
         "终态事件到达时输出必须已排空，实际输出: {:?}",
         outputs
     );

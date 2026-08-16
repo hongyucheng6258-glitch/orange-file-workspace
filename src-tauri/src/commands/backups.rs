@@ -1,9 +1,9 @@
 use rusqlite::OptionalExtension;
 use tauri::State;
 
-use crate::AppState;
 use crate::ipc::CommandResult;
 use crate::services::backup_service;
+use crate::AppState;
 
 /// 创建备份。include_files=true 时包含托管文件（完整备份）。
 #[tauri::command]
@@ -77,9 +77,11 @@ pub fn validate_backup(
 ) -> CommandResult<serde_json::Value> {
     let conn = state.conn.lock().expect("db lock");
     let path: String = conn
-        .query_row("SELECT path FROM backup_records WHERE id = ?1", [&backup_id], |r| {
-            r.get(0)
-        })
+        .query_row(
+            "SELECT path FROM backup_records WHERE id = ?1",
+            [&backup_id],
+            |r| r.get(0),
+        )
         .optional()?
         .ok_or_else(|| crate::error::AppError::new("not_found", "备份不存在"))?;
     drop(conn);

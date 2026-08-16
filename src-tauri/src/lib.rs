@@ -59,9 +59,7 @@ struct AppConfig {
 fn resolve_data_dir(default_dir: &std::path::Path, config_path: &std::path::Path) -> PathBuf {
     let cfg = std::fs::read(config_path)
         .ok()
-        .and_then(|buf| {
-            serde_json::from_str::<AppConfig>(&String::from_utf8_lossy(&buf)).ok()
-        });
+        .and_then(|buf| serde_json::from_str::<AppConfig>(&String::from_utf8_lossy(&buf)).ok());
     cfg.and_then(|c| c.data_dir.map(PathBuf::from))
         .unwrap_or_else(|| default_dir.to_path_buf())
 }
@@ -116,9 +114,9 @@ pub fn run() {
             }
             // 项目运行管理器：确认协议 + 进程生命周期 + 日志 + 运行历史。
             // 历史存储使用独立连接（WAL 支持多连接并发读写）。
-            let history_store = Arc::new(services::run_history::SqliteRunHistoryStore::new(
-                open(&db_path)?,
-            ));
+            let history_store = Arc::new(services::run_history::SqliteRunHistoryStore::new(open(
+                &db_path,
+            )?));
             let runtime_manager = Arc::new(services::project_runtime::RuntimeManager::new(
                 Arc::new(services::process_api::Win32ProcessApiImpl),
                 Arc::new(commands::project_runtime::AppRunEventSink::new(
@@ -174,8 +172,11 @@ pub fn run() {
                             .lock()
                             .expect("data dir lock")
                             .clone();
-                        if let Ok(mut conn) = crate::db::connection::open(&data_dir.join("workspace.db")) {
-                            let _ = crate::services::app_index::rebuild_app_index(&mut conn, &entries);
+                        if let Ok(mut conn) =
+                            crate::db::connection::open(&data_dir.join("workspace.db"))
+                        {
+                            let _ =
+                                crate::services::app_index::rebuild_app_index(&mut conn, &entries);
                         }
                     }
                 });

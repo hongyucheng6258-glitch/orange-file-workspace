@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 use rusqlite::{params, OptionalExtension};
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::AppState;
 use crate::db::connection::now_unix;
 use crate::db::models::{new_id, ResourceKind, SourceType};
 use crate::error::AppError;
@@ -12,6 +11,7 @@ use crate::events::EVENT_TASK_PROGRESS;
 use crate::services::file_service as fsutil;
 use crate::services::settings_service;
 use crate::services::task_service as tasks;
+use crate::AppState;
 
 /// 导入时需要跳过的目录（项目依赖、构建产物和缓存）。
 const SKIP_DIRS: &[&str] = &[
@@ -99,7 +99,15 @@ fn collect_imports(
         }
         let path = resolve_shortcut(&path);
         if path.is_dir() {
-            collect_tree(&path, managed_root, mode, parent_id.clone(), ignore_rules, out, failures);
+            collect_tree(
+                &path,
+                managed_root,
+                mode,
+                parent_id.clone(),
+                ignore_rules,
+                out,
+                failures,
+            );
         } else if path.is_file() {
             if is_ignored(&path, ignore_rules) {
                 continue;
@@ -125,7 +133,14 @@ fn repair_gbk_path(s: &str) -> Option<String> {
 
     let bytes = s.as_bytes();
     let mut wide = vec![0u16; bytes.len() + 2];
-    let written = unsafe { MultiByteToWideChar(936, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), bytes, Some(&mut wide)) };
+    let written = unsafe {
+        MultiByteToWideChar(
+            936,
+            MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0),
+            bytes,
+            Some(&mut wide),
+        )
+    };
     if written <= 0 {
         return None;
     }
@@ -148,7 +163,10 @@ fn resolve_lnk_target(path: &Path) -> Option<PathBuf> {
     use std::io::Read;
 
     let mut data = Vec::new();
-    std::fs::File::open(path).ok()?.read_to_end(&mut data).ok()?;
+    std::fs::File::open(path)
+        .ok()?
+        .read_to_end(&mut data)
+        .ok()?;
     if data.len() < 0x4C || data[0..4] != [0x4C, 0x00, 0x00, 0x00] {
         return None;
     }
@@ -234,11 +252,7 @@ pub fn start_import(app: AppHandle, task_id: String, req: ImportRequest) {
     });
 }
 
-fn run_import(
-    app: &AppHandle,
-    task_id: &str,
-    req: &ImportRequest,
-) -> Result<(), AppError> {
+fn run_import(app: &AppHandle, task_id: &str, req: &ImportRequest) -> Result<(), AppError> {
     let state = app.state::<AppState>();
 
     let managed_root = state.managed_dir.lock().expect("dir lock").clone();
@@ -373,15 +387,13 @@ fn collect_tree(
     }
 
     let (path, canonical) = match mode {
-        SourceType::Managed => {
-            match fsutil::normalize_path(&dest_dir) {
-                Ok(n) => (n.clone(), fsutil::canonical_path_key(&n)),
-                Err(e) => {
-                    failures.push((node.to_path_buf(), e.to_string()));
-                    return;
-                }
+        SourceType::Managed => match fsutil::normalize_path(&dest_dir) {
+            Ok(n) => (n.clone(), fsutil::canonical_path_key(&n)),
+            Err(e) => {
+                failures.push((node.to_path_buf(), e.to_string()));
+                return;
             }
-        }
+        },
         SourceType::External => match fsutil::normalize_path(node) {
             Ok(n) => (n.clone(), fsutil::canonical_path_key(&n)),
             Err(e) => {
@@ -422,7 +434,15 @@ fn collect_tree(
             continue;
         }
         if ft.is_dir() {
-            collect_tree(&p, &dest_dir, mode, Some(dir_id.clone()), ignore_rules, out, failures);
+            collect_tree(
+                &p,
+                &dest_dir,
+                mode,
+                Some(dir_id.clone()),
+                ignore_rules,
+                out,
+                failures,
+            );
         } else if ft.is_file() {
             match build_file(&p, &dest_dir, mode, Some(dir_id.clone())) {
                 Ok(item) => out.push(item),
@@ -632,7 +652,13 @@ fn record_failure(state: &AppState, task_id: &str, src: &Path, message: &str) {
     let _ = conn.execute(
         "INSERT INTO task_items (id, task_id, source_path, status, error_message, updated_at)
          VALUES (?1, ?2, ?3, 'failed', ?4, ?5)",
-        params![new_id(), task_id, src.to_string_lossy(), message, now_unix()],
+        params![
+            new_id(),
+            task_id,
+            src.to_string_lossy(),
+            message,
+            now_unix()
+        ],
     );
 }
 
@@ -664,8 +690,7 @@ pub fn is_ignored(path: &Path, rules: &[settings_service::IgnoreRule]) -> bool {
         let pat = rule.pattern.to_lowercase();
         let matched = match rule.kind.as_str() {
             "name" => {
-                name == pat
-                    || (pat.ends_with('*') && name.starts_with(&pat.trim_end_matches('*')))
+                name == pat || (pat.ends_with('*') && name.starts_with(&pat.trim_end_matches('*')))
             }
             _ => path_lower.contains(&pat),
         };
@@ -717,7 +742,15 @@ mod tests {
         let managed = temp_dir("mroot");
         let mut pending = Vec::new();
         let mut failures = Vec::new();
-        collect_tree(&root, &managed, SourceType::External, None, &[], &mut pending, &mut failures);
+        collect_tree(
+            &root,
+            &managed,
+            SourceType::External,
+            None,
+            &[],
+            &mut pending,
+            &mut failures,
+        );
 
         assert!(failures.is_empty(), "failures: {failures:?}");
 
@@ -726,7 +759,12 @@ mod tests {
             .iter()
             .filter(|p| p.kind == ResourceKind::Folder)
             .collect();
-        assert_eq!(folders.len(), 3, "folders: {:?}", folders.iter().map(|f| &f.name).collect::<Vec<_>>());
+        assert_eq!(
+            folders.len(),
+            3,
+            "folders: {:?}",
+            folders.iter().map(|f| &f.name).collect::<Vec<_>>()
+        );
 
         // 文件：src/main.rs、src/sub/lib.rs、Cargo.toml（跳过 node_modules）
         let files: Vec<&PendingImport> = pending
@@ -736,9 +774,15 @@ mod tests {
         assert_eq!(files.len(), 3);
 
         // 层级：src 下的文件挂到 src 目录资源
-        let src_dir = folders.iter().find(|f| f.name == "src").expect("src folder");
+        let src_dir = folders
+            .iter()
+            .find(|f| f.name == "src")
+            .expect("src folder");
         let main_rs = files.iter().find(|f| f.name == "main.rs").expect("main.rs");
-        assert_eq!(main_rs.parent_id.as_deref(), Some(src_dir.resource_id.as_str()));
+        assert_eq!(
+            main_rs.parent_id.as_deref(),
+            Some(src_dir.resource_id.as_str())
+        );
 
         // 忽略目录不出现
         assert!(
@@ -774,12 +818,23 @@ mod tests {
         let managed = temp_dir("mroot");
         let mut pending = Vec::new();
         let mut failures = Vec::new();
-        collect_tree(&root, &managed, SourceType::Managed, None, &[], &mut pending, &mut failures);
+        collect_tree(
+            &root,
+            &managed,
+            SourceType::Managed,
+            None,
+            &[],
+            &mut pending,
+            &mut failures,
+        );
 
         assert!(failures.is_empty(), "failures: {failures:?}");
 
         // managed 目录被镜像创建
-        assert!(managed.join(root.file_name().unwrap()).join("docs").is_dir());
+        assert!(managed
+            .join(root.file_name().unwrap())
+            .join("docs")
+            .is_dir());
         let file = pending
             .iter()
             .find(|p| p.kind == ResourceKind::File)
@@ -810,7 +865,7 @@ mod tests {
         v.extend_from_slice(&[0u8; 2]); // Reserved1
         v.extend_from_slice(&[0u8; 4]); // Reserved2
         v.extend_from_slice(&[0u8; 4]); // Reserved3
-        // LinkInfo
+                                        // LinkInfo
         let mut vol_id: Vec<u8> = Vec::new();
         vol_id.extend_from_slice(&0x10u32.to_le_bytes()); // VolumeIDSize
         vol_id.extend_from_slice(&0u32.to_le_bytes()); // DriveType
@@ -881,7 +936,12 @@ mod tests {
             .iter()
             .filter(|p| p.kind == ResourceKind::Folder)
             .collect();
-        assert_eq!(folders.len(), 2, "top folder + docs: {:?}", folders.iter().map(|f| &f.name).collect::<Vec<_>>());
+        assert_eq!(
+            folders.len(),
+            2,
+            "top folder + docs: {:?}",
+            folders.iter().map(|f| &f.name).collect::<Vec<_>>()
+        );
         let files: Vec<&PendingImport> = pending
             .iter()
             .filter(|p| p.kind == ResourceKind::File)
@@ -946,12 +1006,18 @@ mod tests {
 
         assert!(failures.is_empty(), "failures: {failures:?}");
         assert_eq!(
-            pending.iter().filter(|p| p.kind == ResourceKind::File).count(),
+            pending
+                .iter()
+                .filter(|p| p.kind == ResourceKind::File)
+                .count(),
             1,
             "mojibake 路径应被修复并导入目录内容"
         );
         assert_eq!(
-            pending.iter().filter(|p| p.kind == ResourceKind::Folder).count(),
+            pending
+                .iter()
+                .filter(|p| p.kind == ResourceKind::Folder)
+                .count(),
             1,
             "顶层文件夹应被收集"
         );
@@ -971,7 +1037,15 @@ mod tests {
         let managed = temp_dir("mroot");
         let mut pending = Vec::new();
         let mut failures = Vec::new();
-        collect_tree(&root, &managed, SourceType::External, None, &[], &mut pending, &mut failures);
+        collect_tree(
+            &root,
+            &managed,
+            SourceType::External,
+            None,
+            &[],
+            &mut pending,
+            &mut failures,
+        );
         assert!(failures.is_empty(), "failures: {failures:?}");
 
         let mut conn = rusqlite::Connection::open_in_memory().expect("db");
@@ -1004,7 +1078,11 @@ mod tests {
             .unwrap()
             .collect::<rusqlite::Result<_>>()
             .expect("children");
-        assert_eq!(children, vec!["b.txt".to_string(), "docs".to_string()], "top folder children");
+        assert_eq!(
+            children,
+            vec!["b.txt".to_string(), "docs".to_string()],
+            "top folder children"
+        );
 
         // docs 子文件夹下应有 a.txt
         let docs_id: String = conn
@@ -1068,7 +1146,11 @@ mod tests {
         flush_batch(&mut conn, &batch, false).expect("flush");
 
         let fc: i64 = conn
-            .query_row("SELECT COUNT(*) FROM resources WHERE kind = 'folder'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM resources WHERE kind = 'folder'",
+                [],
+                |r| r.get(0),
+            )
             .expect("count");
         assert_eq!(fc, 1);
         let rc: i64 = conn
@@ -1086,7 +1168,9 @@ mod tests {
 
         // 父子关系正确
         let parent: Option<String> = conn
-            .query_row("SELECT parent_id FROM resources WHERE id = 'r1'", [], |r| r.get(0))
+            .query_row("SELECT parent_id FROM resources WHERE id = 'r1'", [], |r| {
+                r.get(0)
+            })
             .expect("parent");
         assert_eq!(parent.as_deref(), Some("f1"));
     }
@@ -1187,17 +1271,31 @@ mod tests {
 
         // folder 只有一个，新文件挂到原 folder 下，无 FK 错误
         let folder_count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM resources WHERE kind = 'folder'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM resources WHERE kind = 'folder'",
+                [],
+                |r| r.get(0),
+            )
             .expect("count");
         assert_eq!(folder_count, 1, "folder must not be duplicated");
         let file_count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM resources WHERE kind = 'file'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM resources WHERE kind = 'file'",
+                [],
+                |r| r.get(0),
+            )
             .expect("count");
         assert_eq!(file_count, 2);
         let parent: Option<String> = conn
-            .query_row("SELECT parent_id FROM resources WHERE id = 'r2'", [], |r| r.get(0))
+            .query_row("SELECT parent_id FROM resources WHERE id = 'r2'", [], |r| {
+                r.get(0)
+            })
             .expect("parent");
-        assert_eq!(parent.as_deref(), Some("f1"), "new file must attach to existing folder");
+        assert_eq!(
+            parent.as_deref(),
+            Some("f1"),
+            "new file must attach to existing folder"
+        );
     }
 
     #[test]
@@ -1265,17 +1363,31 @@ mod tests {
             .unwrap()
             .collect::<rusqlite::Result<_>>()
             .expect("roots");
-        assert_eq!(visible, vec!["dir".to_string()], "recreated folder visible at root");
+        assert_eq!(
+            visible,
+            vec!["dir".to_string()],
+            "recreated folder visible at root"
+        );
 
         let d2_deleted: i64 = conn
-            .query_row("SELECT is_deleted FROM resources WHERE id = 'd2'", [], |r| r.get(0))
+            .query_row(
+                "SELECT is_deleted FROM resources WHERE id = 'd2'",
+                [],
+                |r| r.get(0),
+            )
             .expect("d2");
         assert_eq!(d2_deleted, 0, "new folder must not be trashed");
 
         let parent: Option<String> = conn
-            .query_row("SELECT parent_id FROM resources WHERE id = 'r2'", [], |r| r.get(0))
+            .query_row("SELECT parent_id FROM resources WHERE id = 'r2'", [], |r| {
+                r.get(0)
+            })
             .expect("parent");
-        assert_eq!(parent.as_deref(), Some("d2"), "file must attach to recreated folder");
+        assert_eq!(
+            parent.as_deref(),
+            Some("d2"),
+            "file must attach to recreated folder"
+        );
     }
 
     #[test]
@@ -1285,20 +1397,21 @@ mod tests {
         crate::db::migrations::run_migrations(&mut conn).expect("migrations");
 
         let now = now_unix();
-        let mk_folder = |id: &str, name: &str, parent: Option<&str>, canonical: &str| PendingImport {
-            resource_id: id.to_string(),
-            kind: ResourceKind::Folder,
-            name: name.to_string(),
-            parent_id: parent.map(|p| p.to_string()),
-            mode: SourceType::External,
-            path: canonical.to_string(),
-            canonical: canonical.to_string(),
-            size: 0,
-            modified: Some(now),
-            extension: None,
-            mime: None,
-            now,
-        };
+        let mk_folder =
+            |id: &str, name: &str, parent: Option<&str>, canonical: &str| PendingImport {
+                resource_id: id.to_string(),
+                kind: ResourceKind::Folder,
+                name: name.to_string(),
+                parent_id: parent.map(|p| p.to_string()),
+                mode: SourceType::External,
+                path: canonical.to_string(),
+                canonical: canonical.to_string(),
+                size: 0,
+                modified: Some(now),
+                extension: None,
+                mime: None,
+                now,
+            };
         let mk_file = |id: &str, parent: &str, canonical: &str| PendingImport {
             resource_id: id.to_string(),
             kind: ResourceKind::File,
@@ -1346,15 +1459,27 @@ mod tests {
 
         // 子目录必须重建并挂到新 dir 下，而不是复用到已删除祖先下的旧 sub。
         let s2_parent: Option<String> = conn
-            .query_row("SELECT parent_id FROM resources WHERE id = 's2'", [], |r| r.get(0))
+            .query_row("SELECT parent_id FROM resources WHERE id = 's2'", [], |r| {
+                r.get(0)
+            })
             .expect("s2 parent");
-        assert_eq!(s2_parent.as_deref(), Some("d2"), "subfolder must attach to recreated dir");
+        assert_eq!(
+            s2_parent.as_deref(),
+            Some("d2"),
+            "subfolder must attach to recreated dir"
+        );
 
         // 文件挂到新 sub 下。
         let r2_parent: Option<String> = conn
-            .query_row("SELECT parent_id FROM resources WHERE id = 'r2'", [], |r| r.get(0))
+            .query_row("SELECT parent_id FROM resources WHERE id = 'r2'", [], |r| {
+                r.get(0)
+            })
             .expect("r2 parent");
-        assert_eq!(r2_parent.as_deref(), Some("s2"), "file must attach to recreated sub");
+        assert_eq!(
+            r2_parent.as_deref(),
+            Some("s2"),
+            "file must attach to recreated sub"
+        );
 
         // 新树整体可见：从根出发能查到 dir -> sub -> a.txt。
         let leaf: i64 = conn
@@ -1378,20 +1503,21 @@ mod tests {
         crate::db::migrations::run_migrations(&mut conn).expect("migrations");
 
         let now = now_unix();
-        let mk_folder = |id: &str, name: &str, parent: Option<&str>, canonical: &str| PendingImport {
-            resource_id: id.to_string(),
-            kind: ResourceKind::Folder,
-            name: name.to_string(),
-            parent_id: parent.map(|p| p.to_string()),
-            mode: SourceType::External,
-            path: canonical.to_string(),
-            canonical: canonical.to_string(),
-            size: 0,
-            modified: Some(now),
-            extension: None,
-            mime: None,
-            now,
-        };
+        let mk_folder =
+            |id: &str, name: &str, parent: Option<&str>, canonical: &str| PendingImport {
+                resource_id: id.to_string(),
+                kind: ResourceKind::Folder,
+                name: name.to_string(),
+                parent_id: parent.map(|p| p.to_string()),
+                mode: SourceType::External,
+                path: canonical.to_string(),
+                canonical: canonical.to_string(),
+                size: 0,
+                modified: Some(now),
+                extension: None,
+                mime: None,
+                now,
+            };
         let mk_file = |id: &str, parent: &str, canonical: &str| PendingImport {
             resource_id: id.to_string(),
             kind: ResourceKind::File,
@@ -1441,9 +1567,15 @@ mod tests {
 
         // 文件 r2 必须重建并挂到新 sub 下，而不是被复用跳过。
         let r2_parent: Option<String> = conn
-            .query_row("SELECT parent_id FROM resources WHERE id = 'r2'", [], |r| r.get(0))
+            .query_row("SELECT parent_id FROM resources WHERE id = 'r2'", [], |r| {
+                r.get(0)
+            })
             .expect("r2 parent");
-        assert_eq!(r2_parent.as_deref(), Some("s2"), "file must attach to recreated sub");
+        assert_eq!(
+            r2_parent.as_deref(),
+            Some("s2"),
+            "file must attach to recreated sub"
+        );
 
         // 新树整体可见：从根出发能查到 dir -> sub -> a.txt。
         let visible: i64 = conn
@@ -1476,15 +1608,39 @@ mod tests {
             if std::os::windows::fs::symlink_dir(&root, &link).is_ok()
                 && std::fs::symlink_metadata(&link).is_ok()
             {
-                collect_tree(&root, &managed, SourceType::External, None, &[], &mut pending, &mut failures);
+                collect_tree(
+                    &root,
+                    &managed,
+                    SourceType::External,
+                    None,
+                    &[],
+                    &mut pending,
+                    &mut failures,
+                );
                 // 若循环被跟随会无限递归/栈溢出；此处只应收集真实目录与文件
-                assert!(pending.len() < 100, "symlink loop must not explode, got {}", pending.len());
+                assert!(
+                    pending.len() < 100,
+                    "symlink loop must not explode, got {}",
+                    pending.len()
+                );
             }
         }
         #[cfg(not(windows))]
         {
-            collect_tree(&root, &managed, SourceType::External, None, &[], &mut pending, &mut failures);
-            assert!(pending.len() < 100, "symlink loop must not explode, got {}", pending.len());
+            collect_tree(
+                &root,
+                &managed,
+                SourceType::External,
+                None,
+                &[],
+                &mut pending,
+                &mut failures,
+            );
+            assert!(
+                pending.len() < 100,
+                "symlink loop must not explode, got {}",
+                pending.len()
+            );
         }
 
         let _ = std::fs::remove_dir_all(&root);

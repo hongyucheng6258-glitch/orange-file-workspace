@@ -52,7 +52,11 @@ pub fn record_command(
 }
 
 /// 查询某 Shell 的历史，按时间倒序返回最近 `limit` 条。
-pub fn list_history(conn: &Connection, shell: &str, limit: usize) -> Result<Vec<TerminalHistoryEntry>, AppError> {
+pub fn list_history(
+    conn: &Connection,
+    shell: &str,
+    limit: usize,
+) -> Result<Vec<TerminalHistoryEntry>, AppError> {
     let limit = limit.clamp(1, 500) as i64;
     let mut stmt = conn.prepare(
         "SELECT id, shell, command, cwd, created_at

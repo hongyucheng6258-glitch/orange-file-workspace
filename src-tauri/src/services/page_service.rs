@@ -104,17 +104,14 @@ pub fn list_pages(conn: &Connection, parent_id: Option<&str>) -> SqliteResult<Ve
            AND ((?1 IS NULL AND parent_id IS NULL) OR parent_id = ?1)
          ORDER BY name COLLATE NOCASE ASC",
     )?;
-    let rows = stmt.query_map([parent_id], |row| {
-        crate::db::models::resource_from_row(row)
-    })?;
+    let rows = stmt.query_map([parent_id], |row| crate::db::models::resource_from_row(row))?;
     rows.collect()
 }
 
 /// 读取页面的全部块（含子块）。
 pub fn list_all_blocks(conn: &Connection, page_id: &str) -> SqliteResult<Vec<PageBlock>> {
-    let mut stmt = conn.prepare(
-        "SELECT * FROM page_blocks WHERE page_id = ?1 ORDER BY block_order ASC",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM page_blocks WHERE page_id = ?1 ORDER BY block_order ASC")?;
     let rows = stmt.query_map([page_id], page_block_from_row)?;
     rows.collect()
 }

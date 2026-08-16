@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
-use crate::AppState;
 use crate::db::connection::now_unix;
 use crate::db::models::{Resource, ResourceKind, ResourceLocation, SourceType};
 use crate::db::repositories as repo;
@@ -11,6 +10,7 @@ use crate::error::AppError;
 use crate::events::*;
 use crate::ipc::CommandResult;
 use crate::services::file_service as fsutil;
+use crate::AppState;
 
 fn lock_db<'a>(state: &'a AppState) -> std::sync::MutexGuard<'a, rusqlite::Connection> {
     state.conn.lock().expect("db lock poisoned")
@@ -48,9 +48,8 @@ pub fn list_children(
 #[tauri::command]
 pub fn get_resource(state: State<AppState>, id: String) -> CommandResult<serde_json::Value> {
     let conn = lock_db(&state);
-    let resource = repo::get_resource(&conn, &id)?.ok_or_else(|| {
-        AppError::new("not_found", format!("资源 {id} 不存在"))
-    })?;
+    let resource = repo::get_resource(&conn, &id)?
+        .ok_or_else(|| AppError::new("not_found", format!("资源 {id} 不存在")))?;
     let locations = repo::list_locations(&conn, &id)?;
     Ok(serde_json::json!({
         "resource": resource,
@@ -123,9 +122,8 @@ pub fn rename_resource(
 
     let conn = lock_db(&state);
     let now = now_unix();
-    let _resource = repo::get_resource(&conn, &id)?.ok_or_else(|| {
-        AppError::new("not_found", format!("资源 {id} 不存在"))
-    })?;
+    let _resource = repo::get_resource(&conn, &id)?
+        .ok_or_else(|| AppError::new("not_found", format!("资源 {id} 不存在")))?;
 
     let locations = repo::list_locations(&conn, &id)?;
     if let Some(loc) = locations.first() {
@@ -186,9 +184,8 @@ pub fn move_resource(
         }
     }
 
-    let resource = repo::get_resource(&conn, &id)?.ok_or_else(|| {
-        AppError::new("not_found", format!("资源 {id} 不存在"))
-    })?;
+    let resource = repo::get_resource(&conn, &id)?
+        .ok_or_else(|| AppError::new("not_found", format!("资源 {id} 不存在")))?;
     let locations = repo::list_locations(&conn, &id)?;
 
     if let Some(loc) = locations.first() {
@@ -255,18 +252,20 @@ pub fn trash_resources(
 
 /// 从回收站恢复。原父目录不存在时恢复到根目录。
 #[tauri::command]
-pub fn restore_resource(state: State<AppState>, app: AppHandle, id: String) -> CommandResult<Resource> {
+pub fn restore_resource(
+    state: State<AppState>,
+    app: AppHandle,
+    id: String,
+) -> CommandResult<Resource> {
     let conn = lock_db(&state);
     let now = now_unix();
-    let resource = repo::get_resource(&conn, &id)?.ok_or_else(|| {
-        AppError::new("not_found", format!("资源 {id} 不存在"))
-    })?;
+    let resource = repo::get_resource(&conn, &id)?
+        .ok_or_else(|| AppError::new("not_found", format!("资源 {id} 不存在")))?;
 
     let mut target_parent = resource.parent_id.clone();
     if let Some(pid) = &resource.parent_id {
-        let parent = repo::get_resource(&conn, pid)?.ok_or_else(|| {
-            AppError::new("parent_missing", "原父目录已删除")
-        })?;
+        let parent = repo::get_resource(&conn, pid)?
+            .ok_or_else(|| AppError::new("parent_missing", "原父目录已删除"))?;
         if parent.is_deleted {
             target_parent = None;
         }
@@ -339,9 +338,8 @@ pub fn get_ancestors(state: State<AppState>, id: String) -> CommandResult<Vec<Re
     let mut chain: Vec<Resource> = Vec::new();
     let mut cursor: Option<String> = repo::get_resource(&conn, &id)?.and_then(|r| r.parent_id);
     while let Some(pid) = cursor {
-        let parent = repo::get_resource(&conn, &pid)?.ok_or_else(|| {
-            AppError::new("parent_missing", format!("父资源 {pid} 不存在"))
-        })?;
+        let parent = repo::get_resource(&conn, &pid)?
+            .ok_or_else(|| AppError::new("parent_missing", format!("父资源 {pid} 不存在")))?;
         cursor = parent.parent_id.clone();
         chain.push(parent);
     }
@@ -381,7 +379,10 @@ pub fn delete_permanently(
         }
         if errors.is_empty() {
             tx.execute("DELETE FROM file_metadata WHERE resource_id = ?1", [id])?;
-            tx.execute("DELETE FROM resource_locations WHERE resource_id = ?1", [id])?;
+            tx.execute(
+                "DELETE FROM resource_locations WHERE resource_id = ?1",
+                [id],
+            )?;
             tx.execute("DELETE FROM resources WHERE id = ?1", [id])?;
             count += 1;
         }
@@ -427,9 +428,8 @@ fn resolve_parent_dir(
     parent_id: Option<&str>,
 ) -> Result<PathBuf, AppError> {
     if let Some(pid) = parent_id {
-        let parent = repo::get_resource(conn, pid)?.ok_or_else(|| {
-            AppError::new("parent_missing", format!("父目录 {pid} 不存在"))
-        })?;
+        let parent = repo::get_resource(conn, pid)?
+            .ok_or_else(|| AppError::new("parent_missing", format!("父目录 {pid} 不存在")))?;
         if parent.kind != ResourceKind::Folder {
             return Err(AppError::new("not_folder", "父资源不是文件夹"));
         }

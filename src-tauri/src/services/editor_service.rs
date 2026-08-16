@@ -37,15 +37,7 @@ pub fn open_session(
     let (size, modified) = fsutil::stat_basic(path)?;
     let now = now_unix();
 
-    let session = upsert_session(
-        conn,
-        resource_id,
-        path,
-        size,
-        modified,
-        &content,
-        now,
-    )?;
+    let session = upsert_session(conn, resource_id, path, size, modified, &content, now)?;
     Ok((content, session))
 }
 
@@ -105,7 +97,14 @@ pub fn save_session(
          SET base_path = ?2, base_size = ?3, base_modified_at = ?4,
              draft_content = ?5, is_dirty = 0, updated_at = ?6
          WHERE resource_id = ?1",
-        params![resource_id, path.to_string_lossy(), new_size, new_modified, content, now],
+        params![
+            resource_id,
+            path.to_string_lossy(),
+            new_size,
+            new_modified,
+            content,
+            now
+        ],
     )?;
 
     Ok(SaveOutcome::Saved)
@@ -195,10 +194,7 @@ pub fn list_recent_files(
     Ok(rows)
 }
 
-fn get_session(
-    conn: &Connection,
-    resource_id: &str,
-) -> SqliteResult<Option<EditorSession>> {
+fn get_session(conn: &Connection, resource_id: &str) -> SqliteResult<Option<EditorSession>> {
     conn.query_row(
         "SELECT * FROM editor_sessions WHERE resource_id = ?1",
         [resource_id],
@@ -367,7 +363,8 @@ mod tests {
     fn open_reads_full_content_beyond_preview_limit() {
         let conn = conn();
         seed_resource(&conn, "r1");
-        let path = std::env::temp_dir().join(format!("nexus-edbig-{}", crate::db::models::new_id()));
+        let path =
+            std::env::temp_dir().join(format!("nexus-edbig-{}", crate::db::models::new_id()));
         let content = vec![b'x'; 300 * 1024]; // 超过 256KiB 预览上限
         std::fs::write(&path, &content).expect("write");
 
@@ -388,7 +385,8 @@ mod tests {
     fn open_rejects_file_over_edit_limit() {
         let conn = conn();
         seed_resource(&conn, "r1");
-        let path = std::env::temp_dir().join(format!("nexus-edhuge-{}", crate::db::models::new_id()));
+        let path =
+            std::env::temp_dir().join(format!("nexus-edhuge-{}", crate::db::models::new_id()));
         std::fs::write(&path, vec![b'x'; (EDITOR_MAX_BYTES + 1) as usize]).expect("write");
 
         let err = open_session(&conn, "r1", &path).expect_err("should reject");
@@ -401,7 +399,8 @@ mod tests {
     fn save_draft_then_get_returns_content() {
         let conn = conn();
         seed_resource(&conn, "r1");
-        let path = std::env::temp_dir().join(format!("nexus-eddraft-{}", crate::db::models::new_id()));
+        let path =
+            std::env::temp_dir().join(format!("nexus-eddraft-{}", crate::db::models::new_id()));
         std::fs::write(&path, "v1").expect("write");
 
         // 无会话时 save_draft 创建会话并置 dirty

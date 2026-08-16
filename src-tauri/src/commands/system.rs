@@ -1,10 +1,10 @@
 use tauri::State;
 
 use crate::error::AppError;
-use crate::AppState;
 use crate::ipc::CommandResult;
 use crate::services::system_service;
 use crate::services::system_windows;
+use crate::AppState;
 
 /// 系统总览：设备、操作系统、CPU、内存等静态与当前状态。
 #[tauri::command]
@@ -39,7 +39,9 @@ pub fn get_processes(
 
 /// 实时快照：CPU、内存、网络速率。
 #[tauri::command]
-pub fn get_system_snapshot(state: State<AppState>) -> CommandResult<system_service::SystemSnapshot> {
+pub fn get_system_snapshot(
+    state: State<AppState>,
+) -> CommandResult<system_service::SystemSnapshot> {
     let mut sampler = state.sampler.lock().expect("sampler lock poisoned");
     Ok(system_service::collect_snapshot(&mut sampler))
 }
@@ -49,12 +51,8 @@ pub fn get_system_snapshot(state: State<AppState>) -> CommandResult<system_servi
 pub fn export_system_report(state: State<AppState>) -> CommandResult<system_service::ReportOutput> {
     let mut sampler = state.sampler.lock().expect("sampler lock poisoned");
     let data_dir = state.data_dir.lock().expect("dir lock");
-    system_service::export_report(
-        &mut sampler,
-        &data_dir,
-        env!("CARGO_PKG_VERSION"),
-    )
-    .map_err(|message| AppError::new("export_report_failed", message))
+    system_service::export_report(&mut sampler, &data_dir, env!("CARGO_PKG_VERSION"))
+        .map_err(|message| AppError::new("export_report_failed", message))
 }
 
 /// 显卡信息（DXGI + 驱动注册表）。

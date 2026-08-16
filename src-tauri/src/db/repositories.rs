@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection, OptionalExtension, Result as SqliteResult};
 
 use crate::db::models::{
-    resource_from_row, insert_resource, FileMetadata, Resource, ResourceKind, ResourceLocation,
+    insert_resource, resource_from_row, FileMetadata, Resource, ResourceKind, ResourceLocation,
     SourceType,
 };
 
@@ -13,18 +13,26 @@ pub fn list_children(
     include_deleted: bool,
 ) -> SqliteResult<Vec<Resource>> {
     let sql = match (parent_id, include_deleted) {
-        (Some(_), false) => "SELECT * FROM resources
+        (Some(_), false) => {
+            "SELECT * FROM resources
              WHERE parent_id = ?1 AND is_deleted = 0
-             ORDER BY (kind = 'folder') DESC, name COLLATE NOCASE ASC",
-        (Some(_), true) => "SELECT * FROM resources
+             ORDER BY (kind = 'folder') DESC, name COLLATE NOCASE ASC"
+        }
+        (Some(_), true) => {
+            "SELECT * FROM resources
              WHERE parent_id = ?1
-             ORDER BY name COLLATE NOCASE ASC",
-        (None, false) => "SELECT * FROM resources
+             ORDER BY name COLLATE NOCASE ASC"
+        }
+        (None, false) => {
+            "SELECT * FROM resources
              WHERE parent_id IS NULL AND is_deleted = 0
-             ORDER BY (kind = 'folder') DESC, name COLLATE NOCASE ASC",
-        (None, true) => "SELECT * FROM resources
+             ORDER BY (kind = 'folder') DESC, name COLLATE NOCASE ASC"
+        }
+        (None, true) => {
+            "SELECT * FROM resources
              WHERE parent_id IS NULL
-             ORDER BY name COLLATE NOCASE ASC",
+             ORDER BY name COLLATE NOCASE ASC"
+        }
     };
 
     let mut stmt = conn.prepare(sql)?;
@@ -107,9 +115,8 @@ pub fn delete_permanently(conn: &Connection, id: &str) -> SqliteResult<()> {
 
 /// 列出回收站中的资源。
 pub fn list_trash(conn: &Connection) -> SqliteResult<Vec<Resource>> {
-    let mut stmt = conn.prepare(
-        "SELECT * FROM resources WHERE is_deleted = 1 ORDER BY deleted_at DESC",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM resources WHERE is_deleted = 1 ORDER BY deleted_at DESC")?;
     let rows = stmt.query_map([], resource_from_row)?;
     rows.collect()
 }
@@ -151,13 +158,9 @@ pub fn upsert_location(conn: &Connection, loc: &ResourceLocation) -> SqliteResul
 }
 
 /// 获取资源的全部位置记录。
-pub fn list_locations(
-    conn: &Connection,
-    resource_id: &str,
-) -> SqliteResult<Vec<ResourceLocation>> {
-    let mut stmt = conn.prepare(
-        "SELECT * FROM resource_locations WHERE resource_id = ?1 ORDER BY created_at",
-    )?;
+pub fn list_locations(conn: &Connection, resource_id: &str) -> SqliteResult<Vec<ResourceLocation>> {
+    let mut stmt = conn
+        .prepare("SELECT * FROM resource_locations WHERE resource_id = ?1 ORDER BY created_at")?;
     let rows = stmt.query_map([resource_id], |row| {
         Ok(ResourceLocation {
             id: row.get("id")?,
@@ -293,10 +296,7 @@ pub fn get_file_metadata(
 }
 
 /// 查询缩略图缓存路径。
-pub fn get_thumbnail_path(
-    conn: &Connection,
-    resource_id: &str,
-) -> SqliteResult<Option<String>> {
+pub fn get_thumbnail_path(conn: &Connection, resource_id: &str) -> SqliteResult<Option<String>> {
     conn.query_row(
         "SELECT cache_path FROM thumbnails WHERE resource_id = ?1",
         [resource_id],

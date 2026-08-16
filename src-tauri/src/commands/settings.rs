@@ -1,9 +1,9 @@
 use serde_json::Value;
 use tauri::State;
 
-use crate::AppState;
 use crate::ipc::CommandResult;
 use crate::services::settings_service::{self, AppSettings};
+use crate::AppState;
 
 fn lock_db<'a>(state: &'a AppState) -> std::sync::MutexGuard<'a, rusqlite::Connection> {
     state.conn.lock().expect("db lock poisoned")

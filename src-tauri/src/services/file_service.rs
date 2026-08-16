@@ -52,9 +52,9 @@ pub fn infer_mime(path: &Path) -> Option<String> {
         "md" | "markdown" => "text/markdown",
         "txt" => "text/plain",
         "log" => "text/plain",
-        "rs" | "py" | "js" | "ts" | "tsx" | "jsx" | "go" | "java" | "c" | "h" | "cpp"
-        | "hpp" | "cs" | "rb" | "php" | "swift" | "kt" | "toml" | "yaml" | "yml" | "sh"
-        | "sql" | "vue" | "svelte" | "jsonc" => "text/plain",
+        "rs" | "py" | "js" | "ts" | "tsx" | "jsx" | "go" | "java" | "c" | "h" | "cpp" | "hpp"
+        | "cs" | "rb" | "php" | "swift" | "kt" | "toml" | "yaml" | "yml" | "sh" | "sql" | "vue"
+        | "svelte" | "jsonc" => "text/plain",
         "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -114,18 +114,12 @@ mod tests {
 
     #[test]
     fn mime_inference() {
-        assert_eq!(
-            infer_mime(Path::new("a.png")).as_deref(),
-            Some("image/png")
-        );
+        assert_eq!(infer_mime(Path::new("a.png")).as_deref(), Some("image/png"));
         assert_eq!(
             infer_mime(Path::new("b.PDF")).as_deref(),
             Some("application/pdf")
         );
-        assert_eq!(
-            infer_mime(Path::new("c.rs")).as_deref(),
-            Some("text/plain")
-        );
+        assert_eq!(infer_mime(Path::new("c.rs")).as_deref(), Some("text/plain"));
         assert_eq!(infer_mime(Path::new("d.unknown_ext")), None);
     }
 

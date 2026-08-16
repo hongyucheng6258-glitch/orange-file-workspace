@@ -4,11 +4,11 @@ use std::time::Duration;
 use rusqlite::backup::Backup;
 use rusqlite::{params, Connection, OptionalExtension};
 
-use crate::AppState;
 use crate::db::connection::now_unix;
 use crate::db::models::new_id;
 use crate::error::AppError;
 use crate::services::settings_service;
+use crate::AppState;
 
 /// 自动备份最后执行时间键（app_settings）。
 pub const KEY_LAST_RUN_TS: &str = "backup.last_run_ts";
@@ -74,7 +74,11 @@ pub fn create_backup(
     let record = crate::db::models::BackupRecord {
         id: new_id(),
         path: backup_dir.to_string_lossy().to_string(),
-        backup_type: if include_files { "full".into() } else { "metadata".into() },
+        backup_type: if include_files {
+            "full".into()
+        } else {
+            "metadata".into()
+        },
         database_version: crate::db::migrations::MIGRATIONS
             .last()
             .map(|m| m.version)
@@ -142,9 +146,11 @@ pub fn validate_backup(backup_dir: &Path) -> Result<serde_json::Value, AppError>
 pub fn delete_backup(state: &AppState, backup_id: &str) -> Result<(), AppError> {
     let conn = state.conn.lock().expect("db lock");
     let path: Option<String> = conn
-        .query_row("SELECT path FROM backup_records WHERE id = ?1", [backup_id], |r| {
-            r.get(0)
-        })
+        .query_row(
+            "SELECT path FROM backup_records WHERE id = ?1",
+            [backup_id],
+            |r| r.get(0),
+        )
         .optional()?;
     conn.execute("DELETE FROM backup_records WHERE id = ?1", [backup_id])?;
     drop(conn);
@@ -161,9 +167,11 @@ pub fn delete_backup(state: &AppState, backup_id: &str) -> Result<(), AppError> 
 pub fn export_backup(state: &AppState, backup_id: &str, dest_dir: &Path) -> Result<(), AppError> {
     let conn = state.conn.lock().expect("db lock");
     let src: String = conn
-        .query_row("SELECT path FROM backup_records WHERE id = ?1", [backup_id], |r| {
-            r.get(0)
-        })
+        .query_row(
+            "SELECT path FROM backup_records WHERE id = ?1",
+            [backup_id],
+            |r| r.get(0),
+        )
         .optional()?
         .ok_or_else(|| AppError::new("not_found", "备份不存在"))?;
     drop(conn);
@@ -201,7 +209,13 @@ pub fn restore_from_dir(state: &AppState, backup_dir: &Path) -> Result<(), AppEr
     if managed_src.exists() {
         let protect_managed = protect_dir.join("managed-files-current");
         let managed_dst = state.managed_dir.lock().expect("dir lock").clone();
-        if let Err(e) = restore_managed_files(state, &managed_src, &managed_dst, &protect_managed, &protect_dir) {
+        if let Err(e) = restore_managed_files(
+            state,
+            &managed_src,
+            &managed_dst,
+            &protect_managed,
+            &protect_dir,
+        ) {
             return Err(e);
         }
     }
@@ -269,9 +283,8 @@ fn restore_db_snapshot(state: &AppState, backup_dir: &Path) -> Result<(), AppErr
 /// 列出备份记录。
 pub fn list_backups(state: &AppState) -> Result<Vec<crate::db::models::BackupRecord>, AppError> {
     let conn = state.conn.lock().expect("db lock");
-    let mut stmt = conn.prepare(
-        "SELECT * FROM backup_records ORDER BY created_at DESC LIMIT 50",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM backup_records ORDER BY created_at DESC LIMIT 50")?;
     let rows = stmt.query_map([], |row| {
         Ok(crate::db::models::BackupRecord {
             id: row.get("id")?,
@@ -404,9 +417,8 @@ pub fn run_auto_backup_if_due(app: &tauri::AppHandle) -> Result<(), AppError> {
     }
 
     let (now_h, now_m) = local_hhmm();
-    let parsed = parse_hhmm(&settings.backup.run_time).ok_or_else(|| {
-        AppError::new("invalid_setting", "自动备份时间格式错误")
-    })?;
+    let parsed = parse_hhmm(&settings.backup.run_time)
+        .ok_or_else(|| AppError::new("invalid_setting", "自动备份时间格式错误"))?;
     if (now_h, now_m) < parsed {
         return Ok(()); // 当天时间点未到
     }
@@ -490,19 +502,29 @@ mod tests {
                     scan_trigger: std::sync::atomic::AtomicU64::new(0),
                 },
                 terminal: crate::services::terminal_service::TerminalRuntime::default(),
-                runtime: std::sync::Arc::new(crate::services::project_runtime::RuntimeManager::new(
-                    std::sync::Arc::new(crate::services::process_api::Win32ProcessApiImpl),
-                    std::sync::Arc::new(crate::services::project_runtime::NullRunEventSink),
-                    std::sync::Arc::new(crate::services::run_history::InMemoryRunHistoryStore::new()),
-                )),
-                preview: std::sync::Arc::new(crate::services::web_preview_service::PreviewService::new(
-                    std::sync::Arc::new(crate::services::project_runtime::RuntimeManager::new(
+                runtime: std::sync::Arc::new(
+                    crate::services::project_runtime::RuntimeManager::new(
                         std::sync::Arc::new(crate::services::process_api::Win32ProcessApiImpl),
                         std::sync::Arc::new(crate::services::project_runtime::NullRunEventSink),
-                        std::sync::Arc::new(crate::services::run_history::InMemoryRunHistoryStore::new()),
-                    )),
-                    std::sync::Arc::new(crate::services::web_preview_service::UnsupportedPortProbe),
-                )),
+                        std::sync::Arc::new(
+                            crate::services::run_history::InMemoryRunHistoryStore::new(),
+                        ),
+                    ),
+                ),
+                preview: std::sync::Arc::new(
+                    crate::services::web_preview_service::PreviewService::new(
+                        std::sync::Arc::new(crate::services::project_runtime::RuntimeManager::new(
+                            std::sync::Arc::new(crate::services::process_api::Win32ProcessApiImpl),
+                            std::sync::Arc::new(crate::services::project_runtime::NullRunEventSink),
+                            std::sync::Arc::new(
+                                crate::services::run_history::InMemoryRunHistoryStore::new(),
+                            ),
+                        )),
+                        std::sync::Arc::new(
+                            crate::services::web_preview_service::UnsupportedPortProbe,
+                        ),
+                    ),
+                ),
             },
             dir,
         )
@@ -606,7 +628,10 @@ mod tests {
         assert_eq!(count, 1);
         drop(conn);
         // 保护备份目录已落盘（恢复会覆盖 backup_records 表，因此校验磁盘目录）
-        assert!(backup_dir_count(&dir) >= 2, "protect backup dir should exist on disk");
+        assert!(
+            backup_dir_count(&dir) >= 2,
+            "protect backup dir should exist on disk"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -694,7 +719,10 @@ mod tests {
             .expect("count");
         assert_eq!(count, 2, "db content preserved after failed restore");
         drop(conn);
-        assert!(backup_dir_count(&dir) >= 2, "protect backup dir should exist on disk");
+        assert!(
+            backup_dir_count(&dir) >= 2,
+            "protect backup dir should exist on disk"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -759,7 +787,8 @@ mod tests {
             // 保护快照 = 当前数据库（含 r2）
             let protect = dir.join("protect");
             std::fs::create_dir_all(&protect).unwrap();
-            conn.backup("main", protect.join("workspace.db"), None).unwrap();
+            conn.backup("main", protect.join("workspace.db"), None)
+                .unwrap();
         }
 
         // 制造移动失败：protect 目标已存在同名非空目录 → rename 失败
@@ -779,7 +808,9 @@ mod tests {
         // 数据库回滚到保护快照：r2 仍在
         let conn = state.conn.lock().expect("lock");
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM resources WHERE id='r2'", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM resources WHERE id='r2'", [], |r| {
+                r.get(0)
+            })
             .expect("count");
         assert_eq!(count, 1, "数据库应回滚，r2 必须保留");
 

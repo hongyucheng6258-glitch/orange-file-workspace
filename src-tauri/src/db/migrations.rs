@@ -108,7 +108,9 @@ mod tests {
         run_migrations(&mut conn).expect("migrations should apply");
 
         let version: i64 = conn
-            .query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get(0))
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |r| {
+                r.get(0)
+            })
             .expect("max version");
         assert_eq!(version, MIGRATIONS.last().expect("migrations").version);
     }
@@ -128,7 +130,8 @@ mod tests {
     #[test]
     fn foreign_keys_are_enforced() {
         let mut conn = in_memory_conn();
-        conn.pragma_update(None, "foreign_keys", "ON").expect("fk on");
+        conn.pragma_update(None, "foreign_keys", "ON")
+            .expect("fk on");
         run_migrations(&mut conn).expect("migrations");
 
         // 插入指向不存在父资源的记录必须失败
@@ -182,7 +185,8 @@ mod tests {
     #[test]
     fn cascade_delete_cleans_dependents() {
         let mut conn = in_memory_conn();
-        conn.pragma_update(None, "foreign_keys", "ON").expect("fk on");
+        conn.pragma_update(None, "foreign_keys", "ON")
+            .expect("fk on");
         run_migrations(&mut conn).expect("migrations");
 
         conn.execute(
@@ -221,7 +225,8 @@ mod tests {
     #[test]
     fn batch_rollback_on_error() {
         let mut conn = in_memory_conn();
-        conn.pragma_update(None, "foreign_keys", "ON").expect("fk on");
+        conn.pragma_update(None, "foreign_keys", "ON")
+            .expect("fk on");
         run_migrations(&mut conn).expect("migrations");
 
         // 第二条插入违反 NOT NULL，整个事务必须回滚
@@ -251,7 +256,11 @@ mod tests {
     fn global_search_tables_exist() {
         let mut conn = in_memory_conn();
         run_migrations(&mut conn).expect("migrations");
-        for table in ["system_search_entries", "system_search_apps", "system_search_scan_state"] {
+        for table in [
+            "system_search_entries",
+            "system_search_apps",
+            "system_search_scan_state",
+        ] {
             let ok: bool = conn
                 .query_row(
                     "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
@@ -281,7 +290,10 @@ mod tests {
              VALUES ('C:\\DOCS\\A.TXT', 'a.txt', 'file', 'v1', 1, 1)",
             [],
         );
-        assert!(dup.is_err(), "大小写不同的同一路径应被 UNIQUE COLLATE NOCASE 拒绝");
+        assert!(
+            dup.is_err(),
+            "大小写不同的同一路径应被 UNIQUE COLLATE NOCASE 拒绝"
+        );
         // CHECK 约束拒绝非法类型与状态
         let bad_kind = conn.execute(
             "INSERT INTO system_search_entries

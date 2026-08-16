@@ -1,9 +1,9 @@
 use tauri::State;
 
-use crate::AppState;
 use crate::error::AppError;
 use crate::ipc::CommandResult;
 use crate::services::migration_service::{self, MigrateTarget};
+use crate::AppState;
 
 fn parse_which(s: &str) -> Result<MigrateTarget, AppError> {
     match s {

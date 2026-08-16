@@ -9,20 +9,13 @@
 //!    资源管理器等外部目标）。
 
 use std::{
-    cell::UnsafeCell,
-    ffi::OsString,
-    mem,
-    os::windows::ffi::OsStringExt,
-    path::PathBuf,
-    ptr,
-    rc::Rc,
-    thread,
-    time::Duration,
+    cell::UnsafeCell, ffi::OsString, mem, os::windows::ffi::OsStringExt, path::PathBuf, ptr,
+    rc::Rc, thread, time::Duration,
 };
 
 use tauri::{AppHandle, Emitter, Manager};
 use windows::{
-    core::{implement, BOOL, HRESULT, Ref, Result as WinResult},
+    core::{implement, Ref, Result as WinResult, BOOL, HRESULT},
     Win32::{
         Foundation::{DRAGDROP_E_INVALIDHWND, HGLOBAL, HWND, LPARAM, POINT, POINTL},
         Graphics::Gdi::ScreenToClient,
@@ -84,18 +77,20 @@ fn register_drop_targets(app: &AppHandle) -> WinResult<()> {
     let mut registration = DropTargetRegistration::default();
     let mut callback = |child: HWND| registration.inject(child, forwarder.clone());
     let mut trait_obj: &mut dyn FnMut(HWND) -> bool = &mut callback;
-    let closure_ptr: *mut std::os::raw::c_void =
-        unsafe { mem::transmute(&mut trait_obj) };
+    let closure_ptr: *mut std::os::raw::c_void = unsafe { mem::transmute(&mut trait_obj) };
     let lparam = LPARAM(closure_ptr as _);
 
     unsafe extern "system" fn enumerate_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
-        let closure = &mut *(lparam.0 as *mut std::os::raw::c_void
-            as *mut &mut dyn FnMut(HWND) -> bool);
+        let closure =
+            &mut *(lparam.0 as *mut std::os::raw::c_void as *mut &mut dyn FnMut(HWND) -> bool);
         closure(hwnd).into()
     }
 
     let _ = unsafe { EnumChildWindows(Some(hwnd), Some(enumerate_callback), lparam) };
-    eprintln!("drag-drop: registered {} drop target(s)", registration.targets.len());
+    eprintln!(
+        "drag-drop: registered {} drop target(s)",
+        registration.targets.len()
+    );
     Ok(())
 }
 
@@ -164,7 +159,11 @@ impl DropTarget {
             lindex: -1,
             tymed: TYMED_HGLOBAL.0 as u32,
         };
-        match data_obj.as_ref().expect("null IDataObject").GetData(&format) {
+        match data_obj
+            .as_ref()
+            .expect("null IDataObject")
+            .GetData(&format)
+        {
             Ok(medium) => {
                 let hdrop = HDROP(medium.u.hGlobal.0 as _);
                 let count = DragQueryFileW(hdrop, u32::MAX, None);
@@ -213,7 +212,11 @@ impl IDropTarget_Impl for DropTarget_Impl {
                 }),
             );
         }
-        let effect = if valid { DROPEFFECT_COPY } else { DROPEFFECT_NONE };
+        let effect = if valid {
+            DROPEFFECT_COPY
+        } else {
+            DROPEFFECT_NONE
+        };
         unsafe {
             *pdweffect = effect;
             *self.cursor_effect.get() = effect;
@@ -240,7 +243,8 @@ impl IDropTarget_Impl for DropTarget_Impl {
 
     fn DragLeave(&self) -> WinResult<()> {
         if unsafe { *self.enter_is_valid.get() } {
-            self.forwarder.emit("tauri://drag-leave", serde_json::json!({}));
+            self.forwarder
+                .emit("tauri://drag-leave", serde_json::json!({}));
         }
         Ok(())
     }
@@ -311,7 +315,10 @@ unsafe fn drag_drop_loop(paths: &[PathBuf]) -> Result<(), String> {
     );
 
     if hr.is_err() {
-        return Err(format!("Windows 拖拽启动失败：HRESULT 0x{:08X}", hr.0 as u32));
+        return Err(format!(
+            "Windows 拖拽启动失败：HRESULT 0x{:08X}",
+            hr.0 as u32
+        ));
     }
     if hr == DRAGDROP_S_CANCEL {
         return Err("拖拽已取消".into());

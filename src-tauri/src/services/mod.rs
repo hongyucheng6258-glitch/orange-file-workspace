@@ -17,9 +17,9 @@ pub mod run_confirmation;
 pub mod run_history;
 pub mod scan_service;
 pub mod settings_service;
-pub mod task_service;
 pub mod system_service;
 pub mod system_windows;
+pub mod task_service;
 pub mod terminal_history_service;
 pub mod terminal_service;
 #[cfg(test)]

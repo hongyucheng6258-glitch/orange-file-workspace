@@ -151,7 +151,8 @@ fn vendor_name(vendor_id: u32) -> String {
 
 #[cfg(windows)]
 fn normalize_key(s: &str) -> String {
-    s.to_lowercase().replace(['-', '_', ' ', '(', ')', '/', '\\'], "")
+    s.to_lowercase()
+        .replace(['-', '_', ' ', '(', ')', '/', '\\'], "")
 }
 
 #[cfg(windows)]
@@ -186,8 +187,8 @@ fn read_gpu_registry_entries() -> Vec<(String, Option<String>, Option<String>)> 
 pub fn collect_network_adapters() -> Vec<NetworkAdapterInfo> {
     use windows::Win32::Foundation::ERROR_BUFFER_OVERFLOW;
     use windows::Win32::NetworkManagement::IpHelper::{
-        GetAdaptersAddresses, IP_ADAPTER_ADDRESSES_LH, GAA_FLAG_SKIP_ANYCAST,
-        GAA_FLAG_SKIP_DNS_SERVER, GAA_FLAG_SKIP_MULTICAST,
+        GetAdaptersAddresses, GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER,
+        GAA_FLAG_SKIP_MULTICAST, IP_ADAPTER_ADDRESSES_LH,
     };
     use windows::Win32::NetworkManagement::Ndis::IfOperStatusDown;
     use windows::Win32::NetworkManagement::Ndis::IfOperStatusUp;
@@ -244,8 +245,10 @@ pub fn collect_network_adapters() -> Vec<NetworkAdapterInfo> {
                 let u = &*ua;
                 let sa = u.Address;
                 if !sa.lpSockaddr.is_null() && sa.iSockaddrLength >= 8 {
-                    let bytes =
-                        std::slice::from_raw_parts(sa.lpSockaddr as *const u8, sa.iSockaddrLength as usize);
+                    let bytes = std::slice::from_raw_parts(
+                        sa.lpSockaddr as *const u8,
+                        sa.iSockaddrLength as usize,
+                    );
                     let family = u16::from_le_bytes([bytes[0], bytes[1]]);
                     match family {
                         2 => {
@@ -306,8 +309,8 @@ fn enumerate_services(kind: u32) -> Vec<(String, String, String, String)> {
     use windows::Win32::Foundation::ERROR_MORE_DATA;
     use windows::Win32::System::Services::{
         CloseServiceHandle, EnumServicesStatusExW, OpenSCManagerW, OpenServiceW,
-        QueryServiceConfigW, ENUM_SERVICE_STATUS_PROCESSW, SC_ENUM_PROCESS_INFO,
-        SC_HANDLE, SC_MANAGER_ENUMERATE_SERVICE, SERVICE_QUERY_CONFIG,
+        QueryServiceConfigW, ENUM_SERVICE_STATUS_PROCESSW, SC_ENUM_PROCESS_INFO, SC_HANDLE,
+        SC_MANAGER_ENUMERATE_SERVICE, SERVICE_QUERY_CONFIG,
     };
 
     let mut out = Vec::new();
@@ -358,9 +361,8 @@ fn enumerate_services(kind: u32) -> Vec<(String, String, String, String)> {
             if offset + item_size > buf.len() {
                 break;
             }
-            let item = unsafe {
-                &*(buf.as_ptr().add(offset) as *const ENUM_SERVICE_STATUS_PROCESSW)
-            };
+            let item =
+                unsafe { &*(buf.as_ptr().add(offset) as *const ENUM_SERVICE_STATUS_PROCESSW) };
             let name = if item.lpServiceName.is_null() {
                 String::new()
             } else {
@@ -486,15 +488,17 @@ pub fn collect_services() -> Vec<ServiceInfo> {
 /// 内核与文件系统驱动列表。
 #[cfg(windows)]
 pub fn collect_drivers() -> Vec<DriverInfo> {
-    enumerate_services(3 /* SERVICE_KERNEL_DRIVER | SERVICE_FILE_SYSTEM_DRIVER */)
-        .into_iter()
-        .map(|(name, display_name, state, start_type)| DriverInfo {
-            name,
-            display_name,
-            state,
-            start_type,
-        })
-        .collect()
+    enumerate_services(
+        3, /* SERVICE_KERNEL_DRIVER | SERVICE_FILE_SYSTEM_DRIVER */
+    )
+    .into_iter()
+    .map(|(name, display_name, state, start_type)| DriverInfo {
+        name,
+        display_name,
+        state,
+        start_type,
+    })
+    .collect()
 }
 
 #[cfg(not(windows))]
@@ -517,7 +521,12 @@ pub fn collect_startup_items() -> Vec<StartupItemInfo> {
     ] {
         read_run_subkey(RegKey::predef(hive), run_path, label, &mut out);
         let once = format!("{run_path}Once");
-        read_run_subkey(RegKey::predef(hive), &once, &format!("{label} Once"), &mut out);
+        read_run_subkey(
+            RegKey::predef(hive),
+            &once,
+            &format!("{label} Once"),
+            &mut out,
+        );
     }
 
     for (env_var, label) in [
@@ -543,12 +552,7 @@ pub fn collect_startup_items() -> Vec<StartupItemInfo> {
 }
 
 #[cfg(windows)]
-fn read_run_subkey(
-    hive: winreg::RegKey,
-    sub: &str,
-    label: &str,
-    out: &mut Vec<StartupItemInfo>,
-) {
+fn read_run_subkey(hive: winreg::RegKey, sub: &str, label: &str, out: &mut Vec<StartupItemInfo>) {
     if let Ok(key) = hive.open_subkey(sub) {
         for item in key.enum_values() {
             if let Ok((name, value)) = item {
@@ -692,8 +696,8 @@ pub fn collect_security_status() -> SecurityStatus {
 #[cfg(windows)]
 pub fn service_state(name: &str) -> Option<String> {
     use windows::Win32::System::Services::{
-        CloseServiceHandle, OpenSCManagerW, OpenServiceW, QueryServiceStatus,
-        SC_MANAGER_CONNECT, SERVICE_QUERY_STATUS,
+        CloseServiceHandle, OpenSCManagerW, OpenServiceW, QueryServiceStatus, SC_MANAGER_CONNECT,
+        SERVICE_QUERY_STATUS,
     };
 
     unsafe {
@@ -736,9 +740,7 @@ pub fn service_state(_name: &str) -> Option<String> {
 #[cfg(windows)]
 pub fn kill_process(pid: u32) -> Result<(), String> {
     use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::System::Threading::{
-        OpenProcess, TerminateProcess, PROCESS_TERMINATE,
-    };
+    use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
 
     if pid == std::process::id() {
         return Err("不允许结束当前 Orange 进程".into());
@@ -761,8 +763,8 @@ pub fn kill_process(_pid: u32) -> Result<(), String> {
 #[cfg(windows)]
 pub fn start_service(name: &str) -> Result<(), String> {
     use windows::Win32::System::Services::{
-        CloseServiceHandle, OpenSCManagerW, OpenServiceW, StartServiceW,
-        SC_MANAGER_CONNECT, SERVICE_START,
+        CloseServiceHandle, OpenSCManagerW, OpenServiceW, StartServiceW, SC_MANAGER_CONNECT,
+        SERVICE_START,
     };
 
     unsafe {
@@ -787,8 +789,8 @@ pub fn start_service(_name: &str) -> Result<(), String> {
 #[cfg(windows)]
 pub fn stop_service(name: &str) -> Result<(), String> {
     use windows::Win32::System::Services::{
-        CloseServiceHandle, ControlService, OpenSCManagerW, OpenServiceW,
-        SC_MANAGER_CONNECT, SERVICE_CONTROL_STOP, SERVICE_STATUS, SERVICE_STOP,
+        CloseServiceHandle, ControlService, OpenSCManagerW, OpenServiceW, SC_MANAGER_CONNECT,
+        SERVICE_CONTROL_STOP, SERVICE_STATUS, SERVICE_STOP,
     };
 
     unsafe {
@@ -836,12 +838,10 @@ fn disk_health_text(code: i32) -> String {
 pub fn collect_disk_health() -> Vec<DiskHealthInfo> {
     use sysinfo::Disks;
     use windows::Win32::Foundation::{CloseHandle, GENERIC_READ};
-    use windows::Win32::Storage::FileSystem::{
-        CreateFileW, FILE_SHARE_MODE, OPEN_EXISTING,
-    };
+    use windows::Win32::Storage::FileSystem::{CreateFileW, FILE_SHARE_MODE, OPEN_EXISTING};
     use windows::Win32::System::Ioctl::{
-        IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, STORAGE_DEVICE_MANAGEMENT_STATUS,
-        STORAGE_PROPERTY_QUERY, StorageDeviceManagementStatus,
+        PropertyStandardQuery, StorageDeviceManagementStatus, IOCTL_STORAGE_QUERY_PROPERTY,
+        STORAGE_DEVICE_MANAGEMENT_STATUS, STORAGE_PROPERTY_QUERY,
     };
 
     unsafe extern "system" {
@@ -951,8 +951,8 @@ pub struct GpuMetric {
 pub fn collect_gpu_metrics() -> Vec<GpuMetric> {
     use windows::core::Interface;
     use windows::Win32::Graphics::Dxgi::{
-        CreateDXGIFactory1, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, DXGI_QUERY_VIDEO_MEMORY_INFO,
-        IDXGIFactory1, IDXGIAdapter3,
+        CreateDXGIFactory1, IDXGIAdapter3, IDXGIFactory1, DXGI_MEMORY_SEGMENT_GROUP_LOCAL,
+        DXGI_QUERY_VIDEO_MEMORY_INFO,
     };
 
     let mut out = Vec::new();
@@ -1264,9 +1264,7 @@ pub fn explorer_pids() -> Vec<u32> {
     sys.refresh_processes(ProcessesToUpdate::All, true);
     sys.processes()
         .iter()
-        .filter(|(_, p)| {
-            p.name().to_string_lossy().to_lowercase() == "explorer.exe"
-        })
+        .filter(|(_, p)| p.name().to_string_lossy().to_lowercase() == "explorer.exe")
         .map(|(pid, _)| pid.as_u32())
         .collect()
 }
@@ -1471,10 +1469,7 @@ mod tests {
     fn gpu_info_has_entries() {
         let list = collect_gpu_info();
         assert!(!list.is_empty(), "应至少有一个显卡/显示适配器");
-        assert!(
-            list.iter().any(|g| !g.name.is_empty()),
-            "显卡名称不应为空"
-        );
+        assert!(list.iter().any(|g| !g.name.is_empty()), "显卡名称不应为空");
     }
 
     #[test]
@@ -1586,7 +1581,10 @@ mod tests {
         assert_eq!(result.freed_bytes, 384);
         assert!(!dir.join("iconcache_32.db").exists());
         assert!(!dir.join("iconcache_256.db").exists());
-        assert!(dir.join("thumbcache_1.db").exists(), "不匹配模式的文件应保留");
+        assert!(
+            dir.join("thumbcache_1.db").exists(),
+            "不匹配模式的文件应保留"
+        );
         assert!(dir.join("keep.txt").exists());
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -1612,7 +1610,10 @@ mod tests {
     fn admin_tool_command_mapping() {
         assert_eq!(admin_tool_command("sfc").unwrap(), "/k sfc /scannow");
         assert_eq!(admin_tool_command("chkdsk").unwrap(), "/k chkdsk C: /f");
-        assert_eq!(admin_tool_command("winsock").unwrap(), "/k netsh winsock reset");
+        assert_eq!(
+            admin_tool_command("winsock").unwrap(),
+            "/k netsh winsock reset"
+        );
         assert!(admin_tool_command("regedit").is_err());
         assert!(admin_tool_command("").is_err());
     }

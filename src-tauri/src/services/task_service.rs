@@ -112,9 +112,7 @@ pub fn get_task(conn: &Connection, id: &str) -> SqliteResult<Option<Task>> {
 
 /// 查询最近任务列表。
 pub fn list_tasks(conn: &Connection, limit: i64) -> SqliteResult<Vec<Task>> {
-    let mut stmt = conn.prepare(
-        "SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?1",
-    )?;
+    let mut stmt = conn.prepare("SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?1")?;
     let rows = stmt.query_map([limit], task_from_row)?;
     rows.collect()
 }

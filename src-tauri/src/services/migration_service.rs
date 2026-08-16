@@ -8,11 +8,11 @@ use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::AppState;
 use crate::db::connection::now_unix;
 use crate::error::AppError;
 use crate::events::EVENT_TASK_PROGRESS;
 use crate::services::task_service as tasks;
+use crate::AppState;
 
 /// 迁移状态记录键（app_settings）。
 pub const KEY_INFLIGHT: &str = "migration.inflight";
@@ -55,10 +55,7 @@ pub fn validate_target_dir(
     let _ = std::fs::remove_file(&probe);
 
     let (current, label) = match which {
-        MigrateTarget::DataDir => (
-            state.data_dir.lock().expect("dir lock").clone(),
-            "数据目录",
-        ),
+        MigrateTarget::DataDir => (state.data_dir.lock().expect("dir lock").clone(), "数据目录"),
         MigrateTarget::ManagedDir => (
             state.managed_dir.lock().expect("dir lock").clone(),
             "托管目录",
@@ -135,9 +132,7 @@ pub fn start_migration(
             "migration",
             &format!("迁移{}到 {}", which_label(which), target),
             None,
-            Some(
-                &serde_json::json!({ "target": target, "which": which.as_str() }).to_string(),
-            ),
+            Some(&serde_json::json!({ "target": target, "which": which.as_str() }).to_string()),
         )?
     };
 
@@ -182,14 +177,8 @@ fn run_migration(
 ) -> Result<(), AppError> {
     let state = app.state::<AppState>();
     let (current, is_data) = match which {
-        MigrateTarget::DataDir => (
-            state.data_dir.lock().expect("dir lock").clone(),
-            true,
-        ),
-        MigrateTarget::ManagedDir => (
-            state.managed_dir.lock().expect("dir lock").clone(),
-            false,
-        ),
+        MigrateTarget::DataDir => (state.data_dir.lock().expect("dir lock").clone(), true),
+        MigrateTarget::ManagedDir => (state.managed_dir.lock().expect("dir lock").clone(), false),
     };
 
     // 1. 复制到目标位置的临时目录

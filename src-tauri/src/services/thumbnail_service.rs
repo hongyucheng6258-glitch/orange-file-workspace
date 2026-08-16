@@ -17,10 +17,7 @@ pub fn is_image(path: &Path) -> bool {
 }
 
 /// 生成缩略图并保存为 PNG 到缓存目录。返回 (缓存路径, 原图宽, 原图高)。
-pub fn generate_thumbnail(
-    src: &Path,
-    cache_dir: &Path,
-) -> Result<(PathBuf, u32, u32), AppError> {
+pub fn generate_thumbnail(src: &Path, cache_dir: &Path) -> Result<(PathBuf, u32, u32), AppError> {
     let img = image::open(src)?;
     let (w, h) = (img.width(), img.height());
     let thumb = img.thumbnail(THUMB_MAX, THUMB_MAX);
@@ -66,15 +63,15 @@ impl Drop for ComInitializer {
 
 #[cfg(target_os = "windows")]
 pub fn extract_file_icon(path: &Path, cache_dir: &Path) -> Result<PathBuf, AppError> {
-    let _guard = ICON_EXTRACT_LOCK.lock().map_err(|_| {
-        AppError::new("icon_locked", "图标提取锁被占用")
-    })?;
+    let _guard = ICON_EXTRACT_LOCK
+        .lock()
+        .map_err(|_| AppError::new("icon_locked", "图标提取锁被占用"))?;
     let _com = ComInitializer::new();
 
     use windows::Win32::{
         Graphics::Gdi::{
-            BITMAP, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, CreateCompatibleDC, DeleteDC, DeleteObject,
-            DIB_RGB_COLORS, GetDIBits, GetObjectW, HDC, SelectObject,
+            CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, SelectObject,
+            BITMAP, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HDC,
         },
         UI::Shell::{SHGetFileInfoW, SHFILEINFOW, SHGFI_FLAGS, SHGFI_ICON, SHGFI_LARGEICON},
         UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo, HICON, ICONINFO},
@@ -173,7 +170,11 @@ pub fn extract_file_icon(path: &Path, cache_dir: &Path) -> Result<PathBuf, AppEr
     for y in 0..h {
         for x in 0..w {
             let i = ((y * w + x) * 4) as usize;
-            rgba.put_pixel(x, y, image::Rgba([pixels[i + 2], pixels[i + 1], pixels[i], pixels[i + 3]]));
+            rgba.put_pixel(
+                x,
+                y,
+                image::Rgba([pixels[i + 2], pixels[i + 1], pixels[i], pixels[i + 3]]),
+            );
         }
     }
     std::fs::create_dir_all(cache_dir)?;
@@ -218,19 +219,25 @@ mod tests {
             eprintln!("未找到系统 exe，跳过图标提取测试");
             return;
         };
-        let cache = std::env::temp_dir().join(format!("nexus-icon-cache-{}", crate::db::models::new_id()));
+        let cache =
+            std::env::temp_dir().join(format!("nexus-icon-cache-{}", crate::db::models::new_id()));
         let dest = extract_file_icon(Path::new(exe), &cache).expect("提取图标失败");
         assert!(dest.exists(), "图标 PNG 应已生成");
-        assert!(dest.metadata().expect("meta").len() > 0, "图标 PNG 不应为空");
+        assert!(
+            dest.metadata().expect("meta").len() > 0,
+            "图标 PNG 不应为空"
+        );
         let _ = std::fs::remove_dir_all(&cache);
     }
 
     #[test]
     fn thumbnail_is_smaller_than_source() {
-        let src = std::env::temp_dir().join(format!("nexus-thumb-{}.png", crate::db::models::new_id()));
+        let src =
+            std::env::temp_dir().join(format!("nexus-thumb-{}.png", crate::db::models::new_id()));
         make_png(&src);
 
-        let cache = std::env::temp_dir().join(format!("nexus-cache-{}", crate::db::models::new_id()));
+        let cache =
+            std::env::temp_dir().join(format!("nexus-cache-{}", crate::db::models::new_id()));
         std::fs::create_dir_all(&cache).expect("mkdir");
 
         let (dest, w, h) = generate_thumbnail(&src, &cache).expect("generate");

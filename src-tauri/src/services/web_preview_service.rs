@@ -122,14 +122,14 @@ fn scan_urls(text: &str) -> Vec<String> {
     let mut urls = Vec::new();
     let mut i = 0usize;
     while i < bytes.len() {
-        let scheme_len = if bytes[i..].len() >= 8 && bytes[i..i + 8].eq_ignore_ascii_case(b"https://")
-        {
-            8
-        } else if bytes[i..].len() >= 7 && bytes[i..i + 7].eq_ignore_ascii_case(b"http://") {
-            7
-        } else {
-            0
-        };
+        let scheme_len =
+            if bytes[i..].len() >= 8 && bytes[i..i + 8].eq_ignore_ascii_case(b"https://") {
+                8
+            } else if bytes[i..].len() >= 7 && bytes[i..i + 7].eq_ignore_ascii_case(b"http://") {
+                7
+            } else {
+                0
+            };
         if scheme_len > 0 {
             let start = i;
             let mut end = start + scheme_len;

@@ -256,16 +256,14 @@ pub fn collect_processes(
         .processes()
         .iter()
         .map(|(pid, p)| {
-            let user = p
-                .user_id()
-                .and_then(|uid| {
-                    sampler
-                        .users
-                        .list()
-                        .iter()
-                        .find(|u| u.id() == uid)
-                        .map(|u| u.name().to_string())
-                });
+            let user = p.user_id().and_then(|uid| {
+                sampler
+                    .users
+                    .list()
+                    .iter()
+                    .find(|u| u.id() == uid)
+                    .map(|u| u.name().to_string())
+            });
             ProcessInfo {
                 pid: pid.as_u32(),
                 name: p.name().to_string_lossy().into_owned(),
@@ -387,10 +385,7 @@ fn html_escape(value: &str) -> String {
 }
 
 fn report_table(title: &str, rows: Vec<(String, String)>) -> String {
-    let mut out = format!(
-        "<section><h3>{}</h3><table><tbody>",
-        html_escape(title)
-    );
+    let mut out = format!("<section><h3>{}</h3><table><tbody>", html_escape(title));
     for (k, v) in rows {
         out.push_str(&format!(
             "<tr><th>{}</th><td>{}</td></tr>",
@@ -433,8 +428,11 @@ pub fn export_report(
         "snapshot": snapshot,
         "top_processes": processes,
     });
-    std::fs::write(&json_path, serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?)
-        .map_err(|e| format!("写入 JSON 报告失败：{e}"))?;
+    std::fs::write(
+        &json_path,
+        serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| format!("写入 JSON 报告失败：{e}"))?;
 
     let mut html = String::new();
     html.push_str("<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">");
@@ -452,13 +450,34 @@ pub fn export_report(
     html.push_str(&report_table(
         "设备与系统",
         vec![
-            ("设备名称".into(), overview.device_name.unwrap_or_else(|| "未知".into())),
-            ("操作系统".into(), overview.os_name.unwrap_or_else(|| "未知".into())),
-            ("系统版本".into(), overview.os_version.unwrap_or_else(|| "未知".into())),
-            ("内核版本".into(), overview.kernel_version.unwrap_or_else(|| "未知".into())),
-            ("制造商".into(), overview.manufacturer.unwrap_or_else(|| "未知".into())),
-            ("产品型号".into(), overview.product_name.unwrap_or_else(|| "未知".into())),
-            ("BIOS 版本".into(), overview.bios_version.unwrap_or_else(|| "未知".into())),
+            (
+                "设备名称".into(),
+                overview.device_name.unwrap_or_else(|| "未知".into()),
+            ),
+            (
+                "操作系统".into(),
+                overview.os_name.unwrap_or_else(|| "未知".into()),
+            ),
+            (
+                "系统版本".into(),
+                overview.os_version.unwrap_or_else(|| "未知".into()),
+            ),
+            (
+                "内核版本".into(),
+                overview.kernel_version.unwrap_or_else(|| "未知".into()),
+            ),
+            (
+                "制造商".into(),
+                overview.manufacturer.unwrap_or_else(|| "未知".into()),
+            ),
+            (
+                "产品型号".into(),
+                overview.product_name.unwrap_or_else(|| "未知".into()),
+            ),
+            (
+                "BIOS 版本".into(),
+                overview.bios_version.unwrap_or_else(|| "未知".into()),
+            ),
             ("运行时间".into(), format!("{} 秒", overview.uptime)),
         ],
     ));
@@ -466,7 +485,10 @@ pub fn export_report(
     html.push_str(&report_table(
         "处理器与内存",
         vec![
-            ("CPU".into(), overview.cpu_brand.unwrap_or_else(|| "未知".into())),
+            (
+                "CPU".into(),
+                overview.cpu_brand.unwrap_or_else(|| "未知".into()),
+            ),
             ("物理核心".into(), overview.cpu_cores.to_string()),
             ("逻辑线程".into(), overview.cpu_threads.to_string()),
             ("CPU 使用率".into(), format!("{:.1}%", overview.cpu_usage)),
@@ -515,7 +537,10 @@ pub fn export_report(
     html.push_str("</body></html>");
     std::fs::write(&html_path, html).map_err(|e| format!("写入 HTML 报告失败：{e}"))?;
 
-    Ok(ReportOutput { json_path, html_path })
+    Ok(ReportOutput {
+        json_path,
+        html_path,
+    })
 }
 
 /// 字节数格式化。
@@ -619,19 +644,31 @@ pub fn collect_health(sampler: &mut SystemSampler) -> Vec<HealthItem> {
         HealthItem {
             level: "danger".into(),
             title: "内存不足".into(),
-            detail: format!("内存使用率 {mem_percent:.1}%（{}/{}）。", format_bytes(mem_used), format_bytes(mem_total)),
+            detail: format!(
+                "内存使用率 {mem_percent:.1}%（{}/{}）。",
+                format_bytes(mem_used),
+                format_bytes(mem_total)
+            ),
         }
     } else if mem_percent > 80.0 {
         HealthItem {
             level: "warning".into(),
             title: "内存占用偏高".into(),
-            detail: format!("内存使用率 {mem_percent:.1}%（{}/{}）。", format_bytes(mem_used), format_bytes(mem_total)),
+            detail: format!(
+                "内存使用率 {mem_percent:.1}%（{}/{}）。",
+                format_bytes(mem_used),
+                format_bytes(mem_total)
+            ),
         }
     } else {
         HealthItem {
             level: "ok".into(),
             title: "内存充足".into(),
-            detail: format!("内存使用率 {mem_percent:.1}%（{}/{}）。", format_bytes(mem_used), format_bytes(mem_total)),
+            detail: format!(
+                "内存使用率 {mem_percent:.1}%（{}/{}）。",
+                format_bytes(mem_used),
+                format_bytes(mem_total)
+            ),
         }
     });
 
@@ -640,13 +677,21 @@ pub fn collect_health(sampler: &mut SystemSampler) -> Vec<HealthItem> {
             HealthItem {
                 level: "warning".into(),
                 title: "交换空间使用过高".into(),
-                detail: format!("交换空间使用率 {swap_percent:.1}%（{}/{}）。", format_bytes(swap_used), format_bytes(swap_total)),
+                detail: format!(
+                    "交换空间使用率 {swap_percent:.1}%（{}/{}）。",
+                    format_bytes(swap_used),
+                    format_bytes(swap_total)
+                ),
             }
         } else {
             HealthItem {
                 level: "ok".into(),
                 title: "交换空间正常".into(),
-                detail: format!("交换空间使用率 {swap_percent:.1}%（{}/{}）。", format_bytes(swap_used), format_bytes(swap_total)),
+                detail: format!(
+                    "交换空间使用率 {swap_percent:.1}%（{}/{}）。",
+                    format_bytes(swap_used),
+                    format_bytes(swap_total)
+                ),
             }
         });
     }
@@ -655,8 +700,16 @@ pub fn collect_health(sampler: &mut SystemSampler) -> Vec<HealthItem> {
         .disks
         .list()
         .iter()
-        .filter(|d| d.total_space() > 0 && (d.available_space() as f64 / d.total_space() as f64) < 0.10)
-        .map(|d| format!("{}（{}）", d.name().to_string_lossy(), d.mount_point().to_string_lossy()))
+        .filter(|d| {
+            d.total_space() > 0 && (d.available_space() as f64 / d.total_space() as f64) < 0.10
+        })
+        .map(|d| {
+            format!(
+                "{}（{}）",
+                d.name().to_string_lossy(),
+                d.mount_point().to_string_lossy()
+            )
+        })
         .collect();
     items.push(if low_disks.is_empty() {
         HealthItem {
@@ -703,8 +756,16 @@ pub fn collect_health(sampler: &mut SystemSampler) -> Vec<HealthItem> {
             title: "部分安全防护未开启".into(),
             detail: format!(
                 "防火墙：{}；Defender：{}。",
-                if firewall_on { "已开启" } else { "已关闭" },
-                if defender_on { "运行中" } else { "未运行" }
+                if firewall_on {
+                    "已开启"
+                } else {
+                    "已关闭"
+                },
+                if defender_on {
+                    "运行中"
+                } else {
+                    "未运行"
+                }
             ),
         }
     } else {
@@ -756,13 +817,9 @@ mod tests {
         let mut s = SystemSampler::new();
         let list = collect_processes(&mut s, "cpu", 20);
         assert!(!list.is_empty());
-        assert!(list
-            .windows(2)
-            .all(|w| w[0].cpu_usage >= w[1].cpu_usage));
+        assert!(list.windows(2).all(|w| w[0].cpu_usage >= w[1].cpu_usage));
         let by_mem = collect_processes(&mut s, "memory", 10);
-        assert!(by_mem
-            .windows(2)
-            .all(|w| w[0].memory >= w[1].memory));
+        assert!(by_mem.windows(2).all(|w| w[0].memory >= w[1].memory));
     }
 
     #[test]
@@ -805,7 +862,11 @@ mod tests {
     fn health_check_produces_complete_items() {
         let mut s = SystemSampler::new();
         let items = collect_health(&mut s);
-        assert!(items.len() >= 6, "健康检测应至少包含 6 项，实际 {}", items.len());
+        assert!(
+            items.len() >= 6,
+            "健康检测应至少包含 6 项，实际 {}",
+            items.len()
+        );
         for item in &items {
             assert!(!item.title.is_empty());
             assert!(!item.detail.is_empty());

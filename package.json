@@ -9,7 +9,12 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "test:rust": "cd src-tauri && cargo test",
+    "fmt": "cd src-tauri && cargo fmt --check",
+    "clippy": "cd src-tauri && cargo clippy --all-targets",
+    "check": "npm run typecheck && npm run test && npm run test:rust && npm run fmt && npm run clippy"
   },
   "dependencies": {
     "@codemirror/lang-cpp": "^6.0.3",

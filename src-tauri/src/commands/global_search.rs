@@ -35,7 +35,12 @@ pub fn start_global_search(
         .insert(search_id, ());
 
     if q.is_empty() {
-        state.search.active_queries.lock().expect("lock").remove(&search_id);
+        state
+            .search
+            .active_queries
+            .lock()
+            .expect("lock")
+            .remove(&search_id);
         return Ok(SearchBatch {
             search_id,
             hits: Vec::new(),
@@ -162,10 +167,7 @@ pub fn start_global_search(
 
 /// 取消一次全局搜索（停止后台补批）。
 #[tauri::command]
-pub fn cancel_global_search(
-    state: State<AppState>,
-    search_id: u64,
-) -> CommandResult<()> {
+pub fn cancel_global_search(state: State<AppState>, search_id: u64) -> CommandResult<()> {
     state
         .search
         .active_queries
@@ -177,14 +179,14 @@ pub fn cancel_global_search(
 
 /// 打开搜索结果（后端校验后执行，不接受前端任意命令）。
 #[tauri::command]
-pub fn open_search_result(
-    state: State<AppState>,
-    key: String,
-) -> CommandResult<()> {
+pub fn open_search_result(state: State<AppState>, key: String) -> CommandResult<()> {
     let clean_key = key.strip_prefix("app:").unwrap_or(&key);
     // NexusFile 无位置资源（页面/项目）没有本地文件路径，返回独立错误码，避免误导为文件不存在
     if clean_key.starts_with("nexus:") {
-        return Err(AppError::new("no_location", "该资源没有本地位置，请在页面或项目中打开"));
+        return Err(AppError::new(
+            "no_location",
+            "该资源没有本地位置，请在页面或项目中打开",
+        ));
     }
     let conn = state.conn.lock().expect("db lock");
     let row = conn
@@ -192,7 +194,12 @@ pub fn open_search_result(
             "SELECT launch_target, aumid FROM system_search_apps
              WHERE canonical_target = ?1 OR aumid = ?1 COLLATE NOCASE",
             [clean_key],
-            |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, Option<String>>(1)?)),
+            |r| {
+                Ok((
+                    r.get::<_, Option<String>>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                ))
+            },
         )
         .optional()?;
 
@@ -281,18 +288,17 @@ pub fn get_search_index_status(state: State<AppState>) -> CommandResult<SearchIn
             "SELECT volume_id, root_path, status, indexed_count, skipped_count, last_error, completed_at
              FROM system_search_scan_state ORDER BY root_path",
         )?;
-    let rows = stmt
-        .query_map([], |r| {
-            Ok(VolumeStatus {
-                volume_id: r.get(0)?,
-                root_path: r.get(1)?,
-                status: r.get(2)?,
-                indexed_count: r.get(3)?,
-                skipped_count: r.get(4)?,
-                last_error: r.get(5)?,
-                completed_at: r.get(6)?,
-            })
-        })?;
+    let rows = stmt.query_map([], |r| {
+        Ok(VolumeStatus {
+            volume_id: r.get(0)?,
+            root_path: r.get(1)?,
+            status: r.get(2)?,
+            indexed_count: r.get(3)?,
+            skipped_count: r.get(4)?,
+            last_error: r.get(5)?,
+            completed_at: r.get(6)?,
+        })
+    })?;
     let mut volumes = Vec::new();
     for r in rows {
         volumes.push(r?);

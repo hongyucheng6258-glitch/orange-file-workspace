@@ -844,7 +844,9 @@ mod tests {
         let grant = session.confirm(&preview.confirmation_id).unwrap();
         // 配置漂移导致校验失败 → 授权同时失效，禁止配置碰撞探测。
         c.args = vec!["evil.js".into()];
-        let err = session.verify(&c, &root, &grant.confirmation_hash).unwrap_err();
+        let err = session
+            .verify(&c, &root, &grant.confirmation_hash)
+            .unwrap_err();
         assert_eq!(err.code, "confirmation_required");
         let original = base_config(&root);
         assert_eq!(

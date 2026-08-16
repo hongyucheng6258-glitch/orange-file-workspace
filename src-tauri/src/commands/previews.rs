@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use tauri::State;
 
-use crate::AppState;
 use crate::db::connection::now_unix;
 use crate::db::repositories as repo;
 use crate::error::AppError;
@@ -11,6 +10,7 @@ use crate::services::hash_service;
 use crate::services::preview_service;
 use crate::services::settings_service;
 use crate::services::thumbnail_service;
+use crate::AppState;
 
 fn lock_db<'a>(state: &'a AppState) -> std::sync::MutexGuard<'a, rusqlite::Connection> {
     state.conn.lock().expect("db lock poisoned")
@@ -19,10 +19,7 @@ fn lock_db<'a>(state: &'a AppState) -> std::sync::MutexGuard<'a, rusqlite::Conne
 /// 获取资源的缩略图缓存路径（不存在时按需生成）。
 /// 非图片或路径失效返回 None。
 #[tauri::command]
-pub fn get_thumbnail(
-    state: State<AppState>,
-    resource_id: String,
-) -> CommandResult<Option<String>> {
+pub fn get_thumbnail(state: State<AppState>, resource_id: String) -> CommandResult<Option<String>> {
     let conn = lock_db(&state);
     let locations = repo::list_locations(&conn, &resource_id)?;
     let Some(loc) = locations.first() else {
@@ -61,10 +58,7 @@ pub fn get_thumbnail(
 /// 提取文件（可执行文件/快捷方式等）的应用图标，返回缓存 PNG 路径。
 /// 无法提取时返回 None。
 #[tauri::command]
-pub fn get_file_icon(
-    state: State<AppState>,
-    resource_id: String,
-) -> CommandResult<Option<String>> {
+pub fn get_file_icon(state: State<AppState>, resource_id: String) -> CommandResult<Option<String>> {
     let conn = lock_db(&state);
     let locations = repo::list_locations(&conn, &resource_id)?;
     let Some(loc) = locations.first() else {
@@ -102,10 +96,7 @@ pub fn get_file_icon(
 
 /// 读取文本文件的预览内容（上限由设置决定）。
 #[tauri::command]
-pub fn get_text_preview(
-    state: State<AppState>,
-    resource_id: String,
-) -> CommandResult<String> {
+pub fn get_text_preview(state: State<AppState>, resource_id: String) -> CommandResult<String> {
     let conn = lock_db(&state);
     let locations = repo::list_locations(&conn, &resource_id)?;
     let Some(loc) = locations.first() else {

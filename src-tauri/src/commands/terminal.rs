@@ -97,17 +97,14 @@ pub fn terminal_history_list(
     limit: Option<usize>,
 ) -> CommandResult<Vec<TerminalHistoryEntry>> {
     let conn = state.conn.lock().expect("db lock poisoned");
-    let entries = list_history(&conn, &shell, limit.unwrap_or(100))
-        .map_err(crate::error::AppError::from)?;
+    let entries =
+        list_history(&conn, &shell, limit.unwrap_or(100)).map_err(crate::error::AppError::from)?;
     Ok(entries)
 }
 
 /// 清空命令历史；shell 为 None 时清空全部。
 #[tauri::command]
-pub fn terminal_history_clear(
-    state: State<AppState>,
-    shell: Option<String>,
-) -> CommandResult<()> {
+pub fn terminal_history_clear(state: State<AppState>, shell: Option<String>) -> CommandResult<()> {
     let conn = state.conn.lock().expect("db lock poisoned");
     clear_history(&conn, shell.as_deref()).map_err(crate::error::AppError::from)?;
     Ok(())

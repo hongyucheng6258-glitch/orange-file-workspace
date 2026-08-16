@@ -2,11 +2,11 @@ use std::sync::MutexGuard;
 
 use tauri::State;
 
-use crate::AppState;
 use crate::error::AppError;
 use crate::ipc::CommandResult;
 use crate::services::editor_service;
 use crate::services::file_service;
+use crate::AppState;
 
 fn lock_db<'a>(state: &'a AppState) -> MutexGuard<'a, rusqlite::Connection> {
     state.conn.lock().expect("db lock poisoned")
@@ -14,14 +14,10 @@ fn lock_db<'a>(state: &'a AppState) -> MutexGuard<'a, rusqlite::Connection> {
 
 /// 打开代码文件：读取内容并建立编辑会话。
 #[tauri::command]
-pub fn open_file(
-    state: State<AppState>,
-    resource_id: String,
-) -> CommandResult<serde_json::Value> {
+pub fn open_file(state: State<AppState>, resource_id: String) -> CommandResult<serde_json::Value> {
     let conn = lock_db(&state);
-    let resource = crate::db::repositories::get_resource(&conn, &resource_id)?.ok_or_else(|| {
-        AppError::new("not_found", format!("资源 {resource_id} 不存在"))
-    })?;
+    let resource = crate::db::repositories::get_resource(&conn, &resource_id)?
+        .ok_or_else(|| AppError::new("not_found", format!("资源 {resource_id} 不存在")))?;
     let locations = crate::db::repositories::list_locations(&conn, &resource_id)?;
     let Some(loc) = locations.first() else {
         return Err(AppError::new("location_missing", "资源缺少物理位置"));
@@ -127,13 +123,14 @@ fn save_impl(
             crate::db::repositories::update_location_stat(&conn, &loc.id, size, modified)?;
             Ok(serde_json::json!({ "status": "saved" }))
         }
-        editor_service::SaveOutcome::Conflict { message, current_size } => {
-            Ok(serde_json::json!({
-                "status": "conflict",
-                "message": message,
-                "current_size": current_size,
-            }))
-        }
+        editor_service::SaveOutcome::Conflict {
+            message,
+            current_size,
+        } => Ok(serde_json::json!({
+            "status": "conflict",
+            "message": message,
+            "current_size": current_size,
+        })),
     }
 }
 

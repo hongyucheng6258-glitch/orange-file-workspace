@@ -2,13 +2,13 @@ use std::sync::MutexGuard;
 
 use tauri::{AppHandle, State};
 
-use crate::AppState;
 use crate::db::models::{Resource, SourceType, Task};
 use crate::error::AppError;
 use crate::ipc::CommandResult;
 use crate::services::import_service::{start_import, ImportRequest};
 use crate::services::project_service;
 use crate::services::task_service;
+use crate::AppState;
 
 fn lock_db<'a>(state: &'a AppState) -> MutexGuard<'a, rusqlite::Connection> {
     state.conn.lock().expect("db lock poisoned")
@@ -35,9 +35,8 @@ pub fn import_project(
     // 找到刚创建的项目资源 ID
     let project_id = {
         let conn = lock_db(&state);
-        let normalized = crate::services::file_service::normalize_path(
-            std::path::Path::new(&root_path),
-        )?;
+        let normalized =
+            crate::services::file_service::normalize_path(std::path::Path::new(&root_path))?;
         let canonical = crate::services::file_service::canonical_path_key(&normalized);
         let loc = crate::db::repositories::find_location_by_path(&conn, &canonical)?;
         loc.map(|l| l.resource_id)
@@ -95,7 +94,10 @@ pub fn delete_project(state: State<AppState>, project_id: String) -> CommandResu
         .query_map([&project_id], |r| r.get(0))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     if ids.is_empty() {
-        return Err(AppError::new("not_found", format!("项目 {project_id} 不存在")));
+        return Err(AppError::new(
+            "not_found",
+            format!("项目 {project_id} 不存在"),
+        ));
     }
 
     let placeholders = vec!["?"; ids.len()].join(",");
@@ -114,14 +116,10 @@ pub fn delete_project(state: State<AppState>, project_id: String) -> CommandResu
 
 /// 获取项目详情（资源 + 扩展记录 + 根目录路径）。
 #[tauri::command]
-pub fn get_project(
-    state: State<AppState>,
-    project_id: String,
-) -> CommandResult<serde_json::Value> {
+pub fn get_project(state: State<AppState>, project_id: String) -> CommandResult<serde_json::Value> {
     let conn = lock_db(&state);
-    let resource = crate::db::repositories::get_resource(&conn, &project_id)?.ok_or_else(|| {
-        AppError::new("not_found", format!("项目 {project_id} 不存在"))
-    })?;
+    let resource = crate::db::repositories::get_resource(&conn, &project_id)?
+        .ok_or_else(|| AppError::new("not_found", format!("项目 {project_id} 不存在")))?;
     let project = project_service::get_project(&conn, &project_id)?;
     let locations = crate::db::repositories::list_locations(&conn, &project_id)?;
     Ok(serde_json::json!({
@@ -140,5 +138,9 @@ pub fn list_project_files(
 ) -> CommandResult<Vec<Resource>> {
     let conn = lock_db(&state);
     let target = parent_id.unwrap_or(project_id);
-    Ok(crate::db::repositories::list_children(&conn, Some(&target), false)?)
+    Ok(crate::db::repositories::list_children(
+        &conn,
+        Some(&target),
+        false,
+    )?)
 }

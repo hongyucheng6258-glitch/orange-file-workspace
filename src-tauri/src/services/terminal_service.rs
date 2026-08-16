@@ -86,7 +86,10 @@ pub fn resolve_shell(kind: &str) -> Result<ShellSpec, AppError> {
         }),
         "gitbash" => {
             let bash = detect_git_bash().ok_or_else(|| {
-                AppError::new("shell_unavailable", "未检测到 Git Bash，请安装 Git for Windows")
+                AppError::new(
+                    "shell_unavailable",
+                    "未检测到 Git Bash，请安装 Git for Windows",
+                )
             })?;
             Ok(ShellSpec {
                 program: bash,
@@ -294,14 +297,8 @@ pub fn spawn_session(
     };
     let info = {
         let st = app.state::<crate::AppState>();
-        let sessions = st
-            .terminal
-            .sessions
-            .lock()
-            .expect("terminal sessions lock");
-        let s = sessions
-            .get(&id)
-            .expect("just inserted terminal session");
+        let sessions = st.terminal.sessions.lock().expect("terminal sessions lock");
+        let s = sessions.get(&id).expect("just inserted terminal session");
         TerminalSessionInfo {
             session_id: id,
             cwd: s.cwd.to_string_lossy().to_string(),
@@ -344,10 +341,7 @@ pub fn spawn_session(
                 .remove(&id);
             if let Some(sess) = removed {
                 if let Some(mut child) = sess.child.lock().expect("child lock").take() {
-                    child
-                        .wait()
-                        .ok()
-                        .map(|s| s.exit_code() as i32)
+                    child.wait().ok().map(|s| s.exit_code() as i32)
                 } else {
                     None
                 }
@@ -367,11 +361,7 @@ pub fn spawn_session(
         loop {
             std::thread::sleep(std::time::Duration::from_millis(200));
             let st = app3.state::<crate::AppState>();
-            let mut sessions = st
-                .terminal
-                .sessions
-                .lock()
-                .expect("terminal sessions lock");
+            let mut sessions = st.terminal.sessions.lock().expect("terminal sessions lock");
             let Some(sess) = sessions.get(&id) else {
                 // 会话已被读取线程或 close_session 清理。
                 return;
@@ -387,11 +377,12 @@ pub fn spawn_session(
                 let removed = sessions.remove(&id);
                 drop(sessions);
                 if let Some(sess) = removed {
-                    let exit_code = if let Some(mut child) = sess.child.lock().expect("child lock").take() {
-                        child.wait().ok().map(|s| s.exit_code() as i32)
-                    } else {
-                        None
-                    };
+                    let exit_code =
+                        if let Some(mut child) = sess.child.lock().expect("child lock").take() {
+                            child.wait().ok().map(|s| s.exit_code() as i32)
+                        } else {
+                            None
+                        };
                     let _ = channel3.send(TerminalEvent::Exit(exit_code));
                 }
                 return;
@@ -405,10 +396,7 @@ pub fn spawn_session(
 /// 向会话写入输入（UTF-8 字节流）。
 pub fn write_session(runtime: &TerminalRuntime, id: u64, data: &str) -> Result<(), AppError> {
     if data.as_bytes().len() > MAX_WRITE_BYTES {
-        return Err(AppError::new(
-            "input_too_large",
-            "单次输入超过 64KB 限制",
-        ));
+        return Err(AppError::new("input_too_large", "单次输入超过 64KB 限制"));
     }
     let sessions = runtime.sessions.lock().expect("terminal sessions lock");
     let sess = sessions
@@ -423,7 +411,12 @@ pub fn write_session(runtime: &TerminalRuntime, id: u64, data: &str) -> Result<(
 }
 
 /// 调整会话窗口大小（列/行）。
-pub fn resize_session(runtime: &TerminalRuntime, id: u64, cols: u16, rows: u16) -> Result<(), AppError> {
+pub fn resize_session(
+    runtime: &TerminalRuntime,
+    id: u64,
+    cols: u16,
+    rows: u16,
+) -> Result<(), AppError> {
     let sessions = runtime.sessions.lock().expect("terminal sessions lock");
     let sess = sessions
         .get(&id)
@@ -503,7 +496,10 @@ mod tests {
 
     #[test]
     fn shell_whitelist() {
-        assert_eq!(resolve_shell("powershell").unwrap().program, "powershell.exe");
+        assert_eq!(
+            resolve_shell("powershell").unwrap().program,
+            "powershell.exe"
+        );
         assert_eq!(resolve_shell("cmd").unwrap().program, "cmd.exe");
         assert!(resolve_shell("bash").is_err());
         assert!(resolve_shell("").is_err());
