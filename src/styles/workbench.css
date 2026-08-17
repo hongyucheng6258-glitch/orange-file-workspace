@@ -1,0 +1,226 @@
+/* ─── Workbench 分屏布局样式 ─────────────────────────────── */
+
+.wb-root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-0, #1e1e2e);
+}
+
+/* ─── 分割容器 ─── */
+
+.split-container {
+  display: flex;
+  overflow: hidden;
+}
+
+.split-row {
+  flex-direction: row;
+}
+
+.split-column {
+  flex-direction: column;
+}
+
+.split-child {
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ─── Resize Handle ─── */
+
+.split-handle {
+  background: var(--border-1, #333346);
+  flex-shrink: 0;
+  position: relative;
+  transition: background 0.15s;
+  z-index: 5;
+}
+
+.split-handle:hover {
+  background: var(--accent-1, #5b5b8a);
+}
+
+.split-handle-row {
+  cursor: col-resize;
+  width: 4px;
+}
+
+.split-handle-column {
+  cursor: row-resize;
+  height: 4px;
+}
+
+/* ─── 面板 ─── */
+
+.wb-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-1, #252535);
+}
+
+.wb-panel-body {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.wb-panel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--text-dim, #6e6e8e);
+  font-size: 14px;
+}
+
+.wb-panel-empty-hint {
+  opacity: 0.5;
+}
+
+/* ─── 标签栏 ─── */
+
+.wb-tabbar {
+  display: flex;
+  align-items: center;
+  height: 35px;
+  background: var(--bg-2, #1a1a28);
+  border-bottom: 1px solid var(--border-1, #333346);
+  padding: 0 4px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.wb-tabbar-tabs {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  overflow: hidden;
+  gap: 1px;
+}
+
+.wb-tabbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.wb-tabbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim, #6e6e8e);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+
+.wb-tabbar-btn:hover {
+  background: var(--bg-3, #333346);
+  color: var(--text-1, #cdd6f4);
+}
+
+/* ─── 标签 ─── */
+
+.wb-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 28px;
+  min-width: 0;
+  max-width: 180px;
+  background: transparent;
+  color: var(--text-dim, #6e6e8e);
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+  transition: all 0.15s;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.wb-tab:hover {
+  background: var(--bg-3, #2a2a3e);
+  color: var(--text-1, #cdd6f4);
+}
+
+.wb-tab-active {
+  background: var(--bg-1, #252535);
+  color: var(--text-1, #cdd6f4);
+  border-bottom: 2px solid var(--accent-1, #89b4fa);
+}
+
+.wb-tab-icon {
+  font-size: 13px;
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+.wb-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.wb-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.wb-tab-close:hover {
+  opacity: 1;
+  background: var(--bg-3, #333346);
+}
+
+/* ─── 欢迎页 ─── */
+
+.wb-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--text-dim, #6e6e8e);
+  gap: 8px;
+}
+
+.wb-welcome-icon {
+  font-size: 48px;
+  opacity: 0.3;
+}
+
+.wb-welcome-title {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-1, #cdd6f4);
+}
+
+.wb-welcome-hint {
+  font-size: 13px;
+  opacity: 0.7;
+}

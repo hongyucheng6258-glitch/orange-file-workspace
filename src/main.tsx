@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./app/App";
 import "./styles/tokens.css";
 import "./styles/app.css";
+import "./styles/workbench.css";
 import { applyTheme, listenSystemTheme } from "./lib/theme";
 
 async function bootstrap() {
