@@ -79,7 +79,10 @@ pub fn get_file_icon(state: State<AppState>, resource_id: String) -> CommandResu
     let cache_dir = state.data_dir.lock().expect("dir lock").join("thumbnails");
     let dest = match thumbnail_service::extract_file_icon(&path, &cache_dir) {
         Ok(d) => d,
-        Err(_) => return Ok(None),
+        Err(e) => {
+            eprintln!("get_file_icon: extract failed for {}: {} ({})", path.display(), e.message, e.code);
+            return Ok(None);
+        }
     };
     let dest_str = dest.to_string_lossy().to_string();
     let _ = repo::upsert_thumbnail(

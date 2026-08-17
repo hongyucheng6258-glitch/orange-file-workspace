@@ -30,6 +30,23 @@ pub fn open_file(state: State<AppState>, resource_id: String) -> CommandResult<s
     let (content, session) = editor_service::open_session(&conn, &resource_id, &path)?;
     // 打开后读取未保存草稿（若有），供前端提示恢复
     let draft = editor_service::get_draft(&conn, &resource_id)?;
+
+    // 更新资源的 updated_at，使仪表盘"最近使用"列表反映访问
+    let now = crate::db::connection::now_unix();
+    let _ = conn.execute(
+        "UPDATE resources SET updated_at = ?2 WHERE id = ?1",
+        rusqlite::params![&resource_id, now],
+    );
+    // 同步记录到 recent_items 表（供 future API 使用）
+    let resource_type = match resource.kind.as_str() {
+        "file" => "file",
+        "folder" => "folder",
+        "page" => "page",
+        "project" => "project",
+        _ => "file",
+    };
+    let _ = crate::services::recent_service::record_access(&conn, &resource_id, resource_type);
+
     Ok(serde_json::json!({
         "resource": resource,
         "content": content,

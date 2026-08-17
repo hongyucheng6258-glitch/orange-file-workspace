@@ -4,7 +4,7 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--bg-0, #1e1e2e);
+  background: var(--bg);
 }
 
 /* ─── 分割容器 ─── */
@@ -31,15 +31,15 @@
 /* ─── Resize Handle ─── */
 
 .split-handle {
-  background: var(--border-1, #333346);
+  background: var(--border);
   flex-shrink: 0;
   position: relative;
-  transition: background 0.15s;
+  transition: background var(--dur-fast) var(--ease);
   z-index: 5;
 }
 
 .split-handle:hover {
-  background: var(--accent-1, #5b5b8a);
+  background: var(--primary);
 }
 
 .split-handle-row {
@@ -60,7 +60,7 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--bg-1, #252535);
+  background: var(--surface);
 }
 
 .wb-panel-body {
@@ -75,7 +75,7 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  color: var(--text-dim, #6e6e8e);
+  color: var(--text-tertiary);
   font-size: 14px;
 }
 
@@ -89,8 +89,8 @@
   display: flex;
   align-items: center;
   height: 35px;
-  background: var(--bg-2, #1a1a28);
-  border-bottom: 1px solid var(--border-1, #333346);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
   padding: 0 4px;
   user-select: none;
   flex-shrink: 0;
@@ -120,17 +120,17 @@
   padding: 0 4px;
   border: none;
   background: transparent;
-  color: var(--text-dim, #6e6e8e);
+  color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-s);
   font-size: 14px;
   line-height: 1;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .wb-tabbar-btn:hover {
-  background: var(--bg-3, #333346);
-  color: var(--text-1, #cdd6f4);
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 /* ─── 新建标签下拉菜单 ─── */
@@ -144,10 +144,10 @@
   top: 100%;
   right: 0;
   margin-top: 4px;
-  background: var(--bg-2, #1a1a28);
-  border: 1px solid var(--border-1, #333346);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-md);
   z-index: 100;
   min-width: 120px;
   overflow: hidden;
@@ -161,15 +161,15 @@
   padding: 6px 10px;
   border: none;
   background: transparent;
-  color: var(--text-1, #cdd6f4);
+  color: var(--text);
   cursor: pointer;
   font-size: 12px;
   text-align: left;
-  transition: background 0.15s;
+  transition: background var(--dur-fast) var(--ease);
 }
 
 .wb-tabbar-menu-item:hover {
-  background: var(--bg-3, #333346);
+  background: var(--surface-hover);
 }
 
 .wb-tabbar-menu-icon {
@@ -188,23 +188,23 @@
   min-width: 0;
   max-width: 180px;
   background: transparent;
-  color: var(--text-dim, #6e6e8e);
+  color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 4px 4px 0 0;
-  transition: all 0.15s;
+  border-radius: var(--radius-s) var(--radius-s) 0 0;
+  transition: all var(--dur-fast) var(--ease);
   font-size: 12px;
   white-space: nowrap;
 }
 
 .wb-tab:hover {
-  background: var(--bg-3, #2a2a3e);
-  color: var(--text-1, #cdd6f4);
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 .wb-tab-active {
-  background: var(--bg-1, #252535);
-  color: var(--text-1, #cdd6f4);
-  border-bottom: 2px solid var(--accent-1, #89b4fa);
+  background: var(--surface);
+  color: var(--text);
+  border-bottom: 2px solid var(--primary);
 }
 
 .wb-tab-icon {
@@ -234,12 +234,12 @@
   line-height: 1;
   flex-shrink: 0;
   opacity: 0.5;
-  transition: opacity 0.15s;
+  transition: opacity var(--dur-fast) var(--ease);
 }
 
 .wb-tab-close:hover {
   opacity: 1;
-  background: var(--bg-3, #333346);
+  background: var(--surface-active);
 }
 
 /* ─── 欢迎页 ─── */
@@ -251,7 +251,7 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  color: var(--text-dim, #6e6e8e);
+  color: var(--text-tertiary);
   gap: 8px;
 }
 
@@ -263,7 +263,7 @@
 .wb-welcome-title {
   font-size: 18px;
   font-weight: 500;
-  color: var(--text-1, #cdd6f4);
+  color: var(--text);
 }
 
 .wb-welcome-hint {
@@ -308,14 +308,14 @@
   gap: 6px;
   height: 32px;
   padding: 0 8px;
-  background: var(--bg-2, #1a1a28);
-  border-bottom: 1px solid var(--border-1, #333346);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .wb-editor-file {
   font-size: 12px;
-  color: var(--text-1, #cdd6f4);
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -326,7 +326,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent-1, #89b4fa);
+  background: var(--primary);
   flex-shrink: 0;
 }
 
@@ -337,16 +337,16 @@
   padding: 2px 8px;
   border: none;
   background: transparent;
-  color: var(--text-dim, #6e6e8e);
+  color: var(--text-secondary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-s);
   font-size: 12px;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .wb-editor-save:hover:not(:disabled) {
-  background: var(--bg-3, #333346);
-  color: var(--text-1, #cdd6f4);
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 .wb-editor-save:disabled {
@@ -367,12 +367,12 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  color: var(--text-dim, #6e6e8e);
+  color: var(--text-tertiary);
   font-size: 13px;
 }
 
 .wb-editor-error {
-  color: var(--danger, #f38ba8);
+  color: var(--danger);
 }
 
 .spin {

@@ -24,6 +24,9 @@ export interface RecentItem {
   access_count: number;
   last_accessed_at: number;
   created_at: number;
+  // Joined from resources table
+  name?: string | null;
+  path?: string | null;
 }
 
 // ============ Workspace Sessions ============

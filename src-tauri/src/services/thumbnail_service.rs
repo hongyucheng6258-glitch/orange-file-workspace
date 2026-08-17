@@ -63,9 +63,11 @@ impl Drop for ComInitializer {
 
 #[cfg(target_os = "windows")]
 pub fn extract_file_icon(path: &Path, cache_dir: &Path) -> Result<PathBuf, AppError> {
+    // 中毒后自动恢复：前一次提取若 panic 会导致 Mutex poisoned，
+    // 用 into_inner 取出内部值继续执行，避免后续所有提取永久失败。
     let _guard = ICON_EXTRACT_LOCK
         .lock()
-        .map_err(|_| AppError::new("icon_locked", "图标提取锁被占用"))?;
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let _com = ComInitializer::new();
 
     use windows::Win32::{
