@@ -28,6 +28,16 @@ interface IndexStatus {
   fts_enabled: boolean;
 }
 
+interface TaskItem {
+  id: string;
+  task_id: string;
+  resource_id: string | null;
+  source_path: string | null;
+  status: string;
+  error_message: string | null;
+  updated_at: number;
+}
+
 const STATUS_LABEL: Record<string, string> = {
   pending: "等待扫描",
   scanning: "扫描中",
@@ -55,6 +65,25 @@ export function TaskCenterPage() {
   const { tasks, refresh, cancel } = useTaskStore();
   const [backups, setBackups] = useState<BackupRecord[]>([]);
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
+  const [errors, setErrors] = useState<Record<string, TaskItem[]>>({});
+  const [loadingErrors, setLoadingErrors] = useState<Set<string>>(new Set());
+
+  const loadErrors = async (taskId: string) => {
+    if (loadingErrors.has(taskId)) return;
+    setLoadingErrors((prev) => new Set(prev).add(taskId));
+    try {
+      const items = await call<TaskItem[]>("list_task_items", { taskId });
+      setErrors((prev) => ({ ...prev, [taskId]: items }));
+    } catch {
+      /* 静默 */
+    } finally {
+      setLoadingErrors((prev) => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
+    }
+  };
 
   const loadBackups = async () => {
     try {
@@ -115,12 +144,43 @@ export function TaskCenterPage() {
                   {t.completed_count} 完成 · {t.failed_count} 失败
                   {t.total_count != null ? ` · 共 ${t.total_count}` : ""}
                 </span>
-                {(t.status === "queued" || t.status === "running" || t.status === "paused") && (
-                  <button className="btn btn-ghost" onClick={() => cancel(t.id)}>
-                    <X size={13} /> 取消
-                  </button>
-                )}
+                <span className="task-card-actions">
+                  {t.failed_count > 0 && (
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => loadErrors(t.id)}
+                      disabled={loadingErrors.has(t.id)}
+                    >
+                      <AlertCircle size={13} />
+                      {loadingErrors.has(t.id)
+                        ? "加载中…"
+                        : errors[t.id]
+                          ? "收起失败清单"
+                          : `查看失败清单 (${t.failed_count})`}
+                    </button>
+                  )}
+                  {(t.status === "queued" || t.status === "running" || t.status === "paused") && (
+                    <button className="btn btn-ghost" onClick={() => cancel(t.id)}>
+                      <X size={13} /> 取消
+                    </button>
+                  )}
+                </span>
               </div>
+              {errors[t.id] && errors[t.id].length > 0 && (
+                <div className="task-error-list">
+                  {errors[t.id].map((item) => (
+                    <div key={item.id} className="task-error-item" title={item.source_path ?? ""}>
+                      <AlertCircle size={11} color="var(--danger)" />
+                      <span className="task-error-path">
+                        {item.source_path ?? "(未知路径)"}
+                      </span>
+                      {item.error_message && (
+                        <span className="task-error-msg">{item.error_message}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
 

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronDown,
@@ -59,11 +60,22 @@ function kindIcon(r: Resource) {
   return <FileIcon size={16} color="var(--file)" />;
 }
 
+export const FILE_ROW_HEIGHT = 36;
+
 export function FileTable({ onOpen, onSelect, onRename, onTrash }: FileTableProps) {
   const { resources, selection, toggleSelect, clearSelection, selectMany, sortKey, sortAsc, setSort, toggleFavorite } =
     useFileStore();
   const [menu, setMenu] = useState<{ x: number; y: number; resource: Resource } | null>(null);
   const navigate = useNavigate();
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: resources.length,
+    getScrollElement: () => bodyRef.current,
+    estimateSize: () => FILE_ROW_HEIGHT,
+    overscan: 12,
+  });
+  const virtualItems = virtualizer.getVirtualItems();
 
   /** “在终端打开”：解析资源物理路径后跳转终端页（无可用路径则用默认目录）。 */
   const openTerminal = async (r: Resource) => {
@@ -131,78 +143,95 @@ export function FileTable({ onOpen, onSelect, onRename, onTrash }: FileTableProp
           <span className="col-time">{sortHeader("updated_at", "修改时间")}</span>
           <span className="col-actions" />
         </div>
-        <div className="file-table-body" role="rowgroup">
-          {resources.map((r) => {
-            const selected = selection.has(r.id);
-            return (
-              <div
-                key={r.id}
-                role="row"
-                draggable
-                className={`file-row ${selected ? "selected" : ""}`}
-                onClick={(e) => onRowClick(r, e)}
-                onDoubleClick={() => onDoubleClick(r)}
-                onContextMenu={(e) => onContext(e, r)}
-                onDragStart={(e) => {
-                  e.preventDefault();
-                  startDragOut(selection.has(r.id) ? [...selection] : [r.id]);
-                }}
-              >
-                <span className="col-name">
-                  <span className="row-icon">{kindIcon(r)}</span>
-                  <span className="row-name" title={r.name}>
-                    {r.name}
+        <div className="file-table-body" role="rowgroup" ref={bodyRef}>
+          <div
+            style={{
+              position: "relative",
+              height: `${virtualizer.getTotalSize()}px`,
+              width: "100%",
+            }}
+          >
+            {virtualItems.map((vi) => {
+              const r = resources[vi.index];
+              const selected = selection.has(r.id);
+              return (
+                <div
+                  key={r.id}
+                  role="row"
+                  draggable
+                  className={`file-row ${selected ? "selected" : ""}`}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: FILE_ROW_HEIGHT,
+                    transform: `translateY(${vi.start}px)`,
+                  }}
+                  onClick={(e) => onRowClick(r, e)}
+                  onDoubleClick={() => onDoubleClick(r)}
+                  onContextMenu={(e) => onContext(e, r)}
+                  onDragStart={(e) => {
+                    e.preventDefault();
+                    startDragOut(selection.has(r.id) ? [...selection] : [r.id]);
+                  }}
+                >
+                  <span className="col-name">
+                    <span className="row-icon">{kindIcon(r)}</span>
+                    <span className="row-name" title={r.name}>
+                      {r.name}
+                    </span>
                   </span>
-                </span>
-                <span className="col-kind">
-                  {r.kind === "folder" ? "文件夹" : fileTypeName(r.name)}
-                </span>
-                <span className="col-size">
-                  {r.kind === "folder" ? "-" : formatSize(undefined)}
-                </span>
-                <span className="col-time">{formatTime(r.updated_at)}</span>
-                <span className="col-actions">
-                  {r.kind === "folder" && (
+                  <span className="col-kind">
+                    {r.kind === "folder" ? "文件夹" : fileTypeName(r.name)}
+                  </span>
+                  <span className="col-size">
+                    {r.kind === "folder" ? "-" : formatSize(undefined)}
+                  </span>
+                  <span className="col-time">{formatTime(r.updated_at)}</span>
+                  <span className="col-actions">
+                    {r.kind === "folder" && (
+                      <button
+                        className="icon-btn"
+                        title="在终端打开"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void openTerminal(r);
+                        }}
+                      >
+                        <TerminalSquare size={14} />
+                      </button>
+                    )}
                     <button
                       className="icon-btn"
-                      title="在终端打开"
+                      title={r.is_favorite ? "取消收藏" : "收藏"}
                       onClick={(e) => {
                         e.stopPropagation();
-                        void openTerminal(r);
+                        toggleFavorite(r.id);
                       }}
                     >
-                      <TerminalSquare size={14} />
+                      {r.is_favorite ? (
+                        <Star size={14} color="var(--warning)" />
+                      ) : (
+                        <StarOff size={14} />
+                      )}
                     </button>
-                  )}
-                  <button
-                    className="icon-btn"
-                    title={r.is_favorite ? "取消收藏" : "收藏"}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleFavorite(r.id);
-                    }}
-                  >
-                    {r.is_favorite ? (
-                      <Star size={14} color="var(--warning)" />
-                    ) : (
-                      <StarOff size={14} />
-                    )}
-                  </button>
-                  <button
-                    className="icon-btn"
-                    title="更多"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                      setMenu({ x: rect.left - 160, y: rect.bottom + 4, resource: r });
-                    }}
-                  >
-                    <MoreHorizontal size={15} />
-                  </button>
-                </span>
-              </div>
-            );
-          })}
+                    <button
+                      className="icon-btn"
+                      title="更多"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                        setMenu({ x: rect.left - 160, y: rect.bottom + 4, resource: r });
+                      }}
+                    >
+                      <MoreHorizontal size={15} />
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 

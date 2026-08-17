@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection, OptionalExtension, Result as SqliteResult};
 
 use crate::db::connection::now_unix;
-use crate::db::models::Task;
+use crate::db::models::{Task, TaskItem};
 
 /// 创建任务记录（queued 状态）。
 pub fn create_task(
@@ -114,6 +114,40 @@ pub fn get_task(conn: &Connection, id: &str) -> SqliteResult<Option<Task>> {
 pub fn list_tasks(conn: &Connection, limit: i64) -> SqliteResult<Vec<Task>> {
     let mut stmt = conn.prepare("SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?1")?;
     let rows = stmt.query_map([limit], task_from_row)?;
+    rows.collect()
+}
+
+/// 是否已请求取消（status = 'cancelled'）。用于扫描阶段周期性短路。
+pub fn is_cancelled(conn: &Connection, id: &str) -> SqliteResult<bool> {
+    let status: Option<String> = conn
+        .query_row(
+            "SELECT status FROM tasks WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(status.as_deref() == Some("cancelled"))
+}
+
+/// 查询任务的全部单项结果（含失败清单）。
+pub fn list_task_items(conn: &Connection, task_id: &str, limit: i64) -> SqliteResult<Vec<TaskItem>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, task_id, resource_id, source_path, status, error_message, updated_at
+         FROM task_items WHERE task_id = ?1
+         ORDER BY CASE WHEN status = 'failed' THEN 0 ELSE 1 END, updated_at ASC
+         LIMIT ?2",
+    )?;
+    let rows = stmt.query_map(params![task_id, limit], |row| {
+        Ok(TaskItem {
+            id: row.get(0)?,
+            task_id: row.get(1)?,
+            resource_id: row.get(2)?,
+            source_path: row.get(3)?,
+            status: row.get(4)?,
+            error_message: row.get(5)?,
+            updated_at: row.get(6)?,
+        })
+    })?;
     rows.collect()
 }
 

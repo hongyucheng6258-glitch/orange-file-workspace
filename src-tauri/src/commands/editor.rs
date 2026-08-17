@@ -158,3 +158,14 @@ pub fn discard_session(state: State<AppState>, resource_id: String) -> CommandRe
     editor_service::discard_session(&conn, &resource_id)?;
     Ok(())
 }
+
+/// 检测磁盘文件是否在会话基准后被外部修改（窗口聚焦时调用）。
+#[tauri::command]
+pub fn check_external_change(
+    state: State<AppState>,
+    resource_id: String,
+    path: String,
+) -> CommandResult<bool> {
+    let conn = lock_db(&state);
+    Ok(editor_service::check_external_change(&conn, &resource_id, &path)?)
+}

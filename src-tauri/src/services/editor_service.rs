@@ -6,6 +6,7 @@ use crate::db::connection::now_unix;
 use crate::db::models::{new_id, EditorSession};
 use crate::error::AppError;
 use crate::services::file_service as fsutil;
+use crate::services::hash_service;
 use crate::services::preview_service;
 
 /// 保存结果。
@@ -91,17 +92,19 @@ pub fn save_session(
 
     // 更新会话基准
     let (new_size, new_modified) = fsutil::stat_basic(path)?;
+    let new_hash = hash_service::sha256_bytes(content.as_bytes());
     let now = now_unix();
     conn.execute(
         "UPDATE editor_sessions
          SET base_path = ?2, base_size = ?3, base_modified_at = ?4,
-             draft_content = ?5, is_dirty = 0, updated_at = ?6
+             base_hash = ?5, draft_content = ?6, is_dirty = 0, updated_at = ?7
          WHERE resource_id = ?1",
         params![
             resource_id,
             path.to_string_lossy(),
             new_size,
             new_modified,
+            new_hash,
             content,
             now
         ],
@@ -165,6 +168,26 @@ pub fn read_disk_full(path: &Path) -> Result<String, AppError> {
     preview_service::read_text_full(path, EDITOR_MAX_BYTES)
 }
 
+/// 检测磁盘文件是否在会话基准之后被外部修改（size+mtime；文件缺失视为已更改）。
+/// 供前端在窗口聚焦时主动刷新冲突状态，避免未保存草稿被静默覆盖。
+pub fn check_external_change(
+    conn: &Connection,
+    resource_id: &str,
+    path: &str,
+) -> Result<bool, AppError> {
+    let base = get_session(conn, resource_id)?;
+    let Some(sess) = base else { return Ok(false) };
+    if sess.base_size > EDITOR_MAX_BYTES as i64 {
+        return Ok(false);
+    }
+    let p = Path::new(path);
+    if !p.exists() {
+        return Ok(true);
+    }
+    let (size, modified) = fsutil::stat_basic(p)?;
+    Ok(size != sess.base_size || modified != sess.base_modified_at)
+}
+
 /// 最近打开的文件（按会话更新时间倒序，排除已删除资源）。
 /// 返回 (resource_id, 文件名, 路径, 更新时间)。
 pub fn list_recent_files(
@@ -226,15 +249,17 @@ fn upsert_session(
     content: &str,
     now: i64,
 ) -> SqliteResult<EditorSession> {
+    let hash = hash_service::sha256_bytes(content.as_bytes());
     conn.execute(
         "INSERT INTO editor_sessions (
             id, resource_id, base_path, base_size, base_modified_at,
             base_hash, draft_content, is_dirty, created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, 0, ?7, ?7)
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8, ?8)
          ON CONFLICT(resource_id) DO UPDATE SET
             base_path = excluded.base_path,
             base_size = excluded.base_size,
             base_modified_at = excluded.base_modified_at,
+            base_hash = excluded.base_hash,
             draft_content = excluded.draft_content,
             is_dirty = 0,
             updated_at = excluded.updated_at",
@@ -244,6 +269,7 @@ fn upsert_session(
             path.to_string_lossy(),
             size,
             modified,
+            hash,
             content,
             now
         ],
@@ -254,7 +280,7 @@ fn upsert_session(
         base_path: path.to_string_lossy().to_string(),
         base_size: size,
         base_modified_at: modified,
-        base_hash: None,
+        base_hash: Some(hash),
         draft_content: content.to_string(),
         language: None,
         is_dirty: false,

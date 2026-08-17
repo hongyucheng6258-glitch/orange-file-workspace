@@ -33,6 +33,8 @@ interface EditorState {
   clearError: () => void;
   discardSession: () => Promise<void>;
   resolveDraft: (restore: boolean) => void;
+  checkExternalChange: () => Promise<void>;
+  reopenFresh: () => Promise<void>;
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -207,6 +209,43 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       } catch {
         // 忽略
       }
+    }
+  },
+
+  checkExternalChange: async () => {
+    const { openFile, conflict } = get();
+    if (!openFile || conflict) return;
+    const changed = await call<boolean>("check_external_change", {
+      resourceId: openFile.resource.id,
+      path: openFile.path,
+    }).catch(() => false);
+    if (!changed) return;
+    // 有未保存修改 → 弹冲突；无修改 → 直接重载磁盘最新内容并刷新基准
+    if (get().dirty) {
+      set({
+        conflict: { message: "文件在编辑期间被外部修改", current_size: 0 },
+      });
+    } else {
+      await get().reopenFresh();
+    }
+  },
+
+  reopenFresh: async () => {
+    const { openFile } = get();
+    if (!openFile) return;
+    try {
+      const data = await call<OpenFile & { session: unknown; draft?: string | null }>(
+        "open_file",
+        { resourceId: openFile.resource.id },
+      );
+      set({
+        content: data.content,
+        openFile: { resource: data.resource, content: data.content, path: data.path },
+        dirty: false,
+        conflict: null,
+      });
+    } catch {
+      // 保持现状，由保存时的冲突检测兜底
     }
   },
 }));

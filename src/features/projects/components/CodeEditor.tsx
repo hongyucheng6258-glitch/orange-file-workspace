@@ -76,6 +76,16 @@ export function CodeEditor() {
   const [diskVersion, setDiskVersion] = useState<string | null>(null);
   const [diskLoading, setDiskLoading] = useState(false);
 
+  // 窗口重新聚焦时主动检查外部修改，避免未保存草稿被静默覆盖
+  const { checkExternalChange } = useEditorStore();
+  useEffect(() => {
+    const onFocus = () => {
+      void checkExternalChange();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [checkExternalChange]);
+
   // 冲突时读取磁盘当前内容用于对比
   const viewDiskVersion = useCallback(async () => {
     if (!openFile) return;

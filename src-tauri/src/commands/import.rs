@@ -1,6 +1,6 @@
 use tauri::{AppHandle, State};
 
-use crate::db::models::{new_id, SourceType, Task};
+use crate::db::models::{new_id, SourceType, Task, TaskItem};
 use crate::error::AppError;
 use crate::ipc::CommandResult;
 use crate::services::import_service::{resolve_shortcut, start_import, ImportRequest};
@@ -84,6 +84,17 @@ pub fn cancel_task(state: State<AppState>, task_id: String) -> CommandResult<()>
 pub fn list_tasks(state: State<AppState>, limit: Option<i64>) -> CommandResult<Vec<Task>> {
     let conn = state.conn.lock().expect("db lock");
     Ok(tasks::list_tasks(&conn, limit.unwrap_or(50))?)
+}
+
+/// 查询任务的单项结果（含失败文件清单）。
+#[tauri::command]
+pub fn list_task_items(
+    state: State<AppState>,
+    task_id: String,
+    limit: Option<i64>,
+) -> CommandResult<Vec<TaskItem>> {
+    let conn = state.conn.lock().expect("db lock");
+    Ok(tasks::list_task_items(&conn, &task_id, limit.unwrap_or(200))?)
 }
 
 #[allow(dead_code)]

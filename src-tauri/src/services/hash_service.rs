@@ -20,6 +20,13 @@ pub fn sha256_file(path: &Path) -> Result<String, AppError> {
     Ok(hex::encode(hasher.finalize()))
 }
 
+/// 计算字节数据 SHA-256 哈希（十六进制小写）。用于内存中的内容指纹。
+pub fn sha256_bytes(data: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    hex::encode(hasher.finalize())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -85,8 +85,13 @@ fn collect_imports(
     ignore_rules: &[settings_service::IgnoreRule],
     out: &mut Vec<PendingImport>,
     failures: &mut Vec<(PathBuf, String)>,
+    cancel: &mut impl FnMut() -> bool,
 ) {
+    let mut visited: usize = 0;
     for p in paths {
+        if visited > 0 && visited % CANCEL_CHECK_EVERY == 0 && cancel() {
+            return;
+        }
         let raw = PathBuf::from(p);
         let mut path = raw.clone();
         if !path.exists() {
@@ -107,8 +112,11 @@ fn collect_imports(
                 ignore_rules,
                 out,
                 failures,
+                &mut visited,
+                cancel,
             );
         } else if path.is_file() {
+            visited += 1;
             if is_ignored(&path, ignore_rules) {
                 continue;
             }
@@ -118,6 +126,9 @@ fn collect_imports(
             }
         } else {
             failures.push((raw, "路径不存在或不可访问".to_string()));
+        }
+        if visited % CANCEL_CHECK_EVERY == 0 && cancel() {
+            return;
         }
     }
 }
@@ -273,15 +284,32 @@ fn run_import(app: &AppHandle, task_id: &str, req: &ImportRequest) -> Result<(),
     // 收集待导入的文件与目录（保留层级）。
     let mut pending: Vec<PendingImport> = Vec::new();
     let mut failures: Vec<(PathBuf, String)> = Vec::new();
-    collect_imports(
-        &req.paths,
-        req.mode,
-        req.parent_id.clone(),
-        &managed_root,
-        &ignore_rules,
-        &mut pending,
-        &mut failures,
-    );
+    let cancelled;
+    {
+        let mut cancel = || -> bool {
+            let conn = state.conn.lock().expect("db lock");
+            tasks::is_cancelled(&conn, task_id).unwrap_or(false)
+        };
+        collect_imports(
+            &req.paths,
+            req.mode,
+            req.parent_id.clone(),
+            &managed_root,
+            &ignore_rules,
+            &mut pending,
+            &mut failures,
+            &mut cancel,
+        );
+        cancelled = cancel();
+    }
+    if cancelled {
+        {
+            let conn = state.conn.lock().expect("db lock");
+            tasks::mark_cancelled(&conn, task_id)?;
+        }
+        emit_progress(app, task_id, "cancelled", 0, 0, 0);
+        return Ok(());
+    }
 
     let total = (pending.len() + failures.len()) as i64;
     let total_pending = pending.len();
@@ -369,6 +397,8 @@ fn collect_tree(
     ignore_rules: &[settings_service::IgnoreRule],
     out: &mut Vec<PendingImport>,
     failures: &mut Vec<(PathBuf, String)>,
+    visited: &mut usize,
+    cancel: &mut impl FnMut() -> bool,
 ) {
     let Some(name_os) = node.file_name() else {
         failures.push((node.to_path_buf(), "无法获取目录名".to_string()));
@@ -424,6 +454,10 @@ fn collect_tree(
     };
 
     for entry in entries.flatten() {
+        *visited += 1;
+        if *visited % CANCEL_CHECK_EVERY == 0 && cancel() {
+            return;
+        }
         // 不跟随符号链接与目录联接（防循环递归与越界复制）
         let Ok(ft) = entry.file_type() else { continue };
         if ft.is_symlink() {
@@ -442,6 +476,8 @@ fn collect_tree(
                 ignore_rules,
                 out,
                 failures,
+                visited,
+                cancel,
             );
         } else if ft.is_file() {
             match build_file(&p, &dest_dir, mode, Some(dir_id.clone())) {
@@ -746,6 +782,8 @@ mod tests {
         let managed = temp_dir("mroot");
         let mut pending = Vec::new();
         let mut failures = Vec::new();
+        let mut visited = 0;
+        let mut cancelled = false;
         collect_tree(
             &root,
             &managed,
@@ -754,6 +792,8 @@ mod tests {
             &[],
             &mut pending,
             &mut failures,
+            &mut visited,
+            &mut || cancelled,
         );
 
         assert!(failures.is_empty(), "failures: {failures:?}");
@@ -822,6 +862,8 @@ mod tests {
         let managed = temp_dir("mroot");
         let mut pending = Vec::new();
         let mut failures = Vec::new();
+        let mut visited = 0;
+        let mut cancelled = false;
         collect_tree(
             &root,
             &managed,
@@ -830,6 +872,8 @@ mod tests {
             &[],
             &mut pending,
             &mut failures,
+            &mut visited,
+            &mut || cancelled,
         );
 
         assert!(failures.is_empty(), "failures: {failures:?}");
@@ -923,6 +967,7 @@ mod tests {
         let managed = temp_dir("mroot");
         let mut pending = Vec::new();
         let mut failures = Vec::new();
+        let mut cancel = || false;
         collect_imports(
             &[lnk.to_string_lossy().to_string()],
             SourceType::External,
@@ -931,6 +976,7 @@ mod tests {
             &[],
             &mut pending,
             &mut failures,
+            &mut cancel,
         );
 
         assert!(failures.is_empty(), "failures: {failures:?}");
@@ -998,6 +1044,7 @@ mod tests {
         let managed = temp_dir("mroot");
         let mut pending = Vec::new();
         let mut failures = Vec::new();
+        let mut cancel = || false;
         collect_imports(
             &[mojibake_path],
             SourceType::External,
@@ -1006,6 +1053,7 @@ mod tests {
             &[],
             &mut pending,
             &mut failures,
+            &mut cancel,
         );
 
         assert!(failures.is_empty(), "failures: {failures:?}");
@@ -1041,6 +1089,8 @@ mod tests {
         let managed = temp_dir("mroot");
         let mut pending = Vec::new();
         let mut failures = Vec::new();
+        let mut visited = 0;
+        let mut cancelled = false;
         collect_tree(
             &root,
             &managed,
@@ -1049,6 +1099,8 @@ mod tests {
             &[],
             &mut pending,
             &mut failures,
+            &mut visited,
+            &mut || cancelled,
         );
         assert!(failures.is_empty(), "failures: {failures:?}");
 
@@ -1612,6 +1664,8 @@ mod tests {
             if std::os::windows::fs::symlink_dir(&root, &link).is_ok()
                 && std::fs::symlink_metadata(&link).is_ok()
             {
+                let mut visited = 0usize;
+                let mut cancel = || false;
                 collect_tree(
                     &root,
                     &managed,
@@ -1620,6 +1674,8 @@ mod tests {
                     &[],
                     &mut pending,
                     &mut failures,
+                    &mut visited,
+                    &mut cancel,
                 );
                 // 若循环被跟随会无限递归/栈溢出；此处只应收集真实目录与文件
                 assert!(
