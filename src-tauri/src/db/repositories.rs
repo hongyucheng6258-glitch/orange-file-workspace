@@ -344,6 +344,22 @@ pub fn update_location_hash(
     Ok(())
 }
 
+/// 更新文件位置的路径和规范化路径（用于重命名/移动后同步）。
+pub fn update_location_path(
+    conn: &Connection,
+    resource_id: &str,
+    new_path: &str,
+    canonical_path: &str,
+) -> SqliteResult<()> {
+    conn.execute(
+        "UPDATE resource_locations
+         SET path = ?2, canonical_path = ?3
+         WHERE resource_id = ?1",
+        params![resource_id, new_path, canonical_path],
+    )?;
+    Ok(())
+}
+
 /// 读取应用设置（value_json 原样返回）。
 pub fn get_setting(conn: &Connection, key: &str) -> SqliteResult<Option<String>> {
     conn.query_row(

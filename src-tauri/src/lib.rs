@@ -470,7 +470,14 @@ pub fn run() {
             commands::saved_searches::delete_saved_search,
             commands::saved_searches::toggle_saved_search_pinned,
             commands::saved_searches::reorder_pinned_saved_searches,
-            commands::saved_searches::execute_saved_search
+            commands::saved_searches::execute_saved_search,
+            // Batch operations / duplicates / undo
+            commands::batch_ops::find_duplicates,
+            commands::batch_ops::get_hash_stats,
+            commands::batch_ops::preview_batch_rename,
+            commands::batch_ops::execute_batch_rename,
+            commands::batch_ops::list_operation_history,
+            commands::batch_ops::undo_operation
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

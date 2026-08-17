@@ -231,6 +231,37 @@ pub struct SavedSearch {
     pub last_executed_at: Option<i64>,
 }
 
+/// 操作历史记录 — 支持撤销的批量操作快照。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OperationHistory {
+    pub id: String,
+    pub operation_type: String,
+    pub description: Option<String>,
+    pub before_state: String,
+    pub after_state: String,
+    pub affected_count: i64,
+    pub created_at: i64,
+    pub undone_at: Option<i64>,
+}
+
+/// 重复文件分组中的单个条目。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DuplicateEntry {
+    pub resource_id: String,
+    pub name: String,
+    pub path: String,
+    pub size_bytes: i64,
+    pub source_type: String,
+}
+
+/// 重复文件分组。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DuplicateGroup {
+    pub content_hash: String,
+    pub size_bytes: i64,
+    pub entries: Vec<DuplicateEntry>,
+}
+
 /// 缩略图缓存记录。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Thumbnail {

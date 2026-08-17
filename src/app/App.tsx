@@ -6,6 +6,7 @@ import { ProjectPage } from "../features/projects/routes/ProjectPage";
 import { TaskCenterPage } from "../features/tasks/components/TaskCenter";
 import { SearchPage } from "../features/search/routes/SearchPage";
 import { CollectionPage } from "../features/search/routes/CollectionPage";
+import { DuplicatesPage } from "../features/files/routes/DuplicatesPage";
 import { FavoritesPage } from "../features/favorites/routes/FavoritesPage";
 import { TrashPage } from "../features/trash/routes/TrashPage";
 import { SettingsPage } from "../features/settings/routes/SettingsPage";
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/system" element={<SystemPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/collections/:id" element={<CollectionPage />} />
+          <Route path="/duplicates" element={<DuplicatesPage />} />
         </Route>
       </Routes>
     </HashRouter>

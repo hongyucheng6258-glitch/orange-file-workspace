@@ -1,5 +1,6 @@
 pub mod autostart;
 pub mod backups;
+pub mod batch_ops;
 pub mod command_palette;
 pub mod dashboard;
 pub mod drag;

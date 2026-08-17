@@ -12,6 +12,9 @@ import {
   ChevronLeft,
   ChevronRight as ArrowRight,
   TerminalSquare,
+  Edit3,
+  Hash,
+  Undo2,
 } from "lucide-react";
 import { useFileStore } from "../stores/fileStore";
 import { FileTable } from "../components/FileTable";
@@ -21,6 +24,13 @@ import { fetchResourceDetail } from "../stores/fileStore";
 import { call } from "../../../lib/tauri";
 import { getResourcePath } from "../../../lib/openResource";
 import type { Resource } from "../../../lib/types";
+import { BatchRenameDialog } from "../components/BatchRenameDialog";
+import {
+  listOperationHistory,
+  undoOperation,
+  hashResources,
+} from "../api/batchOpsApi";
+import type { OperationHistory } from "../types/batchOps";
 
 export function FilePage() {
   const {
@@ -43,7 +53,14 @@ export function FilePage() {
   const [renameValue, setRenameValue] = useState("");
   const [creating, setCreating] = useState(false);
   const [folderName, setFolderName] = useState("");
+  const [showBatchRename, setShowBatchRename] = useState(false);
+  const [undoHistory, setUndoHistory] = useState<OperationHistory[]>([]);
   const renameInputRef = useRef<HTMLInputElement>(null);
+
+  // 加载操作历史用于撤销
+  useEffect(() => {
+    listOperationHistory(5).then(setUndoHistory).catch(() => {});
+  }, [showBatchRename]);
 
   const currentParentId = crumbs.length > 0 ? crumbs[crumbs.length - 1].id : null;
 
@@ -241,6 +258,57 @@ export function FilePage() {
             </button>
           </div>
         </div>
+
+        {/* 批量操作工具栏 — 选中文件时显示 */}
+        {selection.size > 0 && (
+          <div className="batch-toolbar">
+            <span className="batch-count">已选 {selection.size} 项</span>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setShowBatchRename(true)}
+              title="批量重命名选中文件"
+            >
+              <Edit3 size={13} /> 批量重命名
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              title="计算选中文件哈希值"
+              onClick={async () => {
+                const ids = [...selection];
+                await hashResources(ids);
+                // 刷新列表
+                loadChildren(currentParentId);
+              }}
+            >
+              <Hash size={13} /> 计算哈希
+            </button>
+            {undoHistory.filter((h) => !h.undone_at).length > 0 && (
+              <button
+                className="btn btn-ghost btn-sm"
+                title="撤销最近操作"
+                onClick={async () => {
+                  const lastUndone = undoHistory.find((h) => !h.undone_at);
+                  if (!lastUndone) return;
+                  await undoOperation(lastUndone.id);
+                  setUndoHistory(await listOperationHistory(5));
+                  loadChildren(currentParentId);
+                }}
+              >
+                <Undo2 size={13} /> 撤销
+              </button>
+            )}
+          </div>
+        )}
+
+        {showBatchRename && (
+          <BatchRenameDialog
+            selected={resources.filter((r) => selection.has(r.id))}
+            onClose={() => setShowBatchRename(false)}
+            onDone={() => {
+              loadChildren(currentParentId);
+            }}
+          />
+        )}
 
         {/* 内容区 */}
         <div className="file-content">

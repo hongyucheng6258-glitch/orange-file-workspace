@@ -3486,6 +3486,269 @@ input {
   color: var(--text-secondary, #888);
 }
 
+/* ===== 批量重命名对话框 ===== */
+.brd-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l, 12px);
+  width: 600px;
+  max-width: 90vw;
+  max-height: 80vh;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+}
+.brd-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+.brd-modes {
+  display: flex;
+  gap: 4px;
+}
+.brd-mode-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m, 6px);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--dur-fast, 120ms) var(--ease, ease);
+}
+.brd-mode-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.brd-mode-btn:hover:not(.active) {
+  background: var(--surface-hover, rgba(0,0,0,0.04));
+}
+.brd-params {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.brd-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m, 6px);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+.brd-input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+.brd-input-narrow {
+  flex: 0 0 80px;
+}
+.brd-arrow {
+  color: var(--text-secondary, #888);
+  font-size: 14px;
+}
+.brd-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+}
+.brd-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.brd-stat.ok { color: #10b981; }
+.brd-stat.warn { color: #f59e0b; }
+.brd-stat.err { color: #ef4444; }
+.brd-preview {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m, 6px);
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--bg);
+}
+.brd-loading, .brd-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  padding: 24px;
+  color: var(--text-secondary, #888);
+  font-size: 13px;
+}
+.brd-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.brd-row:last-child { border-bottom: none; }
+.brd-ok { color: var(--text); }
+.brd-conflict { color: #f59e0b; }
+.brd-invalid, .brd-missing { color: #ef4444; }
+.brd-old {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.brd-new {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+.brd-status-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 99px;
+  background: var(--surface-hover, rgba(0,0,0,0.06));
+  white-space: nowrap;
+}
+
+/* ===== 重复文件检测页 ===== */
+.duplicates-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.duplicates-head {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.duplicates-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.duplicates-title-row h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+.duplicates-stats {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+.dup-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary, #888);
+}
+.duplicates-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  padding: 40px;
+  color: var(--text-secondary, #888);
+}
+.duplicates-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 16px;
+}
+.dup-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m, 6px);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.dup-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: var(--surface-hover, rgba(0,0,0,0.02));
+  transition: background var(--dur-fast, 120ms) var(--ease, ease);
+}
+.dup-group-head:hover {
+  background: var(--surface-hover, rgba(0,0,0,0.06));
+}
+.dup-group-size {
+  font-weight: 600;
+  font-size: 13px;
+}
+.dup-group-count {
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+}
+.dup-group-hash {
+  font-size: 11px;
+  color: var(--text-secondary, #888);
+  margin-left: auto;
+  font-family: monospace;
+}
+.dup-entries {
+  padding: 4px 0;
+}
+.dup-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px 6px 36px;
+  cursor: default;
+  transition: background var(--dur-fast, 120ms) var(--ease, ease);
+}
+.dup-entry:hover {
+  background: var(--surface-hover, rgba(0,0,0,0.04));
+}
+.dup-entry-body {
+  flex: 1;
+  min-width: 0;
+}
+.dup-entry-name {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dup-entry-path {
+  font-size: 11px;
+  color: var(--text-secondary, #888);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dup-entry-size {
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+  flex-shrink: 0;
+}
+.dup-hint {
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+  line-height: 1.6;
+}
+
+/* ===== 批量操作工具栏 ===== */
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.batch-count {
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+  font-weight: 500;
+}
+
 /* ===== 设置页 ===== */
 .settings-page {
   flex: 1;

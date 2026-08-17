@@ -14,6 +14,7 @@ import {
   Activity,
   Columns3,
   Sparkles,
+  Copy,
 } from "lucide-react";
 import { useSavedSearchStore } from "../features/search/stores/savedSearchStore";
 
@@ -24,6 +25,7 @@ const NAV = [
   { to: "/pages", label: "页面", icon: FileText },
   { to: "/projects", label: "代码项目", icon: Code2 },
   { to: "/favorites", label: "收藏", icon: Star },
+  { to: "/duplicates", label: "重复检测", icon: Copy },
   { to: "/trash", label: "回收站", icon: Trash2 },
   { to: "/tasks", label: "任务中心", icon: ListTodo },
   { to: "/runs", label: "运行中心", icon: Activity },

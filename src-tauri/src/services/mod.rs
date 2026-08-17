@@ -1,8 +1,10 @@
 pub mod app_index;
 pub mod autostart;
 pub mod backup_service;
+pub mod batch_service;
 pub mod command_palette_service;
 pub mod drag_service;
+pub mod duplicate_service;
 pub mod editor_service;
 pub mod file_service;
 pub mod git_service;
