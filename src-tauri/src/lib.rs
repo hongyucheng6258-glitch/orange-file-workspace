@@ -237,6 +237,7 @@ pub fn run() {
                 // 关闭窗口：若开启“最小化到托盘”，阻止关闭并隐藏窗口。
                 let close_handle = app.handle().clone();
                 if let Some(window) = app.get_webview_window("main") {
+                    let close_handle = close_handle.clone();
                     window.on_window_event(move |event| {
                         if let WindowEvent::CloseRequested { api, .. } = event {
                             let minimize = close_handle
@@ -258,6 +259,25 @@ pub fn run() {
                         }
                     });
                 }
+
+                // 开机自启（--autostart）且开启“最小化到托盘”时保持隐藏驻留托盘；
+                // 其余情况（手动启动等）正常显示窗口。
+                let autostart_flag = std::env::args().any(|a| a == "--autostart");
+                let minimize_to_tray = close_handle
+                    .state::<AppState>()
+                    .conn
+                    .lock()
+                    .map(|conn| {
+                        services::settings_service::load_settings(&conn)
+                            .map(|s| s.general.minimize_to_tray)
+                            .unwrap_or(true)
+                    })
+                    .unwrap_or(true);
+                if !(autostart_flag && minimize_to_tray) {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                    }
+                }
             }
 
             Ok(())
@@ -267,6 +287,47 @@ pub fn run() {
             app_info,
             commands::autostart::set_autostart,
             commands::autostart::get_autostart,
+            // Tags
+            commands::tags::create_tag,
+            commands::tags::list_tags,
+            commands::tags::get_tag,
+            commands::tags::update_tag,
+            commands::tags::delete_tag,
+            commands::tags::add_tag_to_resource,
+            commands::tags::remove_tag_from_resource,
+            commands::tags::get_resource_tags,
+            commands::tags::get_resources_by_tag,
+            // Recent items
+            commands::recent::record_resource_access,
+            commands::recent::get_recent_items,
+            commands::recent::remove_recent_item,
+            commands::recent::clear_recent_items,
+            commands::recent::cleanup_old_recent_items,
+            // Workspace sessions
+            commands::workspace_sessions::save_workspace_session,
+            commands::workspace_sessions::get_workspace_session,
+            commands::workspace_sessions::delete_workspace_session,
+            commands::workspace_sessions::list_workspace_sessions,
+            commands::workspace_sessions::mark_session_restored,
+            // Git
+            commands::git::register_git_repository,
+            commands::git::get_git_repository,
+            commands::git::update_git_repository_status,
+            commands::git::mark_git_repository_fetched,
+            commands::git::save_git_file_status,
+            commands::git::get_git_file_status,
+            commands::git::list_git_file_statuses,
+            commands::git::clear_git_file_statuses,
+            commands::git::delete_git_repository,
+            // Command palette
+            commands::command_palette::record_command_execution,
+            commands::command_palette::get_frequent_commands,
+            commands::command_palette::get_recent_commands,
+            commands::command_palette::get_commands_by_category,
+            commands::command_palette::search_commands,
+            commands::command_palette::clear_command_history,
+            commands::command_palette::delete_command_history,
+            commands::command_palette::get_command_statistics,
             commands::resources::list_children,
             commands::resources::get_resource,
             commands::resources::create_folder,

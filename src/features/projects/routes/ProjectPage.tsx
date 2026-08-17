@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Code2, Folder, File as FileIcon, FolderOpen, ChevronRight, ChevronDown, Plus, Trash2, TerminalSquare, FileCode2 } from "lucide-react";
+import { Code2, Folder, File as FileIcon, FolderOpen, ChevronRight, ChevronDown, Plus, Trash2, TerminalSquare, FileCode2, GitBranch, ChevronUp } from "lucide-react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { Resource } from "../../../lib/types";
 import { call } from "../../../lib/tauri";
@@ -10,6 +10,8 @@ import { useProjectRuntimeStore } from "../stores/projectRuntimeStore";
 import { CodeEditor } from "../components/CodeEditor";
 import { ProjectRuntimePanel } from "../components/ProjectRuntimePanel";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
+import { GitStatus } from "../../../components/GitStatus";
+import { ProjectSessionManager } from "../components/ProjectSessionManager";
 
 /** 文件树节点：懒加载子目录。 */
 function TreeNode({
@@ -102,6 +104,8 @@ export function ProjectPage() {
   const [recentFiles, setRecentFiles] = useState<
     { id: string; name: string; path: string; updated_at: number }[]
   >([]);
+  const [showGitPanel, setShowGitPanel] = useState(false);
+  const [projectPath, setProjectPath] = useState<string | null>(null);
   const openFile = useEditorStore((s) => s.open);
   const resolveOpen = useEditorStore((s) => s.resolveOpen);
   const cancelPending = useEditorStore((s) => s.cancelPending);
@@ -129,6 +133,7 @@ export function ProjectPage() {
   const selectProject = useCallback(async (p: Resource) => {
     setCurrent(p);
     setTree([]);
+    setProjectPath(null);
     const items = await call<Resource[]>("list_project_files", {
       projectId: p.id,
       parentId: null,
@@ -136,6 +141,13 @@ export function ProjectPage() {
     setTree(items);
     // 加载运行识别、状态与事件订阅。
     void useProjectRuntimeStore.getState().load(p.id);
+    // 获取项目路径用于 Git 面板
+    try {
+      const path = await getResourcePath(p.id);
+      setProjectPath(path);
+    } catch {
+      // 路径获取失败时静默
+    }
   }, []);
 
   // 打开文件：dirty 时进入确认流程，等待用户选择保存/放弃/取消。
@@ -203,6 +215,9 @@ export function ProjectPage() {
 
   return (
     <div className="project-page">
+      {current && (
+        <ProjectSessionManager projectId={current.id} />
+      )}
       <aside className="project-list">
         <div className="project-list-head">
           <span>代码项目</span>
@@ -272,8 +287,27 @@ export function ProjectPage() {
             onOpenFile={handleOpenFile}
           />
         ))}
-      </div>
-    </aside>
+        </div>
+
+        {/* Phase 1: Git 状态面板 */}
+        {current && projectPath && (
+          <div className="project-git-section">
+            <button
+              className="project-git-toggle"
+              onClick={() => setShowGitPanel((v) => !v)}
+            >
+              <GitBranch size={13} />
+              <span>Git</span>
+              {showGitPanel ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+            {showGitPanel && (
+              <div className="project-git-body">
+                <GitStatus projectId={current.id} repoPath={projectPath} />
+              </div>
+            )}
+          </div>
+        )}
+      </aside>
 
     <main className="project-editor">
       <CodeEditor />

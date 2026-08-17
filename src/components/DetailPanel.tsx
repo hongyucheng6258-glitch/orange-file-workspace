@@ -12,6 +12,9 @@ import {
   FileArchive,
   Image as ImageIcon,
   ExternalLink,
+  Tag,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { fetchResourceDetail, toggleFavoriteResource } from "../features/files/stores/fileStore";
 import type { ResourceDetail } from "../lib/types";
@@ -19,6 +22,7 @@ import { fileTypeName, formatSize, formatTime } from "../lib/tauri";
 import { Thumbnail } from "./Thumbnail";
 import { openResourceExternally } from "../lib/openResource";
 import { FileIconThumb } from "./FileIconThumb";
+import { TagManager } from "./TagManager";
 
 /** 从托管副本路径中提取盘符用于友好显示（如 "C 盘"）。 */
 function managedDirLabel(path: string): string {
@@ -51,6 +55,7 @@ function typeIcon(resourceId: string, kind: string, name: string) {
 export function DetailPanel({ resourceId }: { resourceId: string | null }) {
   const [detail, setDetail] = useState<ResourceDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showTags, setShowTags] = useState(false);
 
   useEffect(() => {
     if (!resourceId) {
@@ -178,6 +183,23 @@ export function DetailPanel({ resourceId }: { resourceId: string | null }) {
                 </span>
               </div>
             ))}
+          </div>
+
+          {/* Phase 1: 标签管理 */}
+          <div className="detail-section">
+            <button
+              className="detail-section-toggle"
+              onClick={() => setShowTags((v) => !v)}
+            >
+              {showTags ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              <Tag size={13} />
+              <span>标签</span>
+            </button>
+            {showTags && (
+              <div className="detail-tag-manager">
+                <TagManager resourceId={detail.resource.id} embedded />
+              </div>
+            )}
           </div>
 
           {detail.resource.kind === "folder" && (

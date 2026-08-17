@@ -20,6 +20,7 @@ import {
 import { call, formatSize, formatTime } from "../../../lib/tauri";
 import { FileIconThumb } from "../../../components/FileIconThumb";
 import { useFileStore } from "../../files/stores/fileStore";
+import { RecentItemsList } from "../../../components/RecentItemsList";
 import type { DashboardStats, RecentItem, ResourceKind } from "../../../lib/types";
 
 function kindIcon(kind: ResourceKind, name: string) {
@@ -234,6 +235,28 @@ export function HomePage() {
           )}
         </section>
       </div>
+
+      {/* Phase 1: 统一最近访问（支持类型筛选） */}
+      <section className="home-panel home-recent-v2">
+        <div className="home-panel-head">
+          <span className="home-panel-title">
+            <Clock size={15} /> 最近访问（按类型筛选）
+          </span>
+        </div>
+        <RecentItemsList
+          limit={10}
+          onItemClick={(item) => {
+            const pathMap: Record<string, string> = {
+              file: "/files",
+              folder: "/files",
+              page: "/pages",
+              project: "/projects",
+            };
+            const path = pathMap[item.resource_type] ?? "/files";
+            navigate(path, { state: { openId: item.resource_id } });
+          }}
+        />
+      </section>
     </div>
   );
 }

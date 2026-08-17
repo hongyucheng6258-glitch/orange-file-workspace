@@ -4,5 +4,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     include: ["src/**/*.test.ts"],
+    pool: "threads",
+    fileParallelism: false,
   },
 });

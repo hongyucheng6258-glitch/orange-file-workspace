@@ -35,7 +35,11 @@ function kindIcon(kind: ResourceKind, name: string) {
   return <FileIcon size={15} color="var(--file)" />;
 }
 
-export function Topbar() {
+interface TopbarProps {
+  onCommandPaletteToggle?: () => void;
+}
+
+export function Topbar({ onCommandPaletteToggle }: TopbarProps) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -103,6 +107,16 @@ export function Topbar() {
         </button>
       </form>
       <div className="topbar-right">
+        {onCommandPaletteToggle && (
+          <button
+            className="btn btn-ghost cmdk-toggle"
+            onClick={onCommandPaletteToggle}
+            title="命令面板 (Ctrl+K)"
+          >
+            <span className="cmdk-label">命令</span>
+            <kbd className="cmdk-kbd">Ctrl K</kbd>
+          </button>
+        )}
         <div className="topbar-recent" ref={rootRef}>
           <button
             className={`btn btn-ghost recent-toggle ${open ? "active" : ""}`}

@@ -14,6 +14,11 @@ impl AppError {
             message: message.into(),
         }
     }
+
+    #[allow(non_snake_case)]
+    pub fn NotFound(msg: impl Into<String>) -> Self {
+        Self::new("not_found", msg)
+    }
 }
 
 impl std::fmt::Display for AppError {

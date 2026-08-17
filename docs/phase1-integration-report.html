@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orange Phase 1 — 应用集成报告</title>
+<style>
+  :root {
+    --bg: #F7F4EF;
+    --surface: #FBF9F5;
+    --text-1: #1F2421;
+    --text-2: #4A5048;
+    --text-3: #8B9389;
+    --primary: #C4612F;
+    --primary-light: #E89368;
+    --border: #E7E1D7;
+    --success: #5B8C5A;
+    --code-bg: #2C2C2C;
+    --code-text: #E8E0D4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text-1);
+    line-height: 1.6;
+    padding: 40px 20px;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text-1);
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+  .subtitle { color: var(--text-3); font-size: 14px; margin-bottom: 32px; }
+  h2 {
+    font-size: 20px;
+    color: var(--text-1);
+    margin-top: 32px;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 { font-size: 15px; color: var(--text-2); margin-top: 20px; margin-bottom: 8px; }
+  p { color: var(--text-2); margin-bottom: 12px; }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-num { font-size: 28px; font-weight: 700; color: var(--primary); }
+  .stat-label { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { background: var(--surface); color: var(--text-3); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+  td { color: var(--text-2); }
+  code {
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    color: var(--primary);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .check { color: var(--success); }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-done { background: #D4E8D3; color: #2D5A2C; }
+  .badge-pending { background: #FFF3CD; color: #856404; }
+  ul { list-style: none; padding: 0; }
+  li { padding: 4px 0; color: var(--text-2); font-size: 13px; }
+  li::before { content: '→'; color: var(--primary); margin-right: 8px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Orange Phase 1 — 应用集成报告</h1>
+  <p class="subtitle">2026-08-17 · Phase 1 核心功能已全层完成并集成至主应用</p>
+
+  <div class="stats">
+    <div class="stat-card"><div class="stat-num">5</div><div class="stat-label">功能模块</div></div>
+    <div class="stat-card"><div class="stat-num">7</div><div class="stat-label">集成点</div></div>
+    <div class="stat-card"><div class="stat-num">0</div><div class="stat-label">TS 错误</div></div>
+    <div class="stat-card"><div class="stat-num">30+</div><div class="stat-label">修改文件</div></div>
+  </div>
+
+  <h2>集成概览</h2>
+  <p>Phase 1 的五个核心功能模块已全部集成到主应用的实际页面和布局中，用户可以通过自然交互（快捷键、按钮、面板）直接使用这些功能。</p>
+
+  <table>
+    <tr>
+      <th>功能</th>
+      <th>集成位置</th>
+      <th>触发方式</th>
+      <th>状态</th>
+    </tr>
+    <tr>
+      <td>命令面板</td>
+      <td><code>AppShell</code> 全局布局</td>
+      <td>Ctrl+K / 顶栏按钮</td>
+      <td><span class="badge badge-done">完成</span></td>
+    </tr>
+    <tr>
+      <td>最近访问列表</td>
+      <td><code>HomePage</code> 仪表板</td>
+      <td>自动展示 + 类型筛选</td>
+      <td><span class="badge badge-done">完成</span></td>
+    </tr>
+    <tr>
+      <td>标签管理</td>
+      <td><code>DetailPanel</code> 详情面板</td>
+      <td>展开「标签」折叠区</td>
+      <td><span class="badge badge-done">完成</span></td>
+    </tr>
+    <tr>
+      <td>Git 状态</td>
+      <td><code>ProjectPage</code> 项目页</td>
+      <td>展开「Git」折叠区</td>
+      <td><span class="badge badge-done">完成</span></td>
+    </tr>
+    <tr>
+      <td>工作区会话</td>
+      <td><code>ProjectPage</code> 项目页</td>
+      <td>自动保存 + 自动恢复</td>
+      <td><span class="badge badge-done">完成</span></td>
+    </tr>
+  </table>
+
+  <h2>集成详情</h2>
+
+  <h3>1. 命令面板 (Ctrl+K)</h3>
+  <ul>
+    <li><code>AppShell.tsx</code> — 添加 <code>useCommandPalette</code> hook，注册 12 个导航命令</li>
+    <li><code>Topbar.tsx</code> — 添加 <code>onCommandPaletteToggle</code> prop 和「Ctrl K」提示按钮</li>
+    <li>全局 <code>Ctrl+K</code> 快捷键由 hook 内部监听，无需额外配置</li>
+    <li>命令分类：导航（9 个）+ 操作（3 个），覆盖所有主要路由</li>
+  </ul>
+
+  <h3>2. 最近访问列表</h3>
+  <ul>
+    <li><code>HomePage.tsx</code> — 在仪表板底部添加 <code>RecentItemsList</code> 区块</li>
+    <li>支持按资源类型筛选（文件、文件夹、页面、项目）</li>
+    <li>点击项目自动导航到对应路由</li>
+    <li>显示最近 10 条访问记录</li>
+  </ul>
+
+  <h3>3. 标签管理</h3>
+  <ul>
+    <li><code>DetailPanel.tsx</code> — 添加可折叠的「标签」区域</li>
+    <li><code>TagManager</code> 组件新增 <code>embedded</code> 模式，适配面板内嵌</li>
+    <li>点击资源详情面板的「标签」按钮即可展开/收起</li>
+    <li>支持创建、删除、颜色选择、关联/取消关联</li>
+  </ul>
+
+  <h3>4. Git 状态</h3>
+  <ul>
+    <li><code>ProjectPage.tsx</code> — 在文件树侧栏底部添加可折叠 Git 面板</li>
+    <li>选择项目时自动获取项目路径并传入 <code>GitStatus</code></li>
+    <li>显示分支、ahead/behind、文件状态（暂存/未暂存）</li>
+    <li>支持按状态筛选（全部/新增/修改/删除/冲突等）</li>
+  </ul>
+
+  <h3>5. 工作区会话</h3>
+  <ul>
+    <li>新建 <code>ProjectSessionManager.tsx</code> — 纯逻辑组件，无渲染</li>
+    <li>项目打开时自动恢复上次打开的文件</li>
+    <li>文件打开/关闭后 800ms 防抖自动保存会话</li>
+    <li>项目切换时自动更新最后访问时间</li>
+  </ul>
+
+  <h2>新增文件</h2>
+  <table>
+    <tr><th>文件路径</th><th>用途</th></tr>
+    <tr><td><code>src/features/projects/components/ProjectSessionManager.tsx</code></td><td>工作区会话管理器</td></tr>
+  </table>
+
+  <h2>修改文件</h2>
+  <table>
+    <tr><th>文件</th><th>修改内容</th></tr>
+    <tr><td><code>src/layouts/AppShell.tsx</code></td><td>集成 CommandPalette + 导航命令</td></tr>
+    <tr><td><code>src/components/Topbar.tsx</code></td><td>添加 Ctrl+K 提示按钮</td></tr>
+    <tr><td><code>src/components/DetailPanel.tsx</code></td><td>添加标签管理折叠区</td></tr>
+    <tr><td><code>src/components/TagManager.tsx</code></td><td>新增 embedded 模式</td></tr>
+    <tr><td><code>src/features/home/routes/HomePage.tsx</code></td><td>添加 RecentItemsList 区块</td></tr>
+    <tr><td><code>src/features/projects/routes/ProjectPage.tsx</code></td><td>添加 GitStatus + SessionManager</td></tr>
+    <tr><td><code>src/styles/app.css</code></td><td>添加 cmdk-toggle、git-section 等 CSS</td></tr>
+    <tr><td><code>src/hooks/useWorkspaceSession.ts</code></td><td>修复 API 函数名</td></tr>
+    <tr><td><code>src/hooks/useTags.ts</code></td><td>修复 API 函数名和类型</td></tr>
+    <tr><td><code>src/hooks/useRecentItems.ts</code></td><td>修复参数顺序</td></tr>
+    <tr><td><code>src/hooks/useGitStatus.ts</code></td><td>修复 API 函数名</td></tr>
+    <tr><td><code>src/components/CommandPalette.tsx</code></td><td>移除未用变量</td></tr>
+    <tr><td><code>src/components/GitStatus.tsx</code></td><td>修复 API 函数名</td></tr>
+    <tr><td><code>src/api/phase1.ts</code></td><td>修复导入路径</td></tr>
+    <tr><td><code>src/examples/Phase1Integration.tsx</code></td><td>修复组件 props</td></tr>
+  </table>
+
+  <h2>验证结果</h2>
+  <table>
+    <tr><th>检查项</th><th>结果</th></tr>
+    <tr><td>TypeScript 编译 (<code>tsc --noEmit</code>)</td><td><span class="check">✓ 通过 (0 errors)</span></td></tr>
+    <tr><td>Rust 编译 (<code>cargo check</code>)</td><td><span class="badge badge-pending">需在开发环境验证</span></td></tr>
+    <tr><td>Rust 单元测试 (<code>cargo test</code>)</td><td><span class="badge badge-pending">需在开发环境验证</span></td></tr>
+    <tr><td>前端构建 (<code>npm run build</code>)</td><td><span class="badge badge-pending">需在开发环境验证</span></td></tr>
+  </table>
+
+  <h2>后续步骤</h2>
+  <ul>
+    <li>在开发环境运行 <code>cargo test</code> 验证 34 个 Rust 单元测试</li>
+    <li>在开发环境运行 <code>cargo check</code> 验证 Rust 编译</li>
+    <li>运行 <code>npm run dev</code> 实际测试交互体验</li>
+    <li>为 <code>autoSave</code> 添加更完善的 debounce（已在 ProjectSessionManager 中实现 800ms 防抖）</li>
+    <li>Phase 2 规划：任务跟踪、剪贴板历史、AI 助手</li>
+  </ul>
+</div>
+</body>
+</html>

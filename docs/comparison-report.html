@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orange 项目对比分析报告</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-weight: 300;
+      line-height: 1.7;
+      color: #1F2421;
+      background: #F7F4EF;
+      padding: 2rem 1rem;
+    }
+    
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #FFFFFF;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(31, 36, 33, 0.08);
+      overflow: hidden;
+    }
+    
+    header {
+      background: #1F2421;
+      color: #F7F4EF;
+      padding: 3rem 2.5rem 2.5rem;
+    }
+    
+    h1 {
+      font-family: 'Fraunces', 'DM Serif Display', Georgia, serif;
+      font-size: 2.5rem;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin-bottom: 0.75rem;
+    }
+    
+    h1 em {
+      font-style: italic;
+      color: #C4612F;
+    }
+    
+    .meta {
+      font-size: 0.9rem;
+      opacity: 0.7;
+      font-weight: 400;
+    }
+    
+    .content {
+      padding: 2.5rem;
+    }
+    
+    h2 {
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: 1.75rem;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+      margin: 2.5rem 0 1rem;
+      color: #1F2421;
+    }
+    
+    h2:first-child {
+      margin-top: 0;
+    }
+    
+    h3 {
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: 1.25rem;
+      font-weight: 400;
+      margin: 1.75rem 0 0.75rem;
+      color: #1F2421;
+    }
+    
+    p {
+      margin-bottom: 1rem;
+      color: #5C635D;
+    }
+    
+    .pill {
+      display: inline-block;
+      background: #F2E3D6;
+      color: #C4612F;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+      font-size: 0.9rem;
+    }
+    
+    thead {
+      background: #FBF9F5;
+    }
+    
+    th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      font-weight: 500;
+      color: #1F2421;
+      border-bottom: 1px solid #E7E1D7;
+    }
+    
+    td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #E7E1D7;
+      color: #5C635D;
+    }
+    
+    tr:last-child td {
+      border-bottom: none;
+    }
+    
+    ul {
+      margin: 1rem 0 1rem 1.5rem;
+      color: #5C635D;
+    }
+    
+    li {
+      margin-bottom: 0.5rem;
+    }
+    
+    .highlight-box {
+      background: #FBF9F5;
+      border-left: 3px solid #C4612F;
+      padding: 1.25rem 1.5rem;
+      margin: 1.5rem 0;
+      border-radius: 4px;
+    }
+    
+    .highlight-box p:last-child {
+      margin-bottom: 0;
+    }
+    
+    a {
+      color: #C4612F;
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.2s;
+    }
+    
+    a:hover {
+      border-bottom-color: #C4612F;
+    }
+    
+    .section {
+      margin: 2rem 0;
+    }
+    
+    code {
+      background: #FBF9F5;
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 0.85em;
+      color: #1F2421;
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    
+    .stat-card {
+      background: #FBF9F5;
+      padding: 1.25rem;
+      border-radius: 8px;
+      border: 1px solid #E7E1D7;
+    }
+    
+    .stat-label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #5C635D;
+      margin-bottom: 0.5rem;
+    }
+    
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 400;
+      color: #1F2421;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="pill">技术调研</div>
+      <h1>Orange 项目<em>对比分析</em>报告</h1>
+      <div class="meta">生成时间：2026-08-17 | 分析范围：GitHub 开源同类项目</div>
+    </header>
+    
+    <div class="content">
+      <div class="section">
+        <h2>项目概况</h2>
+        <p>Orange 是一个 <strong>本地优先、Windows 优先</strong>的桌面工作台，将文件管理、知识页面、代码项目、内置终端、全盘搜索和系统工具整合到单一界面。</p>
+        
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">当前分支</div>
+            <div class="stat-value">master</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Rust 测试</div>
+            <div class="stat-value">272+ 用例</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">前端框架</div>
+            <div class="stat-value">React 19</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">桌面框架</div>
+            <div class="stat-value">Tauri 2</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>技术栈清单</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>层级</th>
+              <th>技术选型</th>
+              <th>版本</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>桌面壳</td>
+              <td>Tauri + Rust</td>
+              <td>2.x / 2021 edition</td>
+            </tr>
+            <tr>
+              <td>前端框架</td>
+              <td>React + TypeScript + Vite</td>
+              <td>19.1 / 5.8 / 7.0</td>
+            </tr>
+            <tr>
+              <td>状态管理</td>
+              <td>Zustand</td>
+              <td>5.0</td>
+            </tr>
+            <tr>
+              <td>路由</td>
+              <td>React Router</td>
+              <td>7.18</td>
+            </tr>
+            <tr>
+              <td>代码编辑器</td>
+              <td>CodeMirror 6</td>
+              <td>6.x</td>
+            </tr>
+            <tr>
+              <td>富文本编辑器</td>
+              <td>Tiptap 3</td>
+              <td>3.30</td>
+            </tr>
+            <tr>
+              <td>终端</td>
+              <td>portable-pty + xterm</td>
+              <td>0.8.1 / 6.0</td>
+            </tr>
+            <tr>
+              <td>数据库</td>
+              <td>SQLite (rusqlite bundled)</td>
+              <td>0.40 + FTS5</td>
+            </tr>
+            <tr>
+              <td>Windows 集成</td>
+              <td>Win32 API + Windows Search</td>
+              <td>windows 0.61</td>
+            </tr>
+            <tr>
+              <td>测试</td>
+              <td>Vitest + Rust unit tests</td>
+              <td>4.1 / cargo test</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <h2>核心功能覆盖</h2>
+        <h3>已实现</h3>
+        <ul>
+          <li><strong>文件管理</strong>：托管/外部模式、目录浏览、缩略图、批处理、哈希校验、原生拖出</li>
+          <li><strong>页面编辑</strong>：Tiptap 富文本、图片、表格、任务列表、页面树、草稿恢复</li>
+          <li><strong>代码项目</strong>：目录导入、文件树、CodeMirror 编辑、大文件保护、外部修改冲突检测</li>
+          <li><strong>项目运行</strong>：Node/Python/Rust/Maven 等运行时识别、三级子项目扫描、并行运行、Windows Job 进程收容、实时日志</li>
+          <li><strong>Web 预览</strong>：端口探测、进程归属校验、启动后自动打开</li>
+          <li><strong>内置终端</strong>：多标签、Shell 枚举、输入/尺寸控制、主题、命令历史</li>
+          <li><strong>混合搜索</strong>：资源库 + Windows Search + 后台全盘索引 + 应用索引</li>
+          <li><strong>数据安全</strong>：回收站、完整/元数据备份、恢复预检、目录迁移</li>
+          <li><strong>系统工具</strong>：硬件监控、进程管理、网络状态、服务管理、启动项、电池、健康检查</li>
+          <li><strong>桌面集成</strong>：系统托盘、开机自启、主题切换</li>
+        </ul>
+        
+        <h3>数据模型预留但未实现</h3>
+        <ul>
+          <li><code>tags</code> / <code>resource_tags</code>：标签系统</li>
+          <li><code>resource_relations</code>：资源关系</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <h2>GitHub 同类项目对比</h2>
+        <p>通过 <code>Tauri local first</code>、<code>file manager React Rust</code>、<code>embedded terminal</code>、<code>project workspace</code> 等关键词检索，筛选出以下可比项目：</p>
+        
+        <table>
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>定位</th>
+              <th>Stars</th>
+              <th>相似度</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><a href="https://github.com/St0ff3l/fileterm" target="_blank">fileterm</a></td>
+              <td>Tauri 文件管理 + 终端 + 编辑器</td>
+              <td>~200</td>
+              <td>⭐⭐⭐⭐</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/gnoviawan/termul" target="_blank">termul</a></td>
+              <td>项目工作区 + 终端 + 代码编辑 + Web 预览</td>
+              <td>~150</td>
+              <td>⭐⭐⭐⭐</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/kimlimjustin/xplorer" target="_blank">Xplorer</a></td>
+              <td>Tauri 文件管理器 + 终端 + Git + 预览</td>
+              <td>~4.5k</td>
+              <td>⭐⭐⭐</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/cuiheng511/filepilot-ai" target="_blank">FilePilot</a></td>
+              <td>本地索引 + 标签 + 批处理 + AI</td>
+              <td>~100</td>
+              <td>⭐⭐⭐</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/trentbrew/filegraph-desktop-archive" target="_blank">Filegraph</a></td>
+              <td>文件 + 笔记 + 关系图谱（已归档）</td>
+              <td>~80</td>
+              <td>⭐⭐</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <h2>详细对比分析</h2>
+        
+        <h3>fileterm</h3>
+        <p><strong>相似点</strong>：Tauri + React + Rust、文件管理、编辑器、终端、传输任务中心</p>
+        <p><strong>差异化</strong>：偏远程运维（SSH/SFTP），不覆盖知识页面和项目运行</p>
+        <p><strong>值得借鉴</strong>：</p>
+        <ul>
+          <li>终端目录与文件面板联动</li>
+          <li>命令模板系统</li>
+          <li>传输任务中心（进度、暂停、恢复）</li>
+          <li>清晰的领域分层架构</li>
+          <li>签名更新与多平台发布流程</li>
+        </ul>
+        
+        <h3>termul</h3>
+        <p><strong>相似点</strong>：项目工作区、终端、代码编辑、文件树、Web 预览</p>
+        <p><strong>差异化</strong>：开发工具属性强，文件资料管理弱</p>
+        <p><strong>值得借鉴</strong>：</p>
+        <ul>
+          <li>分屏工作区布局（编辑器 + 终端 + 预览并排）</li>
+          <li>持久会话恢复（工作区状态快照）</li>
+          <li>全局命令面板（<code>Ctrl+K</code> 统一入口）</li>
+          <li>自定义快捷键系统</li>
+          <li>Git 面板集成</li>
+        </ul>
+        
+        <h3>Xplorer</h3>
+        <p><strong>相似点</strong>：Tauri 文件管理器、终端、Git、预览、搜索</p>
+        <p><strong>差异化</strong>：<code>next</code> 分支仍标注非生产就绪，主分支架构老旧</p>
+        <p><strong>值得借鉴</strong>：</p>
+        <ul>
+          <li>多标签和分栏文件浏览</li>
+          <li>丰富的文件预览（PDF、Office、视频、压缩包）</li>
+          <li>语义搜索集成</li>
+          <li>扩展市场 + 沙箱插件机制</li>
+          <li>Playwright UI 自动化测试</li>
+        </ul>
+        
+        <h3>FilePilot</h3>
+        <p><strong>相似点</strong>：本地索引、标签、搜索、批处理、回收站</p>
+        <p><strong>差异化</strong>：Python/PySide 技术栈，不涉及编辑器和终端</p>
+        <p><strong>值得借鉴</strong>：</p>
+        <ul>
+          <li>重复文件检测（哈希 + 相似度）</li>
+          <li>增量索引机制</li>
+          <li>保存搜索与智能集合</li>
+          <li>批量重命名预览</li>
+          <li>操作历史与撤销</li>
+          <li>OCR 与本地模型接入</li>
+        </ul>
+        
+        <h3>Filegraph</h3>
+        <p><strong>相似点</strong>：文件、笔记、代码、终端统一工作区</p>
+        <p><strong>差异化</strong>：仓库已归档，仅作设计参考</p>
+        <p><strong>值得借鉴</strong>：</p>
+        <ul>
+          <li>双向链接与反向链接</li>
+          <li>关系图谱可视化</li>
+          <li>空间画布（Canvas）</li>
+          <li>统一文件预览层</li>
+          <li>Agent 工具注册机制</li>
+        </ul>
+      </div>
+
+      <div class="highlight-box">
+        <p><strong>关键结论</strong>：没有发现一个项目同时覆盖 Orange 的全部范围。你的差异化恰恰是 <strong>Windows 本地文件工作台 + 知识页面 + 开发项目运行 + 系统工具</strong> 的融合定位。</p>
+      </div>
+
+      <div class="section">
+        <h2>当前缺口与风险</h2>
+        
+        <h3>P0：产品闭环缺失</h3>
+        <ul>
+          <li><strong>标签与资源关系</strong>：数据库已有表结构，业务层未落地，无法实现文件、页面、项目的互相关联</li>
+          <li><strong>统一命令面板</strong>：缺少 <code>Ctrl+K</code> 全局入口，高频操作依赖鼠标导航</li>
+          <li><strong>项目级 Git 工作流</strong>：已有代码编辑和终端，但缺文件差异、暂存、提交、分支切换</li>
+          <li><strong>统一工作区状态</strong>：无法保存和恢复项目打开的文件、终端标签、运行任务、面板尺寸</li>
+        </ul>
+        
+        <h3>P1：核心竞争力待增强</h3>
+        <ul>
+          <li><strong>分屏与多标签工作区</strong>：代码、页面、终端、预览无法并排显示</li>
+          <li><strong>文件智能整理</strong>：缺重复检测、批量重命名预览、保存搜索、操作历史</li>
+          <li><strong>更多文件预览</strong>：PDF、Office、CSV、音视频、压缩包预览缺失</li>
+          <li><strong>任务与资源联动</strong>：任务无法关联页面、文件、项目，运行失败无法自动生成待办</li>
+        </ul>
+        
+        <h3>P2：工程化与质量</h3>
+        <ul>
+          <li>Vitest 配置只匹配 <code>src/**/*.test.ts</code>，遗漏 <code>.test.mjs</code> 和 <code>.test.tsx</code></li>
+          <li>缺少桌面 UI 端到端测试（Playwright / tauri-driver）</li>
+          <li>前端无 ESLint/格式化门禁、覆盖率报告</li>
+          <li>CI 无安装包构建、签名、发布和安装验证</li>
+          <li>Tauri 文件访问权限范围过宽（<code>**</code> 全局读权限）</li>
+          <li>根目录缺少独立 <code>LICENSE</code> 文件</li>
+          <li>深度依赖 Windows 特性，无跨平台降级策略</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <h2>三种演进方案</h2>
+        
+        <table>
+          <thead>
+            <tr>
+              <th>方案</th>
+              <th>核心方向</th>
+              <th>优点</th>
+              <th>风险</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>A：开发者工作台</strong></td>
+              <td>Git、分屏、命令面板、工作区恢复、调试运行</td>
+              <td>与现有项目运行和终端能力衔接最好，定位清晰</td>
+              <td>文件知识管理差异化利用不足</td>
+            </tr>
+            <tr>
+              <td><strong>B：本地知识工作台</strong></td>
+              <td>标签、双链、关系图、OCR、语义搜索、智能整理</td>
+              <td>差异化强，文件与页面价值提升明显</td>
+              <td>索引、解析和 AI 容易扩大范围</td>
+            </tr>
+            <tr>
+              <td><strong>C：统一个人工作台</strong></td>
+              <td>先做统一资源模型，再逐步加入 A、B 的核心能力</td>
+              <td>最符合当前产品形态，长期扩展性最好</td>
+              <td>必须控制第一阶段范围，避免继续堆功能</td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <div class="highlight-box">
+          <p><strong>推荐方案 C</strong>，但采用 <strong>"A 优先、B 跟进"</strong> 的实施顺序。</p>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>推荐实施路线</h2>
+        
+        <h3>第一阶段：统一入口（当前启动）</h3>
+        <p>目标：让现有功能从"多个模块"变成"一个工作台"</p>
+        <ul>
+          <li>✅ 全局命令面板（<code>Ctrl+K</code>）</li>
+          <li>✅ 标签、收藏和资源关联</li>
+          <li>✅ 统一最近使用记录</li>
+          <li>✅ 项目工作区状态恢复</li>
+          <li>✅ Git 状态、差异和基础提交</li>
+          <li>✅ 修复测试匹配，建立 UI 冒烟测试</li>
+        </ul>
+        <p><strong>预计工期</strong>：2-3 周 | <strong>风险</strong>：低，全部为增量功能</p>
+        
+        <h3>第二阶段：统一工作流</h3>
+        <ul>
+          <li>分屏与多标签布局</li>
+          <li>终端、文件树和运行目录联动</li>
+          <li>项目任务与文件、页面关联</li>
+          <li>保存搜索和智能集合</li>
+          <li>重复文件检测、批量重命名预览、操作撤销</li>
+          <li>PDF、Office、CSV 和压缩包预览</li>
+        </ul>
+        
+        <h3>第三阶段：可扩展能力</h3>
+        <ul>
+          <li>受控插件接口</li>
+          <li>本地 OCR 和内容提取</li>
+          <li>可选的 Ollama/OpenAI 兼容接口</li>
+          <li>语义搜索与文件问答</li>
+          <li>安装包签名、自动更新、发布流水线</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <h2>第一阶段详细任务清单</h2>
+        
+        <h3>1. 全局命令面板</h3>
+        <ul>
+          <li>前端组件：快捷键监听（<code>Ctrl+K</code> / <code>Cmd+K</code>）、模糊搜索、命令分类</li>
+          <li>命令注册：打开文件、新建页面、切换项目、运行任务、系统工具、设置跳转</li>
+          <li>最近使用优先级排序</li>
+        </ul>
+        
+        <h3>2. 标签与资源关系</h3>
+        <ul>
+          <li>Rust 服务层：<code>tags</code> CRUD、<code>resource_tags</code> 关联、<code>resource_relations</code> 双向关系</li>
+          <li>前端 UI：标签输入、标签筛选、关系图可视化（可选）</li>
+          <li>迁移脚本：确保表结构与索引完整</li>
+        </ul>
+        
+        <h3>3. 统一最近使用</h3>
+        <ul>
+          <li>数据模型：<code>recent_items</code> 表，记录资源类型、ID、访问时间、访问频率</li>
+          <li>自动记录：打开文件、编辑页面、切换项目时触发</li>
+          <li>命令面板集成：最近项优先展示</li>
+        </ul>
+        
+        <h3>4. 项目工作区状态</h3>
+        <ul>
+          <li>数据模型：<code>workspace_sessions</code> 表，存储项目 ID、打开文件列表、终端标签、运行任务、面板布局</li>
+          <li>保存时机：项目关闭、应用退出、定时自动保存</li>
+          <li>恢复逻辑：项目重新打开时还原状态</li>
+        </ul>
+        
+        <h3>5. Git 基础工作流</h3>
+        <ul>
+          <li>依赖：<code>git2-rs</code> 或调用本地 <code>git</code> 命令</li>
+          <li>功能：文件状态（modified/staged/untracked）、差异查看、暂存、提交、分支列表、分支切换</li>
+          <li>UI：项目文件树集成 Git 状态标记、差异对比面板、提交输入框</li>
+        </ul>
+        
+        <h3>6. 测试补强</h3>
+        <ul>
+          <li>修复 <code>vitest.config.ts</code>：匹配 <code>**/*.test.{ts,tsx,mjs}</code></li>
+          <li>增加前端 UI 冒烟测试：Vitest + jsdom 或 Playwright</li>
+          <li>增加覆盖率报告：<code>vitest --coverage</code></li>
+          <li>CI 增加覆盖率门禁（可选）</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <h2>实施原则</h2>
+        <ul>
+          <li><strong>增量优先</strong>：所有功能均为新增或扩展，不破坏现有模块</li>
+          <li><strong>数据先行</strong>：先完成 Rust 服务层和数据库迁移，再做前端 UI</li>
+          <li><strong>测试同步</strong>：每个功能同步编写单元测试和集成测试</li>
+          <li><strong>文档更新</strong>：README 和用户文档同步更新</li>
+          <li><strong>小步快跑</strong>：每完成一项功能即可提交，保持主分支可用</li>
+        </ul>
+      </div>
+
+      <div class="section" style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #E7E1D7;">
+        <p style="color: #5C635D; font-size: 0.9rem; text-align: center;">本报告由 Orange 项目团队生成 | 2026-08-17</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -11,9 +11,10 @@ const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 /// 本应用的自启值名称（与应用 identifier 一致）。
 const VALUE_NAME: &str = "com.nexus.file-workspace";
 
-/// 生成注册表值：带引号的 exe 绝对路径。
+/// 生成注册表值：带引号的 exe 绝对路径 + 自启标记参数。
+/// 应用启动时检测到 `--autostart` 可判断本次为开机自启。
 fn command_value(exe: &Path) -> String {
-    format!("\"{}\"", exe.display())
+    format!("\"{}\" --autostart", exe.display())
 }
 
 /// 启用或禁用开机自启。
@@ -57,11 +58,11 @@ mod tests {
     fn command_value_quotes_exe_path() {
         assert_eq!(
             command_value(Path::new(r"C:\Program Files\Orange\orange.exe")),
-            r#""C:\Program Files\Orange\orange.exe""#
+            r#""C:\Program Files\Orange\orange.exe" --autostart"#
         );
         assert_eq!(
             command_value(Path::new(r"C:\Orange.exe")),
-            r#""C:\Orange.exe""#
+            r#""C:\Orange.exe" --autostart"#
         );
     }
 }
