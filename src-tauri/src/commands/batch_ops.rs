@@ -4,6 +4,7 @@ use rusqlite::Connection;
 use tauri::State;
 
 use crate::db::models::{DuplicateGroup, OperationHistory};
+use crate::error::AppError;
 use crate::ipc::CommandResult;
 use crate::services::{batch_service, duplicate_service};
 use crate::AppState;
@@ -16,7 +17,9 @@ fn lock_db<'a>(state: &'a AppState) -> MutexGuard<'a, Connection> {
 
 #[tauri::command]
 pub fn find_duplicates(state: State<AppState>) -> CommandResult<Vec<DuplicateGroup>> {
-    let conn = lock_db(&state);
+    let mut conn = lock_db(&state);
+    // 先补齐缺失的哈希，保证能检出重复
+    let _ensured = duplicate_service::ensure_all_hashed(&mut conn).map_err(|e| AppError::from(e))?;
     duplicate_service::find_duplicates(&conn).map_err(Into::into)
 }
 

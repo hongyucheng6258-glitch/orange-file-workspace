@@ -32,7 +32,9 @@ export function DuplicatesPage() {
     setLoading(true);
     setError(null);
     try {
-      const [dups, st] = await Promise.all([findDuplicates(), getHashStats()]);
+      // 先检测（内部会补齐哈希），再刷新统计，保证数字准确
+      const dups = await findDuplicates();
+      const st = await getHashStats();
       setGroups(dups);
       setStats(st);
     } catch (e) {
@@ -98,13 +100,11 @@ export function DuplicatesPage() {
         <div className="empty-state">
           <Hash size={32} />
           <p>未发现重复文件</p>
-          {stats[0] < stats[1] && (
-            <p className="dup-hint">
-              已计算 {stats[0]} 个文件哈希，共 {stats[1]} 个文件。
-              <br />
-              前往文件页面，选中文件后点击「计算哈希」以检测更多重复。
-            </p>
-          )}
+          <p className="dup-hint">
+            已扫描 {stats[0]} 个文件哈希，共 {stats[1]} 个文件。
+            <br />
+            检测时已自动补齐缺失的哈希，如果仍有文件未计入，可能是该文件已不在原位置。
+          </p>
         </div>
       )}
 

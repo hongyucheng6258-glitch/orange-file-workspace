@@ -5,9 +5,52 @@
  * 调用前应先通过 hash_resources 命令计算哈希。
  */
 
+use std::path::PathBuf;
+
 use rusqlite::{Connection, Result as SqliteResult};
 
 use crate::db::models::{DuplicateEntry, DuplicateGroup};
+use crate::services::hash_service;
+
+/// 为尚未计算内容哈希的受管文件补齐 SHA-256 哈希。
+///
+/// 返回本次实际计算的文件数量。用于在重复检测前自动补齐哈希，
+/// 避免因 content_hash 为 NULL 而漏检重复文件。
+pub fn ensure_all_hashed(conn: &mut Connection) -> SqliteResult<usize> {
+    // 找出所有缺哈希的受管文件位置
+    let missing: Vec<(String, String)> = {
+        let mut stmt = conn.prepare(
+            "SELECT id, path FROM resource_locations
+             WHERE source_type = 'managed'
+               AND (content_hash IS NULL OR content_hash = '')",
+        )?;
+        let rows = stmt
+            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+            .filter_map(|r| r.ok())
+            .collect();
+        rows
+    };
+
+    let mut hashed = 0;
+    let tx = conn.transaction()?;
+    {
+        let mut update = tx.prepare(
+            "UPDATE resource_locations SET content_hash = ?2, hash_algorithm = 'sha256' WHERE id = ?1",
+        )?;
+        for (loc_id, path) in missing {
+            let p = PathBuf::from(&path);
+            if !p.exists() || !p.is_file() {
+                continue;
+            }
+            if let Ok(h) = hash_service::sha256_file(&p) {
+                update.execute(rusqlite::params![loc_id, h])?;
+                hashed += 1;
+            }
+        }
+    }
+    tx.commit()?;
+    Ok(hashed)
+}
 
 /// 查找所有重复文件分组。
 ///
