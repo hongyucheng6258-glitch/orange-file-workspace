@@ -16,6 +16,7 @@ import {
   type TerminalShell,
 } from "../../terminal/lib/terminal";
 import { recordTerminalHistory } from "../../terminal/lib/terminal";
+import { useWorkbenchContext } from "../stores/workbenchContext";
 
 interface Props {
   params: Record<string, unknown>;
@@ -26,7 +27,9 @@ export function WorkbenchTerminal({ params }: Props) {
   const sessionIdRef = useRef<number | null>(null);
 
   const shell = (params.shell as TerminalShell) ?? "powershell";
-  const cwd = params.cwd as string | undefined;
+  // 优先使用 tab.params.cwd，否则回退到工作台共享 cwd
+  const contextCwd = useWorkbenchContext((s) => s.cwd);
+  const cwd = (params.cwd as string | undefined) ?? contextCwd ?? undefined;
 
   // onReady: xterm 就绪后 spawn 后端会话
   const onReady = useCallback(

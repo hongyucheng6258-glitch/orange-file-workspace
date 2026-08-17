@@ -11,7 +11,7 @@ import { TabBar } from "./TabBar";
 
 // ─── 内容注册表 ─────────────────────────────────────────────
 
-export type ContentRenderer = (tab: Tab) => ReactNode;
+export type ContentRenderer = (tab: Tab, panelId: string) => ReactNode;
 
 const registry = new Map<string, ContentRenderer>();
 
@@ -34,6 +34,7 @@ interface PanelHostProps {
   onSplit?: (direction: "row" | "column") => void;
   onClosePanel?: () => void;
   onAddTerminal?: () => void;
+  onAddFileTree?: () => void;
 }
 
 export function PanelHost({
@@ -43,6 +44,7 @@ export function PanelHost({
   onSplit,
   onClosePanel,
   onAddTerminal,
+  onAddFileTree,
 }: PanelHostProps) {
   const activeTab = panel.activeTabId
     ? panel.tabs.find((t) => t.id === panel.activeTabId) ?? null
@@ -51,7 +53,7 @@ export function PanelHost({
   let content: ReactNode = null;
   if (activeTab) {
     const renderer = getRenderer(activeTab.contentType);
-    content = renderer ? renderer(activeTab) : (
+    content = renderer ? renderer(activeTab, panel.id) : (
       <div className="wb-panel-empty">
         <span>未知内容类型: {activeTab.contentType}</span>
       </div>
@@ -73,6 +75,7 @@ export function PanelHost({
         onSplit={onSplit}
         onClosePanel={onClosePanel}
         onAddTerminal={onAddTerminal}
+        onAddFileTree={onAddFileTree}
       />
       <div className="wb-panel-body">{content}</div>
     </div>

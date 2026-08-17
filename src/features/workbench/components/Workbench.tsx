@@ -9,6 +9,7 @@ import { useCallback } from "react";
 import type { UseBoundStore, StoreApi } from "zustand";
 import type { PanelNode } from "../lib/layoutModel";
 import { useLayoutStore, type LayoutStore } from "../stores/layoutStore";
+import { useWorkbenchContext } from "../stores/workbenchContext";
 import { SplitView } from "./SplitView";
 import { PanelHost } from "./PanelHost";
 
@@ -28,6 +29,7 @@ export function Workbench({ store }: WorkbenchProps) {
   const splitPanel = useStore((s) => s.splitPanel);
   const closePanel = useStore((s) => s.closePanel);
   const openTab = useStore((s) => s.openTab);
+  const cwd = useWorkbenchContext((s) => s.cwd);
 
   const handleSetSizes = useCallback(
     (splitId: string, sizes: number[]) => setSplitSizes(splitId, sizes),
@@ -48,12 +50,21 @@ export function Workbench({ store }: WorkbenchProps) {
             panel.tabs.length === 0 ? () => closePanel(panel.id) : undefined
           }
           onAddTerminal={() =>
-            openTab(panel.id, "terminal", "Terminal", { shell: "powershell" }, "terminal")
+            openTab(
+              panel.id,
+              "terminal",
+              "Terminal",
+              { shell: "powershell", cwd: cwd ?? undefined },
+              "terminal",
+            )
+          }
+          onAddFileTree={() =>
+            openTab(panel.id, "filetree", "文件树", {}, "filetree")
           }
         />
       );
     },
-    [setActiveTab, closeTab, splitPanel, closePanel, openTab],
+    [setActiveTab, closeTab, splitPanel, closePanel, openTab, cwd],
   );
 
   return (

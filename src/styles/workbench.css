@@ -292,6 +292,117 @@
   height: 100%;
 }
 
+/* ─── 文件树 ─── */
+
+.wb-filetree {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.wb-filetree-header {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.wb-filetree-body {
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.wb-filetree-loading,
+.wb-filetree-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.wb-filetree-empty-hint {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+/* ─── 文件树节点 ─── */
+
+.wb-treenode-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 0;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.wb-treenode-row:hover {
+  background: var(--surface-hover);
+}
+
+.wb-treenode-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+.wb-treenode-file-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.wb-treenode-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.wb-treenode-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: var(--radius-s);
+  opacity: 0;
+  flex-shrink: 0;
+  transition: all var(--dur-fast) var(--ease);
+}
+
+.wb-treenode-row:hover .wb-treenode-action {
+  opacity: 1;
+}
+
+.wb-treenode-action:hover {
+  background: var(--surface-active);
+  color: var(--primary);
+}
+
 /* ─── 编辑器渲染器 ─── */
 
 .wb-editor {

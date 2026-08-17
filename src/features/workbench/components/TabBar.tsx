@@ -2,7 +2,7 @@
  * TabBar — 通用标签栏组件
  *
  * 支持点击切换、关闭、右键菜单（分割/关闭）。
- * + 按钮可创建新终端标签。
+ * + 按钮可创建新终端/文件树标签。
  */
 
 import { useState, useRef, useEffect } from "react";
@@ -15,6 +15,7 @@ interface TabBarProps {
   onSplit?: (direction: "row" | "column") => void;
   onClosePanel?: () => void;
   onAddTerminal?: () => void;
+  onAddFileTree?: () => void;
 }
 
 const ICON_MAP: Record<string, string> = {
@@ -35,6 +36,7 @@ export function TabBar({
   onSplit,
   onClosePanel,
   onAddTerminal,
+  onAddFileTree,
 }: TabBarProps) {
   const { tabs, activeTabId } = panel;
   const [showMenu, setShowMenu] = useState(false);
@@ -50,6 +52,8 @@ export function TabBar({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [showMenu]);
+
+  const hasAdd = onAddTerminal || onAddFileTree;
 
   return (
     <div className="wb-tabbar" onContextMenu={(e) => e.preventDefault()}>
@@ -89,7 +93,7 @@ export function TabBar({
       </div>
 
       <div className="wb-tabbar-actions">
-        {onAddTerminal && (
+        {hasAdd && (
           <div className="wb-tabbar-add" ref={menuRef}>
             <button
               className="wb-tabbar-btn"
@@ -100,16 +104,30 @@ export function TabBar({
             </button>
             {showMenu && (
               <div className="wb-tabbar-menu">
-                <button
-                  className="wb-tabbar-menu-item"
-                  onClick={() => {
-                    setShowMenu(false);
-                    onAddTerminal();
-                  }}
-                >
-                  <span className="wb-tabbar-menu-icon">▣</span>
-                  新终端
-                </button>
+                {onAddTerminal && (
+                  <button
+                    className="wb-tabbar-menu-item"
+                    onClick={() => {
+                      setShowMenu(false);
+                      onAddTerminal();
+                    }}
+                  >
+                    <span className="wb-tabbar-menu-icon">▣</span>
+                    新终端
+                  </button>
+                )}
+                {onAddFileTree && (
+                  <button
+                    className="wb-tabbar-menu-item"
+                    onClick={() => {
+                      setShowMenu(false);
+                      onAddFileTree();
+                    }}
+                  >
+                    <span className="wb-tabbar-menu-icon">⊟</span>
+                    文件树
+                  </button>
+                )}
               </div>
             )}
           </div>
