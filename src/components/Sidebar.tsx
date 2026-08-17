@@ -11,10 +11,12 @@ import {
   Settings,
   MonitorSmartphone,
   Activity,
+  Columns3,
 } from "lucide-react";
 
 const NAV = [
   { to: "/", label: "首页", icon: LayoutDashboard, end: true },
+  { to: "/workbench", label: "工作台", icon: Columns3 },
   { to: "/files", label: "文件", icon: Folder },
   { to: "/pages", label: "页面", icon: FileText },
   { to: "/projects", label: "代码项目", icon: Code2 },

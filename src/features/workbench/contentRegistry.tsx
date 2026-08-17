@@ -7,6 +7,8 @@
 import type { ReactNode } from "react";
 import { registerContent } from "./components/PanelHost";
 import type { Tab } from "./lib/layoutModel";
+import { WorkbenchTerminal } from "./content/WorkbenchTerminal";
+import { WorkbenchEditor } from "./content/WorkbenchEditor";
 
 /** 注册欢迎页渲染器 */
 registerContent("welcome", (_tab: Tab): ReactNode => {
@@ -19,4 +21,14 @@ registerContent("welcome", (_tab: Tab): ReactNode => {
       </div>
     </div>
   );
+});
+
+/** 注册终端渲染器 */
+registerContent("terminal", (tab: Tab): ReactNode => {
+  return <WorkbenchTerminal params={tab.params} />;
+});
+
+/** 注册编辑器渲染器 */
+registerContent("editor", (tab: Tab): ReactNode => {
+  return <WorkbenchEditor params={tab.params} />;
 });

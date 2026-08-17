@@ -12,6 +12,7 @@ import { HomePage } from "../features/home/routes/HomePage";
 import { SystemPage } from "../features/system/routes/SystemPage";
 import { TerminalPage } from "../features/terminal/routes/TerminalPage";
 import { RunCenterPage } from "../features/runs/routes/RunCenterPage";
+import { WorkbenchPage } from "../features/workbench/routes/WorkbenchPage";
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
       <Routes>
         <Route element={<AppShell />}>
           <Route path="/" element={<HomePage />} />
+          <Route path="/workbench" element={<WorkbenchPage />} />
           <Route path="/files" element={<FilePage />} />
           <Route path="/pages" element={<PagePage />} />
           <Route path="/projects" element={<ProjectPage />} />

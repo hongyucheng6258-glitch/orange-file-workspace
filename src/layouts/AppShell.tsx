@@ -99,6 +99,13 @@ export function AppShell() {
         action: () => goTo("/terminal"),
       },
       {
+        id: "nav-workbench",
+        label: "前往工作台",
+        category: "导航",
+        keywords: ["workbench", "split", "工作台", "分屏"],
+        action: () => goTo("/workbench"),
+      },
+      {
         id: "nav-search",
         label: "搜索文件",
         category: "操作",

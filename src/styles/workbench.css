@@ -224,3 +224,117 @@
   font-size: 13px;
   opacity: 0.7;
 }
+
+/* ─── Workbench 页面容器 ─── */
+
+.workbench-page {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ─── 终端渲染器 ─── */
+
+.wb-terminal {
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.wb-terminal .terminal-view {
+  height: 100%;
+}
+
+/* ─── 编辑器渲染器 ─── */
+
+.wb-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.wb-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px;
+  background: var(--bg-2, #1a1a28);
+  border-bottom: 1px solid var(--border-1, #333346);
+  flex-shrink: 0;
+}
+
+.wb-editor-file {
+  font-size: 12px;
+  color: var(--text-1, #cdd6f4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.wb-editor-dirty {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-1, #89b4fa);
+  flex-shrink: 0;
+}
+
+.wb-editor-save {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim, #6e6e8e);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.wb-editor-save:hover:not(:disabled) {
+  background: var(--bg-3, #333346);
+  color: var(--text-1, #cdd6f4);
+}
+
+.wb-editor-save:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.wb-editor .cm-editor {
+  flex: 1;
+  overflow: hidden;
+}
+
+.wb-editor-loading,
+.wb-editor-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--text-dim, #6e6e8e);
+  font-size: 13px;
+}
+
+.wb-editor-error {
+  color: var(--danger, #f38ba8);
+}
+
+.spin {
+  animation: wb-spin 1s linear infinite;
+}
+
+@keyframes wb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
