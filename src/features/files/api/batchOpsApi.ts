@@ -23,6 +23,11 @@ export async function hashResources(ids: string[]): Promise<number> {
   return call<number>("hash_resources", { ids });
 }
 
+/** 将指定资源移入回收站（软删除）。用于删除重复副本。 */
+export async function trashResources(ids: string[]): Promise<number> {
+  return call<number>("trash_resources", { ids });
+}
+
 // ── 批量重命名 ──
 
 export async function previewBatchRename(

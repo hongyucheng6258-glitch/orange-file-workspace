@@ -11,11 +11,14 @@ import {
   ChevronDown,
   ChevronRight,
   HardDrive,
+  Trash2,
+  Check,
 } from "lucide-react";
 import { formatSize } from "../../../lib/tauri";
 import {
   findDuplicates,
   getHashStats,
+  trashResources,
 } from "../api/batchOpsApi";
 import type { DuplicateGroup } from "../types/batchOps";
 import { PathIconThumb } from "../../../components/FileIconThumb";
@@ -25,6 +28,7 @@ export function DuplicatesPage() {
   const [groups, setGroups] = useState<DuplicateGroup[]>([]);
   const [stats, setStats] = useState<[number, number]>([0, 0]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
@@ -48,8 +52,10 @@ export function DuplicatesPage() {
     loadData();
   }, [loadData]);
 
-  // 计算全部需要哈希的资源 ID（仅当哈希率低时才需要）
-  // 这里仅展示统计，实际哈希操作在 FilePage 进行
+  // 计算所有需要删除的副本 ID（每组保留第一个，其余删除）
+  const allDuplicateIds = groups.flatMap((g) =>
+    g.entries.slice(1).map((e) => e.resource_id),
+  );
 
   const toggleGroup = (hash: string) => {
     setExpanded((prev) => {
@@ -58,6 +64,24 @@ export function DuplicatesPage() {
       else next.add(hash);
       return next;
     });
+  };
+
+  const handleDelete = async (ids: string[], keepCount: number) => {
+    if (ids.length === 0) return;
+    const ok = window.confirm(
+      `确定要删除这 ${ids.length} 个重复副本（移入回收站）吗？将保留 ${keepCount} 个文件。`,
+    );
+    if (!ok) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await trashResources(ids);
+      await loadData();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const totalWasted = groups.reduce(
@@ -84,6 +108,14 @@ export function DuplicatesPage() {
           <span className="dup-stat">
             可释放: {formatSize(totalWasted)}
           </span>
+          <button
+            className="dup-clean-all"
+            disabled={allDuplicateIds.length === 0 || deleting || loading}
+            onClick={() => handleDelete(allDuplicateIds, groups.length)}
+          >
+            <Trash2 size={14} />
+            {deleting ? "删除中…" : `清理全部重复 (${allDuplicateIds.length})`}
+          </button>
         </div>
       </div>
 
@@ -111,29 +143,49 @@ export function DuplicatesPage() {
       <div className="duplicates-list">
         {groups.map((group) => {
           const isExpanded = expanded.has(group.content_hash);
+          const deleteIds = group.entries
+            .slice(1)
+            .map((e) => e.resource_id);
           return (
             <div key={group.content_hash} className="dup-group">
-              <div
-                className="dup-group-head"
-                onClick={() => toggleGroup(group.content_hash)}
-              >
-                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                <span className="dup-group-size">
-                  {formatSize(group.size_bytes)}
+              <div className="dup-group-head">
+                <span
+                  className="dup-group-toggle"
+                  onClick={() => toggleGroup(group.content_hash)}
+                >
+                  {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </span>
-                <span className="dup-group-count">
-                  {group.entries.length} 个副本
+                <span
+                  className="dup-group-main"
+                  onClick={() => toggleGroup(group.content_hash)}
+                >
+                  <span className="dup-group-size">
+                    {formatSize(group.size_bytes)}
+                  </span>
+                  <span className="dup-group-count">
+                    {group.entries.length} 个副本
+                  </span>
+                  <span className="dup-group-hash" title={group.content_hash}>
+                    {group.content_hash.slice(0, 12)}…
+                  </span>
                 </span>
-                <span className="dup-group-hash" title={group.content_hash}>
-                  {group.content_hash.slice(0, 12)}…
-                </span>
+                {deleteIds.length > 0 && (
+                  <button
+                    className="dup-group-del"
+                    disabled={deleting}
+                    onClick={() => handleDelete(deleteIds, 1)}
+                  >
+                    <Trash2 size={13} />
+                    删除其余 ({deleteIds.length})
+                  </button>
+                )}
               </div>
               {isExpanded && (
                 <div className="dup-entries">
-                  {group.entries.map((entry) => (
+                  {group.entries.map((entry, idx) => (
                     <div
                       key={entry.resource_id}
-                      className="dup-entry"
+                      className={`dup-entry ${idx === 0 ? "is-keep" : ""}`}
                       onDoubleClick={() =>
                         navigate(
                           `/files?path=${encodeURIComponent(entry.path)}`,
@@ -141,6 +193,11 @@ export function DuplicatesPage() {
                       }
                       title={entry.path}
                     >
+                      {idx === 0 && (
+                        <span className="dup-keep-badge">
+                          <Check size={12} /> 保留
+                        </span>
+                      )}
                       <PathIconThumb
                         path={entry.path}
                         size={20}
