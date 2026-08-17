@@ -12,6 +12,7 @@ pub mod pages;
 pub mod previews;
 pub mod project_preview;
 pub mod project_runtime;
+pub mod project_tasks;
 pub mod projects;
 pub mod recent;
 pub mod resources;

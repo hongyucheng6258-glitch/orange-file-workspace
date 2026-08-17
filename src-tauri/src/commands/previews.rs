@@ -1,5 +1,6 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use base64::Engine;
 use tauri::State;
 
 use crate::db::connection::now_unix;
@@ -14,6 +15,12 @@ use crate::AppState;
 
 fn lock_db<'a>(state: &'a AppState) -> std::sync::MutexGuard<'a, rusqlite::Connection> {
     state.conn.lock().expect("db lock poisoned")
+}
+
+fn png_data_url(path: &Path) -> CommandResult<String> {
+    let bytes = std::fs::read(path)?;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(format!("data:image/png;base64,{encoded}"))
 }
 
 /// 获取资源的缩略图缓存路径（不存在时按需生成）。
@@ -71,8 +78,9 @@ pub fn get_file_icon(state: State<AppState>, resource_id: String) -> CommandResu
 
     // 命中缓存
     if let Some(cached) = repo::get_thumbnail_path(&conn, &resource_id)? {
-        if PathBuf::from(&cached).exists() {
-            return Ok(Some(cached));
+        let cached_path = PathBuf::from(&cached);
+        if cached_path.exists() {
+            return png_data_url(&cached_path).map(Some);
         }
     }
 
@@ -94,7 +102,7 @@ pub fn get_file_icon(state: State<AppState>, resource_id: String) -> CommandResu
         loc.content_hash.as_deref(),
         now_unix(),
     );
-    Ok(Some(dest_str))
+    png_data_url(&dest).map(Some)
 }
 
 /// 读取文本文件的预览内容（上限由设置决定）。

@@ -2037,6 +2037,316 @@ input {
   border-top: 1px solid var(--border);
 }
 
+/* Phase 2.3: 项目任务面板 */
+.project-task-panel {
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 40vh;
+}
+.ptp-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.ptp-count {
+  margin-left: auto;
+  background: var(--surface-hover);
+  border-radius: var(--radius-s);
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.ptp-input-row {
+  display: flex;
+  gap: 4px;
+  padding: 0 8px 6px;
+}
+.ptp-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+.ptp-input:focus {
+  border-color: var(--primary);
+}
+.ptp-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-s);
+  background: var(--primary);
+  color: white;
+  cursor: pointer;
+}
+.ptp-add-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ptp-filters {
+  display: flex;
+  gap: 2px;
+  padding: 0 8px 6px;
+  flex-wrap: wrap;
+}
+.ptp-filter {
+  padding: 2px 6px;
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+.ptp-filter.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+.ptp-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 4px 4px;
+}
+.ptp-loading,
+.ptp-empty {
+  padding: 12px 8px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.ptp-task-row {
+  border-radius: var(--radius-s);
+  margin-bottom: 2px;
+}
+.ptp-task-row.selected {
+  background: var(--surface-hover);
+}
+.ptp-task-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+}
+.ptp-task-checkbox {
+  display: flex;
+  align-items: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+}
+.ptp-priority-wrapper {
+  position: relative;
+}
+.ptp-priority-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+}
+.ptp-priority-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-md);
+  padding: 4px 0;
+}
+.ptp-priority-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: none;
+  background: none;
+  font-size: 11px;
+  color: var(--text);
+  cursor: pointer;
+  width: 100%;
+}
+.ptp-priority-option:hover {
+  background: var(--surface-hover);
+}
+.ptp-task-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ptp-task-title.done {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
+}
+.ptp-task-edit-input {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 4px;
+  font-size: 12px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-s);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+.ptp-task-badge {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  background: var(--surface-hover);
+  border-radius: var(--radius-s);
+  padding: 0 4px;
+}
+.ptp-task-expand,
+.ptp-task-delete {
+  display: flex;
+  align-items: center;
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+}
+.ptp-task-row:hover .ptp-task-expand,
+.ptp-task-row:hover .ptp-task-delete {
+  opacity: 1;
+}
+.ptp-task-delete:hover {
+  color: #e05252;
+}
+.ptp-task-detail {
+  padding: 4px 8px 8px 28px;
+  border-top: 1px solid var(--border);
+}
+.ptp-task-desc {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+  white-space: pre-wrap;
+}
+.ptp-links-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ptp-links-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+.ptp-link-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border: none;
+  background: none;
+  font-size: 10px;
+  color: var(--primary);
+  cursor: pointer;
+}
+.ptp-link-input-row {
+  display: flex;
+  gap: 4px;
+}
+.ptp-link-input {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 4px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+.ptp-link-confirm {
+  padding: 2px 6px;
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.ptp-links-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ptp-links-empty {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  padding: 4px 0;
+}
+.ptp-link-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: var(--radius-s);
+}
+.ptp-link-item:hover {
+  background: var(--surface-hover);
+}
+.ptp-link-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ptp-link-name:hover {
+  color: var(--primary);
+}
+.ptp-link-remove {
+  display: flex;
+  align-items: center;
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+}
+.ptp-link-item:hover .ptp-link-remove {
+  opacity: 1;
+}
+.ptp-link-remove:hover {
+  color: #e05252;
+}
+
 .project-editor {
   flex: 1;
   min-width: 0;

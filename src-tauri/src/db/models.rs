@@ -190,6 +190,31 @@ pub struct TaskItem {
     pub updated_at: i64,
 }
 
+/// 项目任务（用户工作项）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectTask {
+    pub id: String,
+    pub project_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub status: String,
+    pub priority: String,
+    pub sort_order: i64,
+    pub due_date: Option<i64>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub completed_at: Option<i64>,
+}
+
+/// 任务-资源关联。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectTaskLink {
+    pub task_id: String,
+    pub resource_id: String,
+    pub link_type: String,
+    pub created_at: i64,
+}
+
 /// 缩略图缓存记录。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Thumbnail {

@@ -112,8 +112,15 @@ pub fn run() {
             // 需先加入 asset 协议白名单，否则缩略图和图标无法通过 convertFileSrc 加载。
             {
                 let scope = app.asset_protocol_scope();
-                let _ = scope.allow_directory(&data_dir, true);
-                let _ = scope.allow_directory(&managed_dir, true);
+                scope.allow_directory(&data_dir, true)?;
+                scope.allow_directory(&managed_dir, true)?;
+                eprintln!(
+                    "asset scope: data_dir={} allowed={}, managed_dir={} allowed={}",
+                    data_dir.display(),
+                    scope.is_allowed(&data_dir),
+                    managed_dir.display(),
+                    scope.is_allowed(&managed_dir)
+                );
             }
             // 项目运行管理器：确认协议 + 进程生命周期 + 日志 + 运行历史。
             // 历史存储使用独立连接（WAL 支持多连接并发读写）。
@@ -330,6 +337,7 @@ pub fn run() {
             commands::command_palette::get_command_statistics,
             commands::resources::list_children,
             commands::resources::get_resource,
+            commands::resources::find_resource_by_path,
             commands::resources::create_folder,
             commands::resources::rename_resource,
             commands::resources::move_resource,
@@ -442,7 +450,17 @@ pub fn run() {
             commands::project_runtime::list_project_runs_by_project,
             commands::project_runtime::get_process_logs,
             commands::project_preview::open_project_preview,
-            commands::run_center::list_project_runs
+            commands::run_center::list_project_runs,
+            // Project tasks
+            commands::project_tasks::create_project_task,
+            commands::project_tasks::list_project_tasks,
+            commands::project_tasks::update_project_task,
+            commands::project_tasks::delete_project_task,
+            commands::project_tasks::reorder_project_tasks,
+            commands::project_tasks::link_task_resource,
+            commands::project_tasks::unlink_task_resource,
+            commands::project_tasks::list_task_links,
+            commands::project_tasks::list_links_by_resource
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

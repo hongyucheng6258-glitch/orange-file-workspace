@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use rusqlite::OptionalExtension;
 use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
@@ -55,6 +56,35 @@ pub fn get_resource(state: State<AppState>, id: String) -> CommandResult<serde_j
         "resource": resource,
         "locations": locations,
     }))
+}
+
+/// 按文件路径查找资源（模糊匹配 canonical_path）。
+#[tauri::command]
+pub fn find_resource_by_path(
+    state: State<AppState>,
+    path: String,
+) -> CommandResult<Option<Resource>> {
+    let conn = lock_db(&state);
+    // 尝试规范化路径
+    let canonical = fsutil::canonical_path_key(&path);
+    if let Some(loc) = repo::find_location_by_path(&conn, &canonical)? {
+        if let Some(res) = repo::get_resource(&conn, &loc.resource_id)? {
+            return Ok(Some(res));
+        }
+    }
+    // 回退：直接用原始路径匹配
+    let alt = format!("SELECT * FROM resource_locations WHERE path LIKE ?1 LIMIT 1");
+    let row = conn
+        .query_row(&alt, [&format!("%{}", path)], |row| {
+            row.get::<_, String>("resource_id")
+        })
+        .optional()
+        .map_err(AppError::from)?;
+    if let Some(rid) = row {
+        return repo::get_resource(&conn, &rid)
+            .map_err(AppError::from);
+    }
+    Ok(None)
 }
 
 /// 在文件系统中创建文件夹，并写入资源记录。

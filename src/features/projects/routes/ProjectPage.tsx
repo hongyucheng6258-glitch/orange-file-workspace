@@ -12,6 +12,7 @@ import { ProjectRuntimePanel } from "../components/ProjectRuntimePanel";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { GitStatus } from "../../../components/GitStatus";
 import { ProjectSessionManager } from "../components/ProjectSessionManager";
+import { ProjectTaskPanel } from "../components/ProjectTaskPanel";
 
 /** 文件树节点：懒加载子目录。 */
 function TreeNode({
@@ -307,6 +308,9 @@ export function ProjectPage() {
             )}
           </div>
         )}
+
+        {/* Phase 2.3: 项目任务面板 */}
+        {current && <ProjectTaskPanel projectId={current.id} />}
       </aside>
 
     <main className="project-editor">
