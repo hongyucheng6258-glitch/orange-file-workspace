@@ -115,20 +115,66 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
   border: none;
   background: transparent;
   color: var(--text-dim, #6e6e8e);
   cursor: pointer;
   border-radius: 4px;
   font-size: 14px;
+  line-height: 1;
   transition: all 0.15s;
 }
 
 .wb-tabbar-btn:hover {
   background: var(--bg-3, #333346);
   color: var(--text-1, #cdd6f4);
+}
+
+/* ─── 新建标签下拉菜单 ─── */
+
+.wb-tabbar-add {
+  position: relative;
+}
+
+.wb-tabbar-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-2, #1a1a28);
+  border: 1px solid var(--border-1, #333346);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  min-width: 120px;
+  overflow: hidden;
+}
+
+.wb-tabbar-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-1, #cdd6f4);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.wb-tabbar-menu-item:hover {
+  background: var(--bg-3, #333346);
+}
+
+.wb-tabbar-menu-icon {
+  font-size: 14px;
+  opacity: 0.8;
 }
 
 /* ─── 标签 ─── */

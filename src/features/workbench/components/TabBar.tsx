@@ -2,8 +2,10 @@
  * TabBar — 通用标签栏组件
  *
  * 支持点击切换、关闭、右键菜单（分割/关闭）。
+ * + 按钮可创建新终端标签。
  */
 
+import { useState, useRef, useEffect } from "react";
 import type { Tab, PanelNode } from "../lib/layoutModel";
 
 interface TabBarProps {
@@ -12,6 +14,7 @@ interface TabBarProps {
   onClose: (tabId: string) => void;
   onSplit?: (direction: "row" | "column") => void;
   onClosePanel?: () => void;
+  onAddTerminal?: () => void;
 }
 
 const ICON_MAP: Record<string, string> = {
@@ -25,8 +28,28 @@ const ICON_MAP: Record<string, string> = {
   welcome: "★",
 };
 
-export function TabBar({ panel, onActivate, onClose, onSplit, onClosePanel }: TabBarProps) {
+export function TabBar({
+  panel,
+  onActivate,
+  onClose,
+  onSplit,
+  onClosePanel,
+  onAddTerminal,
+}: TabBarProps) {
   const { tabs, activeTabId } = panel;
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMenu]);
 
   return (
     <div className="wb-tabbar" onContextMenu={(e) => e.preventDefault()}>
@@ -65,33 +88,60 @@ export function TabBar({ panel, onActivate, onClose, onSplit, onClosePanel }: Ta
         })}
       </div>
 
-      {onSplit && (
-        <div className="wb-tabbar-actions">
-          <button
-            className="wb-tabbar-btn"
-            title="水平分割"
-            onClick={() => onSplit("row")}
-          >
-            ◧
-          </button>
-          <button
-            className="wb-tabbar-btn"
-            title="垂直分割"
-            onClick={() => onSplit("column")}
-          >
-            ◨
-          </button>
-          {onClosePanel && tabs.length === 0 && (
+      <div className="wb-tabbar-actions">
+        {onAddTerminal && (
+          <div className="wb-tabbar-add" ref={menuRef}>
             <button
               className="wb-tabbar-btn"
-              title="关闭面板"
-              onClick={onClosePanel}
+              title="新建标签"
+              onClick={() => setShowMenu((v) => !v)}
             >
-              ✕
+              +
             </button>
-          )}
-        </div>
-      )}
+            {showMenu && (
+              <div className="wb-tabbar-menu">
+                <button
+                  className="wb-tabbar-menu-item"
+                  onClick={() => {
+                    setShowMenu(false);
+                    onAddTerminal();
+                  }}
+                >
+                  <span className="wb-tabbar-menu-icon">▣</span>
+                  新终端
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        {onSplit && (
+          <>
+            <button
+              className="wb-tabbar-btn"
+              title="水平分割"
+              onClick={() => onSplit("row")}
+            >
+              ◧
+            </button>
+            <button
+              className="wb-tabbar-btn"
+              title="垂直分割"
+              onClick={() => onSplit("column")}
+            >
+              ◨
+            </button>
+          </>
+        )}
+        {onClosePanel && tabs.length === 0 && (
+          <button
+            className="wb-tabbar-btn"
+            title="关闭面板"
+            onClick={onClosePanel}
+          >
+            ✕
+          </button>
+        )}
+      </div>
     </div>
   );
 }

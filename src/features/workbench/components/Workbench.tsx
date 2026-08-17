@@ -27,6 +27,7 @@ export function Workbench({ store }: WorkbenchProps) {
   const closeTab = useStore((s) => s.closeTab);
   const splitPanel = useStore((s) => s.splitPanel);
   const closePanel = useStore((s) => s.closePanel);
+  const openTab = useStore((s) => s.openTab);
 
   const handleSetSizes = useCallback(
     (splitId: string, sizes: number[]) => setSplitSizes(splitId, sizes),
@@ -46,10 +47,13 @@ export function Workbench({ store }: WorkbenchProps) {
           onClosePanel={
             panel.tabs.length === 0 ? () => closePanel(panel.id) : undefined
           }
+          onAddTerminal={() =>
+            openTab(panel.id, "terminal", "Terminal", { shell: "powershell" }, "terminal")
+          }
         />
       );
     },
-    [setActiveTab, closeTab, splitPanel, closePanel],
+    [setActiveTab, closeTab, splitPanel, closePanel, openTab],
   );
 
   return (

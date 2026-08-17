@@ -33,6 +33,7 @@ interface PanelHostProps {
   onCloseTab: (tabId: string) => void;
   onSplit?: (direction: "row" | "column") => void;
   onClosePanel?: () => void;
+  onAddTerminal?: () => void;
 }
 
 export function PanelHost({
@@ -41,6 +42,7 @@ export function PanelHost({
   onCloseTab,
   onSplit,
   onClosePanel,
+  onAddTerminal,
 }: PanelHostProps) {
   const activeTab = panel.activeTabId
     ? panel.tabs.find((t) => t.id === panel.activeTabId) ?? null
@@ -70,6 +72,7 @@ export function PanelHost({
         onClose={onCloseTab}
         onSplit={onSplit}
         onClosePanel={onClosePanel}
+        onAddTerminal={onAddTerminal}
       />
       <div className="wb-panel-body">{content}</div>
     </div>
