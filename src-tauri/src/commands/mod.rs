@@ -10,6 +10,8 @@ pub mod import;
 pub mod migration;
 pub mod pages;
 pub mod previews;
+#[cfg(test)]
+mod previews_path_icon_tests;
 pub mod project_preview;
 pub mod project_runtime;
 pub mod project_tasks;
@@ -17,6 +19,7 @@ pub mod projects;
 pub mod recent;
 pub mod resources;
 pub mod run_center;
+pub mod saved_searches;
 pub mod search;
 pub mod settings;
 pub mod system;

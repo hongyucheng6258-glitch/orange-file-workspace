@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -12,7 +13,9 @@ import {
   MonitorSmartphone,
   Activity,
   Columns3,
+  Sparkles,
 } from "lucide-react";
+import { useSavedSearchStore } from "../features/search/stores/savedSearchStore";
 
 const NAV = [
   { to: "/", label: "首页", icon: LayoutDashboard, end: true },
@@ -30,6 +33,13 @@ const NAV = [
 ];
 
 export function Sidebar() {
+  const pinned = useSavedSearchStore((s) => s.pinned);
+  const loadPinned = useSavedSearchStore((s) => s.loadPinned);
+
+  useEffect(() => {
+    loadPinned();
+  }, [loadPinned]);
+
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
@@ -50,6 +60,32 @@ export function Sidebar() {
             <span>{label}</span>
           </NavLink>
         ))}
+
+        {pinned.length > 0 && (
+          <>
+            <div className="sidebar-section-label">
+              <Sparkles size={13} />
+              <span>智能集合</span>
+            </div>
+            {pinned.map((s) => (
+              <NavLink
+                key={s.id}
+                to={`/collections/${s.id}`}
+                className={({ isActive }) =>
+                  `nav-item nav-item-collection ${isActive ? "active" : ""}`
+                }
+              >
+                <span
+                  className="collection-dot"
+                  style={s.color ? { backgroundColor: s.color } : undefined}
+                >
+                  {!s.color && <Sparkles size={13} />}
+                </span>
+                <span>{s.name}</span>
+              </NavLink>
+            ))}
+          </>
+        )}
       </nav>
       <div className="sidebar-foot">
         <span className="storage-text">橙子的工作台</span>

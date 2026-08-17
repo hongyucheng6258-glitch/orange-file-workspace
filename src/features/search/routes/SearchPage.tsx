@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Search, FileText, Folder, AppWindow, FileCode2, Loader2, CornerDownLeft } from "lucide-react";
+import { Search, FileText, Folder, AppWindow, FileCode2, Loader2, CornerDownLeft, Star } from "lucide-react";
 import { formatTime } from "../../../lib/tauri";
 import {
   GlobalSearchHit,
@@ -11,6 +11,8 @@ import {
   onSearchBatch,
 } from "../lib/globalSearch";
 import { IndexStatusBar } from "../components/IndexStatusBar";
+import { PathIconThumb } from "../../../components/FileIconThumb";
+import { SaveSearchDialog } from "../components/SaveSearchDialog";
 
 const KIND_LABEL: Record<string, string> = {
   file: "文件",
@@ -51,6 +53,16 @@ function kindIcon(kind: string) {
   return <FileText size={15} color="var(--file)" />;
 }
 
+const ICON_EXTS = ["exe", "lnk", "url", "msi", "bat", "cmd", "com", "scr"];
+
+function resultIcon(hit: GlobalSearchHit) {
+  const fallback = kindIcon(hit.kind);
+  if (!hit.path) return fallback;
+  const extension = hit.path.split(".").pop()?.toLowerCase() ?? "";
+  if (hit.kind !== "app" && !ICON_EXTS.includes(extension)) return fallback;
+  return <PathIconThumb path={hit.path} name={hit.name} size={20} fallback={fallback} />;
+}
+
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
   const urlQ = params.get("q") ?? "";
@@ -73,6 +85,8 @@ export function SearchPage() {
   const kindRef = useRef(kind);
   // 卸载标志：异步订阅/搜索返回后若组件已卸载则立即清理，防止监听泄漏
   const disposedRef = useRef(false);
+  // 保存搜索对话框
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
 
   useEffect(() => {
     kindRef.current = kind;
@@ -314,8 +328,26 @@ export function SearchPage() {
             }}
             title="按扩展名筛选（不带点，如 pdf）"
           />
+          {(urlQ || kind) && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setShowSaveDialog(true)}
+              title="将当前搜索保存为智能集合"
+            >
+              <Star size={13} />
+              保存
+            </button>
+          )}
         </div>
       </div>
+
+      {showSaveDialog && (
+        <SaveSearchDialog
+          query={urlQ || query}
+          kind={kind}
+          onClose={() => setShowSaveDialog(false)}
+        />
+      )}
 
       <IndexStatusBar />
 
@@ -340,7 +372,7 @@ export function SearchPage() {
             onDoubleClick={() => activate(r)}
             title={r.path ?? ""}
           >
-            <span className="search-kind-icon">{kindIcon(r.kind)}</span>
+            <span className="search-kind-icon">{resultIcon(r)}</span>
             <div className="search-result-body">
               <div className="search-result-name">
                 {r.name}

@@ -67,6 +67,11 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "project_tasks",
         sql: include_str!("../../migrations/0011_project_tasks.sql"),
     },
+    Migration {
+        version: 12,
+        name: "saved_searches",
+        sql: include_str!("../../migrations/0012_saved_searches.sql"),
+    },
 ];
 
 /// 应用所有未执行的迁移。每个迁移在独立事务中执行，失败即回滚。

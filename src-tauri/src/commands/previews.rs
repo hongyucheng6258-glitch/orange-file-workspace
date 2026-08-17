@@ -23,6 +23,28 @@ fn png_data_url(path: &Path) -> CommandResult<String> {
     Ok(format!("data:image/png;base64,{encoded}"))
 }
 
+pub(crate) fn icon_data_url_for_path(
+    path: &Path,
+    cache_dir: &Path,
+) -> CommandResult<Option<String>> {
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let icon_path = match thumbnail_service::extract_file_icon(path, cache_dir) {
+        Ok(icon_path) => icon_path,
+        Err(error) => {
+            eprintln!(
+                "get_path_icon: extract failed for {}: {} ({})",
+                path.display(),
+                error.message,
+                error.code
+            );
+            return Ok(None);
+        }
+    };
+    png_data_url(&icon_path).map(Some)
+}
+
 /// 获取资源的缩略图缓存路径（不存在时按需生成）。
 /// 非图片或路径失效返回 None。
 #[tauri::command]
@@ -103,6 +125,48 @@ pub fn get_file_icon(state: State<AppState>, resource_id: String) -> CommandResu
         now_unix(),
     );
     png_data_url(&dest).map(Some)
+}
+
+/// 按物理路径提取系统文件图标，用于不属于资源库的全局搜索结果。
+/// 路径失效时按显示名称回退到应用索引中的有效启动目标。
+#[tauri::command]
+pub fn get_path_icon(
+    state: State<AppState>,
+    path: String,
+    name: Option<String>,
+) -> CommandResult<Option<String>> {
+    let cache_dir = state.data_dir.lock().expect("dir lock").join("thumbnails");
+    let requested_path = PathBuf::from(&path);
+    if requested_path.is_file() {
+        return icon_data_url_for_path(&requested_path, &cache_dir);
+    }
+
+    let Some(display_name) = name
+        .as_deref()
+        .and_then(|value| Path::new(value).file_stem())
+        .map(|value| value.to_string_lossy().to_string())
+    else {
+        return Ok(None);
+    };
+
+    let conn = lock_db(&state);
+    let mut stmt = conn.prepare(
+        "SELECT launch_target, icon_source FROM system_search_apps
+         WHERE display_name = ?1 COLLATE NOCASE",
+    )?;
+    let rows = stmt.query_map([display_name], |row| {
+        Ok((row.get::<_, Option<String>>(0)?, row.get::<_, Option<String>>(1)?))
+    })?;
+    for row in rows {
+        let (launch_target, icon_source) = row?;
+        for candidate in [launch_target, icon_source].into_iter().flatten() {
+            let candidate_path = PathBuf::from(candidate);
+            if candidate_path.is_file() {
+                return icon_data_url_for_path(&candidate_path, &cache_dir);
+            }
+        }
+    }
+    Ok(None)
 }
 
 /// 读取文本文件的预览内容（上限由设置决定）。

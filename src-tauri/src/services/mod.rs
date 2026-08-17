@@ -20,6 +20,7 @@ pub mod project_task_service;
 pub mod recent_service;
 pub mod run_confirmation;
 pub mod run_history;
+pub mod saved_search_service;
 pub mod scan_service;
 pub mod settings_service;
 pub mod system_service;

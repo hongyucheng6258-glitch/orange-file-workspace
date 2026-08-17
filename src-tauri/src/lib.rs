@@ -351,6 +351,7 @@ pub fn run() {
             commands::import::list_tasks,
             commands::previews::get_thumbnail,
             commands::previews::get_file_icon,
+            commands::previews::get_path_icon,
             commands::previews::get_text_preview,
             commands::previews::hash_resources,
             commands::pages::create_page,
@@ -460,7 +461,16 @@ pub fn run() {
             commands::project_tasks::link_task_resource,
             commands::project_tasks::unlink_task_resource,
             commands::project_tasks::list_task_links,
-            commands::project_tasks::list_links_by_resource
+            commands::project_tasks::list_links_by_resource,
+            // Saved searches / smart collections
+            commands::saved_searches::create_saved_search,
+            commands::saved_searches::list_saved_searches,
+            commands::saved_searches::list_pinned_saved_searches,
+            commands::saved_searches::update_saved_search,
+            commands::saved_searches::delete_saved_search,
+            commands::saved_searches::toggle_saved_search_pinned,
+            commands::saved_searches::reorder_pinned_saved_searches,
+            commands::saved_searches::execute_saved_search
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

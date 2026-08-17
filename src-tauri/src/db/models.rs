@@ -215,6 +215,22 @@ pub struct ProjectTaskLink {
     pub created_at: i64,
 }
 
+/// 保存的搜索（智能集合）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SavedSearch {
+    pub id: String,
+    pub name: String,
+    pub query: Option<String>,
+    pub filters_json: String,
+    pub color: Option<String>,
+    pub icon: Option<String>,
+    pub is_pinned: bool,
+    pub display_order: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub last_executed_at: Option<i64>,
+}
+
 /// 缩略图缓存记录。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Thumbnail {
