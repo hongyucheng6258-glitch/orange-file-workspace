@@ -23,9 +23,9 @@ export async function hashResources(ids: string[]): Promise<number> {
   return call<number>("hash_resources", { ids });
 }
 
-/** 将指定资源移入回收站（软删除）。用于删除重复副本。 */
-export async function trashResources(ids: string[]): Promise<number> {
-  return call<number>("trash_resources", { ids });
+/** 永久删除指定资源（磁盘文件 + 数据库记录），不可恢复。用于删除重复副本。 */
+export async function deletePermanently(ids: string[]): Promise<number> {
+  return call<number>("delete_permanently", { ids });
 }
 
 // ── 批量重命名 ──

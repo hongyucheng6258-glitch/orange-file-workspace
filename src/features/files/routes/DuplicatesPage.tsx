@@ -18,7 +18,7 @@ import { formatSize } from "../../../lib/tauri";
 import {
   findDuplicates,
   getHashStats,
-  trashResources,
+  deletePermanently,
 } from "../api/batchOpsApi";
 import type { DuplicateGroup } from "../types/batchOps";
 import { PathIconThumb } from "../../../components/FileIconThumb";
@@ -69,13 +69,13 @@ export function DuplicatesPage() {
   const handleDelete = async (ids: string[], keepCount: number) => {
     if (ids.length === 0) return;
     const ok = window.confirm(
-      `确定要删除这 ${ids.length} 个重复副本（移入回收站）吗？将保留 ${keepCount} 个文件。`,
+      `将永久删除这 ${ids.length} 个重复副本（含磁盘文件，不可恢复），仅保留 ${keepCount} 个文件。确定继续？`,
     );
     if (!ok) return;
     setDeleting(true);
     setError(null);
     try {
-      await trashResources(ids);
+      await deletePermanently(ids);
       await loadData();
     } catch (e) {
       setError((e as Error).message);
