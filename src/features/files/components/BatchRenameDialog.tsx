@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { X, Loader2, Check, AlertTriangle, RotateCcw } from "lucide-react";
 import type { RenameItem } from "../types/batchOps";
-import type { Resource } from "../../../lib/tauri";
+import type { Resource } from "../../../lib/types";
 import { previewBatchRename, executeBatchRename } from "../api/batchOpsApi";
 
 type RenameMode = "replace" | "prefix" | "suffix" | "number";

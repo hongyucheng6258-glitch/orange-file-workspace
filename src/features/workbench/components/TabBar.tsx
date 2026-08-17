@@ -26,6 +26,12 @@ const ICON_MAP: Record<string, string> = {
   browser: "⌖",
   log: "☰",
   image: "🖼",
+  pdf: "📄",
+  csv: "▦",
+  archive: "📦",
+  video: "▶",
+  audio: "♪",
+  markdown: "M",
   welcome: "★",
 };
 

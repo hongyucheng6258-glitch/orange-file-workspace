@@ -10,6 +10,14 @@ import type { Tab } from "./lib/layoutModel";
 import { WorkbenchTerminal } from "./content/WorkbenchTerminal";
 import { WorkbenchEditor } from "./content/WorkbenchEditor";
 import { WorkbenchFileTree } from "./content/WorkbenchFileTree";
+import {
+  ImagePreview,
+  PdfPreview,
+  CsvPreview,
+  ArchivePreview,
+  VideoPreview,
+  AudioPreview,
+} from "../preview/PreviewRenderers";
 
 /** 注册欢迎页渲染器 */
 registerContent("welcome", (_tab: Tab): ReactNode => {
@@ -37,4 +45,39 @@ registerContent("editor", (tab: Tab): ReactNode => {
 /** 注册文件树渲染器 */
 registerContent("filetree", (tab: Tab, panelId: string): ReactNode => {
   return <WorkbenchFileTree params={tab.params} panelId={panelId} />;
+});
+
+/** 注册图片预览渲染器 */
+registerContent("image", (tab: Tab): ReactNode => {
+  return <ImagePreview tab={tab} />;
+});
+
+/** 注册 PDF 预览渲染器 */
+registerContent("pdf", (tab: Tab): ReactNode => {
+  return <PdfPreview tab={tab} />;
+});
+
+/** 注册 CSV 预览渲染器 */
+registerContent("csv", (tab: Tab): ReactNode => {
+  return <CsvPreview tab={tab} />;
+});
+
+/** 注册压缩包预览渲染器 */
+registerContent("archive", (tab: Tab): ReactNode => {
+  return <ArchivePreview tab={tab} />;
+});
+
+/** 注册视频预览渲染器 */
+registerContent("video", (tab: Tab): ReactNode => {
+  return <VideoPreview tab={tab} />;
+});
+
+/** 注册音频预览渲染器 */
+registerContent("audio", (tab: Tab): ReactNode => {
+  return <AudioPreview tab={tab} />;
+});
+
+/** 注册 Markdown 预览渲染器（暂时复用编辑器） */
+registerContent("markdown", (tab: Tab): ReactNode => {
+  return <WorkbenchEditor params={tab.params} />;
 });

@@ -7,7 +7,6 @@ import type { Resource } from "../../../lib/types";
 import type {
   ProjectTask,
   ProjectTaskLink,
-  TaskStatus,
   TaskPriority,
   TaskLinkType,
   UpdateTaskParams,

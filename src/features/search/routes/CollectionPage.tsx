@@ -32,7 +32,6 @@ export function CollectionPage() {
   const navigate = useNavigate();
   const {
     searches,
-    results,
     executing,
     runSearch,
     togglePin,

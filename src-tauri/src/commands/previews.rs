@@ -7,6 +7,7 @@ use crate::db::connection::now_unix;
 use crate::db::repositories as repo;
 use crate::error::AppError;
 use crate::ipc::CommandResult;
+use crate::services::archive_service;
 use crate::services::hash_service;
 use crate::services::preview_service;
 use crate::services::settings_service;
@@ -205,4 +206,85 @@ pub fn hash_resources(state: State<AppState>, ids: Vec<String>) -> CommandResult
         }
     }
     Ok(hashed)
+}
+
+/// 获取资源的预览类型（preview_kind），用于前端选择渲染器。
+/// 如果数据库中未存储 preview_kind，则根据扩展名和 MIME 推断并回写。
+#[tauri::command]
+pub fn get_preview_kind(state: State<AppState>, resource_id: String) -> CommandResult<Option<String>> {
+    let conn = lock_db(&state);
+    // 从 file_metadata 读取 preview_kind + extension + mime_type
+    let row: Option<(Option<String>, Option<String>, Option<String>)> = conn
+        .query_row(
+            "SELECT preview_kind, extension, mime_type FROM file_metadata WHERE resource_id = ?1",
+            rusqlite::params![&resource_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .ok();
+    let Some((stored, extension, mime_type)) = row else {
+        return Ok(None);
+    };
+    if let Some(kind) = stored {
+        return Ok(Some(kind));
+    }
+    // 推断
+    let kind = preview_service::detect_preview_kind(extension.as_deref(), mime_type.as_deref());
+    // 回写
+    if let Some(ref k) = kind {
+        let _ = conn.execute(
+            "UPDATE file_metadata SET preview_kind = ?2 WHERE resource_id = ?1",
+            rusqlite::params![&resource_id, k],
+        );
+    }
+    Ok(kind)
+}
+
+/// 获取资源的物理文件路径，用于前端通过 asset 协议加载。
+#[tauri::command]
+pub fn get_resource_path(state: State<AppState>, resource_id: String) -> CommandResult<Option<String>> {
+    let conn = lock_db(&state);
+    let locs = repo::list_locations(&conn, &resource_id)?;
+    let Some(loc) = locs.first() else {
+        return Ok(None);
+    };
+    let path = PathBuf::from(&loc.path);
+    if path.exists() {
+        Ok(Some(loc.path.clone()))
+    } else {
+        Ok(None)
+    }
+}
+
+/// 获取 CSV 预览数据。
+#[tauri::command]
+pub fn get_csv_preview(state: State<AppState>, resource_id: String) -> CommandResult<preview_service::CsvPreview> {
+    let conn = lock_db(&state);
+    let locs = repo::list_locations(&conn, &resource_id)?;
+    let Some(loc) = locs.first() else {
+        return Err(AppError::new("location_missing", "资源缺少物理位置"));
+    };
+    let path = PathBuf::from(&loc.path);
+    if !path.exists() {
+        return Err(AppError::new("path_missing", "文件路径不可用"));
+    }
+    preview_service::read_csv_preview(&path, 500)
+}
+
+/// 列出压缩包内容。
+#[tauri::command]
+pub fn get_archive_listing(
+    state: State<AppState>,
+    resource_id: String,
+    max_entries: Option<usize>,
+) -> CommandResult<archive_service::ArchiveInfo> {
+    let conn = lock_db(&state);
+    let locs = repo::list_locations(&conn, &resource_id)?;
+    let Some(loc) = locs.first() else {
+        return Err(AppError::new("location_missing", "资源缺少物理位置"));
+    };
+    let path = PathBuf::from(&loc.path);
+    if !path.exists() {
+        return Err(AppError::new("path_missing", "文件路径不可用"));
+    }
+    archive_service::list_archive(&path, max_entries.unwrap_or(1000))
 }

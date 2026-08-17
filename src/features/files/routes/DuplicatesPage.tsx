@@ -8,7 +8,6 @@ import {
   Copy,
   Loader2,
   Hash,
-  Trash2,
   ChevronDown,
   ChevronRight,
   HardDrive,
@@ -17,7 +16,6 @@ import { formatSize } from "../../../lib/tauri";
 import {
   findDuplicates,
   getHashStats,
-  hashResources,
 } from "../api/batchOpsApi";
 import type { DuplicateGroup } from "../types/batchOps";
 import { PathIconThumb } from "../../../components/FileIconThumb";
@@ -27,7 +25,6 @@ export function DuplicatesPage() {
   const [groups, setGroups] = useState<DuplicateGroup[]>([]);
   const [stats, setStats] = useState<[number, number]>([0, 0]);
   const [loading, setLoading] = useState(true);
-  const [hashing, setHashing] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
@@ -147,6 +144,7 @@ export function DuplicatesPage() {
                       <PathIconThumb
                         path={entry.path}
                         size={20}
+                        fallback={<span className="dup-entry-fallback">📄</span>}
                       />
                       <div className="dup-entry-body">
                         <div className="dup-entry-name">{entry.name}</div>

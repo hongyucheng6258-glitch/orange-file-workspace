@@ -20,9 +20,9 @@ import {
 import type { Resource } from "../../../lib/types";
 import { call } from "../../../lib/tauri";
 import { getResourcePath } from "../../../lib/openResource";
+import { getPreviewKind } from "../../preview/previewApi";
 import { useLayoutStore } from "../stores/layoutStore";
 import { useWorkbenchContext } from "../stores/workbenchContext";
-import type { Tab } from "../lib/layoutModel";
 
 interface Props {
   params: Record<string, unknown>;
@@ -145,12 +145,11 @@ function TreeNode({
   );
 }
 
-export function WorkbenchFileTree({ params, panelId }: Props) {
+export function WorkbenchFileTree({ panelId }: Props) {
   const [roots, setRoots] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const setCwd = useWorkbenchContext((s) => s.setCwd);
   const openTab = useLayoutStore((s) => s.openTab);
-  const splitPanel = useLayoutStore((s) => s.splitPanel);
 
   // 加载根级资源
   useEffect(() => {
@@ -169,10 +168,17 @@ export function WorkbenchFileTree({ params, panelId }: Props) {
     };
   }, []);
 
-  // 点击文件 → 在同面板打开编辑器
+  // 点击文件 → 根据预览类型打开对应渲染器
   const handleOpenFile = useCallback(
-    (res: Resource) => {
-      openTab(panelId, "editor", res.name, { resourceId: res.id }, "file");
+    async (res: Resource) => {
+      let kind: string | null = null;
+      try {
+        kind = await getPreviewKind(res.id);
+      } catch {
+        // 推断失败时回退到编辑器
+      }
+      const contentType = (kind ?? "editor") as Parameters<typeof openTab>[1];
+      openTab(panelId, contentType, res.name, { resourceId: res.id }, "file");
     },
     [openTab, panelId],
   );

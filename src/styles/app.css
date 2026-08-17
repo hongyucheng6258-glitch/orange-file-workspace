@@ -5954,6 +5954,288 @@ input {
     color var(--dur-fast) var(--ease);
 }
 
+/* ─── Phase 2.6: Preview Renderers ─────────────────────── */
+
+.pv-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.pv-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--danger, #ef4444);
+  font-size: 13px;
+  padding: 16px;
+  text-align: center;
+}
+
+.pv-unsupported {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  color: var(--text-secondary);
+}
+
+.pv-unsupported-title {
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* Image */
+.pv-image-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  overflow: auto;
+  background: var(--bg-secondary, #1a1a1a);
+  padding: 16px;
+}
+
+.pv-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-m, 6px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* PDF */
+.pv-pdf-wrap {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pv-pdf-iframe {
+  flex: 1;
+  border: none;
+  width: 100%;
+  height: 100%;
+  background: white;
+}
+
+/* CSV */
+.pv-csv-wrap {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pv-csv-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface, #252525);
+  flex-shrink: 0;
+}
+
+.pv-csv-truncated {
+  color: var(--warning, #f59e0b);
+}
+
+.pv-csv-table-wrap {
+  flex: 1;
+  overflow: auto;
+  font-family: "Cascadia Code", "Fira Code", monospace;
+  font-size: 12px;
+}
+
+.pv-csv-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.pv-csv-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface, #252525);
+  border-bottom: 2px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.pv-csv-table td {
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.pv-csv-table tr:hover td {
+  background: var(--surface-hover, #2a2a2a);
+}
+
+.pv-csv-idx {
+  color: var(--text-secondary);
+  text-align: right;
+  user-select: none;
+  width: 40px;
+}
+
+/* Archive */
+.pv-archive-wrap {
+  height: 100%;
+  overflow: auto;
+  padding: 8px;
+}
+
+.pv-archive-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pv-archive-toggle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+.pv-archive-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.pv-archive-fmt {
+  font-weight: 600;
+  color: var(--primary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--primary-dim, rgba(99, 102, 241, 0.15));
+}
+
+.pv-archive-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.pv-archive-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  font-size: 12px;
+  border-bottom: 1px solid transparent;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.pv-archive-entry:hover {
+  background: var(--surface-hover, #2a2a2a);
+}
+
+.pv-archive-entry.is-dir .pv-archive-path {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.pv-archive-icon {
+  display: flex;
+  align-items: center;
+  width: 18px;
+  flex-shrink: 0;
+}
+
+.pv-archive-path {
+  flex: 1;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pv-archive-size {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  min-width: 60px;
+  text-align: right;
+}
+
+.pv-archive-modified {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* Video */
+.pv-video-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #000;
+}
+
+.pv-video {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Audio */
+.pv-audio-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 100%;
+  color: var(--text-secondary);
+}
+
+.pv-audio-icon {
+  opacity: 0.4;
+}
+
+.pv-audio-title {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.pv-audio {
+  width: 80%;
+  max-width: 400px;
+}
+
+/* Spinner animation */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .terminal-tab::before {
   /* 激活态与终端区域连通的色块，覆盖标签栏底边 */
   content: "";

@@ -17,6 +17,12 @@ export type ContentType =
   | "browser"
   | "log"
   | "image"
+  | "pdf"
+  | "csv"
+  | "archive"
+  | "video"
+  | "audio"
+  | "markdown"
   | "welcome";
 
 export interface Tab {

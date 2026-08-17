@@ -610,13 +610,17 @@ fn flush_batch(
             ],
         )?;
         if item.kind == ResourceKind::File {
+            let preview_kind = crate::services::preview_service::detect_preview_kind(
+                item.extension.as_deref(),
+                item.mime.as_deref(),
+            );
             tx.execute(
                 "INSERT INTO file_metadata (
                     resource_id, extension, mime_type, size_bytes,
                     width, height, duration_ms, encoding, line_count,
                     is_binary, preview_kind, metadata_json
-                 ) VALUES (?1, ?2, ?3, ?4, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL)",
-                params![item.resource_id, item.extension, item.mime, item.size],
+                 ) VALUES (?1, ?2, ?3, ?4, NULL, NULL, NULL, NULL, NULL, 0, ?5, NULL)",
+                params![item.resource_id, item.extension, item.mime, item.size, preview_kind],
             )?;
         }
     }

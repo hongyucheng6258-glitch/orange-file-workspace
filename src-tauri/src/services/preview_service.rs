@@ -1,7 +1,133 @@
 use std::io::Read;
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
+
 use crate::error::AppError;
+
+/// CSV 预览结果：表头 + 行数据。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CsvPreview {
+    pub headers: Vec<String>,
+    pub rows: Vec<Vec<String>>,
+    pub total_rows: usize,
+    pub truncated: bool,
+}
+
+/// 根据文件扩展名和 MIME 类型推断预览类型。
+pub fn detect_preview_kind(extension: Option<&str>, mime: Option<&str>) -> Option<String> {
+    if let Some(ext) = extension {
+        let ext = ext.to_lowercase();
+        match ext.as_str() {
+            "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "svg" => return Some("image".into()),
+            "pdf" => return Some("pdf".into()),
+            "csv" | "tsv" => return Some("csv".into()),
+            "zip" | "tar" | "gz" | "tgz" | "7z" | "rar" | "bz2" | "xz" | "jar" | "epub" => {
+                return Some("archive".into())
+            }
+            "mp4" | "avi" | "mkv" | "mov" | "webm" | "flv" | "wmv" | "m4v" => {
+                return Some("video".into())
+            }
+            "mp3" | "wav" | "flac" | "ogg" | "m4a" | "aac" | "wma" => return Some("audio".into()),
+            "md" | "markdown" => return Some("markdown".into()),
+            _ => {}
+        }
+    }
+    if let Some(mime) = mime {
+        if mime.starts_with("text/") {
+            return Some("text".into());
+        }
+        if mime.starts_with("image/") {
+            return Some("image".into());
+        }
+        if mime.starts_with("video/") {
+            return Some("video".into());
+        }
+        if mime.starts_with("audio/") {
+            return Some("audio".into());
+        }
+    }
+    None
+}
+
+/// 解析 CSV 文件并返回结构化预览数据。
+/// 最多读取 max_rows 行，超出时设置 truncated = true。
+pub fn read_csv_preview(path: &Path, max_rows: usize) -> Result<CsvPreview, AppError> {
+    let bytes = std::fs::read(path)?;
+    let text = strip_bom(&bytes);
+    let text = text.lines();
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut total_rows = 0;
+    let mut truncated = false;
+
+    for line in text {
+        if line.trim().is_empty() {
+            continue;
+        }
+        total_rows += 1;
+        if rows.len() < max_rows {
+            rows.push(parse_csv_line(line));
+        } else {
+            truncated = true;
+        }
+    }
+
+    let headers = if rows.is_empty() {
+        Vec::new()
+    } else {
+        rows.remove(0)
+    };
+
+    Ok(CsvPreview {
+        headers,
+        rows,
+        total_rows,
+        truncated,
+    })
+}
+
+fn strip_bom(bytes: &[u8]) -> &str {
+    let bytes = if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        &bytes[3..]
+    } else {
+        bytes
+    };
+    std::str::from_utf8(bytes).unwrap_or("")
+}
+
+/// 简易 CSV 行解析：处理双引号包裹的字段。
+fn parse_csv_line(line: &str) -> Vec<String> {
+    let mut fields = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut chars = line.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if in_quotes {
+            if c == '"' {
+                if chars.peek() == Some(&'"') {
+                    current.push('"');
+                    chars.next();
+                } else {
+                    in_quotes = false;
+                }
+            } else {
+                current.push(c);
+            }
+        } else {
+            if c == '"' {
+                in_quotes = true;
+            } else if c == ',' {
+                fields.push(current.clone());
+                current.clear();
+            } else {
+                current.push(c);
+            }
+        }
+    }
+    fields.push(current);
+    fields
+}
 
 /// 读取文件前 N 字节并尝试解析为 UTF-8 文本预览。
 /// limit_kb 为上限（KB），超过时在结尾追加截断提示。

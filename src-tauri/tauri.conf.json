@@ -26,6 +26,8 @@
         "default-src": "'self' asset: http://asset.localhost",
         "connect-src": "ipc: http://ipc.localhost",
         "img-src": "'self' asset: http://asset.localhost data: blob:",
+        "media-src": "'self' asset: http://asset.localhost blob:",
+        "frame-src": "'self' asset: http://asset.localhost",
         "style-src": "'self' 'unsafe-inline'",
         "font-src": "'self' data:",
         "script-src": "'self'"
@@ -34,13 +36,15 @@
         "default-src": "'self' asset: http://asset.localhost http://localhost:1420",
         "connect-src": "ipc: http://ipc.localhost http://localhost:1420 ws://localhost:1420",
         "img-src": "'self' asset: http://asset.localhost data: blob:",
+        "media-src": "'self' asset: http://asset.localhost blob: http://localhost:1420",
+        "frame-src": "'self' asset: http://asset.localhost http://localhost:1420",
         "style-src": "'self' 'unsafe-inline'",
         "font-src": "'self' data:",
         "script-src": "'self'"
       },
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPDATA/**", "$RESOURCE/**", "$HOME/**"]
+        "scope": ["**"]
       }
     }
   },

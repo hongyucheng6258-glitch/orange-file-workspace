@@ -11,7 +11,7 @@
  * - 关联资源管理（展开任务详情）
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CheckCircle2,
   Circle,
@@ -22,23 +22,14 @@ import {
   Flag,
   Link2,
   X,
-  FileText,
   Folder,
   File as FileIcon,
 } from "lucide-react";
 import { useProjectTaskStore } from "../stores/projectTaskStore";
-import { listProjectTasks } from "../api/projectTaskApi";
 import { call } from "../../../lib/tauri";
 import type { Resource } from "../../../lib/types";
 import type { TaskStatus, TaskPriority } from "../types/projectTask";
 import { useEditorStore } from "../stores/editorStore";
-
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  todo: "待办",
-  in_progress: "进行中",
-  done: "已完成",
-  cancelled: "已取消",
-};
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
   low: "var(--text-tertiary)",
@@ -319,7 +310,6 @@ export function ProjectTaskPanel({ projectId }: { projectId: string }) {
     tasks,
     loading,
     selectedTaskId,
-    loadTasks,
     setActiveProject,
     addTask,
     selectTask,
