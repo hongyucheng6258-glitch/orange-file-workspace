@@ -78,7 +78,10 @@ pub fn get_recent_items(
         idx += 1;
     }
 
-    sql.push_str(&format!(" ORDER BY ri.last_accessed_at DESC, ri.rowid DESC LIMIT ?{}", idx));
+    sql.push_str(&format!(
+        " ORDER BY ri.last_accessed_at DESC, ri.rowid DESC LIMIT ?{}",
+        idx
+    ));
     let limit_i64 = limit as i64;
     params_vec.push(Box::new(limit_i64));
 

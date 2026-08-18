@@ -167,5 +167,9 @@ pub fn check_external_change(
     path: String,
 ) -> CommandResult<bool> {
     let conn = lock_db(&state);
-    Ok(editor_service::check_external_change(&conn, &resource_id, &path)?)
+    Ok(editor_service::check_external_change(
+        &conn,
+        &resource_id,
+        &path,
+    )?)
 }

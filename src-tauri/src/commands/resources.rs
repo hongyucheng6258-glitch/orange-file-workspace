@@ -81,8 +81,7 @@ pub fn find_resource_by_path(
         .optional()
         .map_err(AppError::from)?;
     if let Some(rid) = row {
-        return repo::get_resource(&conn, &rid)
-            .map_err(AppError::from);
+        return repo::get_resource(&conn, &rid).map_err(AppError::from);
     }
     Ok(None)
 }

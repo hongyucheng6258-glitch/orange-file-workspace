@@ -2,6 +2,7 @@ use tauri::State;
 
 use crate::error::AppError;
 use crate::ipc::CommandResult;
+use crate::services::c_drive_cleaner;
 use crate::services::system_service;
 use crate::services::system_windows;
 use crate::AppState;
@@ -186,4 +187,29 @@ pub fn run_admin_tool(tool: String) -> CommandResult<()> {
 #[tauri::command]
 pub fn get_admin_status() -> CommandResult<bool> {
     Ok(system_windows::is_admin())
+}
+
+/// 扫描固定白名单内的 C 盘可清理项。
+#[tauri::command]
+pub fn scan_c_drive_cleanup(
+    mode: c_drive_cleaner::CleanupMode,
+) -> CommandResult<Vec<c_drive_cleaner::CleanupScanItem>> {
+    c_drive_cleaner::scan(mode, system_windows::is_admin())
+        .map_err(|message| AppError::new("c_drive_cleanup_scan_failed", message))
+}
+
+/// 清理调用方选择的固定项目 ID，不接受任意路径。
+#[tauri::command]
+pub fn clean_c_drive_items(
+    mode: c_drive_cleaner::CleanupMode,
+    item_ids: Vec<String>,
+    confirm_recycle_bin: bool,
+) -> CommandResult<c_drive_cleaner::CleanupRunResult> {
+    c_drive_cleaner::clean(
+        mode,
+        &item_ids,
+        confirm_recycle_bin,
+        system_windows::is_admin(),
+    )
+    .map_err(|message| AppError::new("c_drive_cleanup_failed", message))
 }

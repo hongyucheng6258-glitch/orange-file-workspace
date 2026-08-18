@@ -16,6 +16,7 @@ import {
   HeartPulse,
   Activity,
   Wrench,
+  Clock,
 } from "lucide-react";
 import type { StorageInfo, SystemSnapshot, TemperatureInfo } from "../../../lib/types";
 import { call } from "../../../lib/tauri";
@@ -35,6 +36,7 @@ import { SecurityTab } from "../components/SecurityTab";
 import { HealthTab } from "../components/HealthTab";
 import { SensorsTab } from "../components/SensorsTab";
 import { ToolsTab } from "../components/ToolsTab";
+import { AppUsageTab } from "../components/AppUsageTab";
 
 const TABS = [
   { key: "overview", label: "总览", icon: MonitorSmartphone },
@@ -51,6 +53,7 @@ const TABS = [
   { key: "security", label: "安全", icon: ShieldCheck },
   { key: "health", label: "健康", icon: HeartPulse },
   { key: "tools", label: "工具", icon: Wrench },
+  { key: "app_usage", label: "软件使用", icon: Clock },
   { key: "report", label: "报告", icon: FileText },
 ] as const;
 
@@ -211,6 +214,7 @@ export function SystemPage() {
       {tab === "security" && <SecurityTab />}
       {tab === "health" && <HealthTab />}
       {tab === "tools" && <ToolsTab />}
+      {tab === "app_usage" && <AppUsageTab />}
       {tab === "report" && <ReportTab />}
     </div>
   );

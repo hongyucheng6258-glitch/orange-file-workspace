@@ -33,12 +33,13 @@ pub struct SearchRuntime {
 pub struct AppState {
     pub data_dir: std::sync::Mutex<PathBuf>,
     pub managed_dir: std::sync::Mutex<PathBuf>,
-    pub conn: Mutex<rusqlite::Connection>,
+    pub conn: Arc<Mutex<rusqlite::Connection>>,
     pub sampler: Mutex<services::system_service::SystemSampler>,
     pub search: SearchRuntime,
     pub terminal: services::terminal_service::TerminalRuntime,
     pub runtime: Arc<services::project_runtime::RuntimeManager>,
     pub preview: Arc<services::web_preview_service::PreviewService>,
+    pub app_usage: Arc<services::app_usage_service::AppUsageTracker>,
 }
 
 impl AppState {
@@ -114,13 +115,6 @@ pub fn run() {
                 let scope = app.asset_protocol_scope();
                 scope.allow_directory(&data_dir, true)?;
                 scope.allow_directory(&managed_dir, true)?;
-                eprintln!(
-                    "asset scope: data_dir={} allowed={}, managed_dir={} allowed={}",
-                    data_dir.display(),
-                    scope.is_allowed(&data_dir),
-                    managed_dir.display(),
-                    scope.is_allowed(&managed_dir)
-                );
             }
             // 项目运行管理器：确认协议 + 进程生命周期 + 日志 + 运行历史。
             // 历史存储使用独立连接（WAL 支持多连接并发读写）。
@@ -139,10 +133,14 @@ pub fn run() {
             // Web 端口预览服务：目标解析 + 监听检测 + Job 归属校验。
             let preview_service =
                 services::web_preview_service::build_preview_service(runtime_manager.clone());
+            // 软件使用时间统计：后台采样器，应用启动即开始计时。
+            let app_usage_tracker = Arc::new(services::app_usage_service::AppUsageTracker::new());
+            // 包装为共享连接，避免 vmcache 虚拟盘下独立连接被降级为只读
+            let conn = Arc::new(Mutex::new(conn));
             app.manage(AppState {
                 data_dir: Mutex::new(data_dir),
                 managed_dir: Mutex::new(managed_dir),
-                conn: Mutex::new(conn),
+                conn: conn.clone(),
                 sampler: Mutex::new(services::system_service::SystemSampler::new()),
                 search: SearchRuntime {
                     active_queries: Mutex::new(HashMap::new()),
@@ -153,7 +151,10 @@ pub fn run() {
                 terminal: services::terminal_service::TerminalRuntime::default(),
                 runtime: runtime_manager.clone(),
                 preview: preview_service.clone(),
+                app_usage: app_usage_tracker.clone(),
             });
+            // 软件使用时间采样：后台线程，5 秒一次，共享主连接。
+            services::app_usage_service::start_tracker_thread(conn.clone(), app_usage_tracker);
             // 运行管理器：确认票据过期清理 + 停止超时清理重试。
             {
                 let runtime = runtime_manager.clone();
@@ -428,6 +429,8 @@ pub fn run() {
             commands::system::restart_explorer,
             commands::system::run_admin_tool,
             commands::system::get_admin_status,
+            commands::system::scan_c_drive_cleanup,
+            commands::system::clean_c_drive_items,
             commands::global_search::start_global_search,
             commands::global_search::cancel_global_search,
             commands::global_search::open_search_result,
@@ -483,7 +486,14 @@ pub fn run() {
             commands::batch_ops::preview_batch_rename,
             commands::batch_ops::execute_batch_rename,
             commands::batch_ops::list_operation_history,
-            commands::batch_ops::undo_operation
+            commands::batch_ops::undo_operation,
+            // App usage tracking
+            commands::app_usage::get_app_usage,
+            commands::app_usage::pause_app_usage,
+            commands::app_usage::resume_app_usage,
+            commands::app_usage::set_app_usage_idle_threshold,
+            commands::app_usage::get_app_usage_status,
+            commands::app_usage::clear_app_usage
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -493,6 +503,7 @@ pub fn run() {
                 let state = app.state::<AppState>();
                 services::terminal_service::shutdown_all(&state.terminal);
                 state.runtime.shutdown_all();
+                state.app_usage.stop();
             }
         });
 }

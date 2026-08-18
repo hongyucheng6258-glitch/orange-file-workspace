@@ -656,7 +656,13 @@ fn flush_batch(
                     width, height, duration_ms, encoding, line_count,
                     is_binary, preview_kind, metadata_json
                  ) VALUES (?1, ?2, ?3, ?4, NULL, NULL, NULL, NULL, NULL, 0, ?5, NULL)",
-                params![item.resource_id, item.extension, item.mime, item.size, preview_kind],
+                params![
+                    item.resource_id,
+                    item.extension,
+                    item.mime,
+                    item.size,
+                    preview_kind
+                ],
             )?;
         }
     }

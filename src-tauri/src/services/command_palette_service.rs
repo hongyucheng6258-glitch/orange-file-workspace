@@ -225,11 +225,8 @@ pub fn delete_command_history(conn: &Connection, command_id: &str) -> Result<(),
 
 /// Get command statistics
 pub fn get_command_statistics(conn: &Connection) -> Result<CommandStatistics, AppError> {
-    let total_commands: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM command_history",
-        [],
-        |row| row.get(0),
-    )?;
+    let total_commands: i64 =
+        conn.query_row("SELECT COUNT(*) FROM command_history", [], |row| row.get(0))?;
 
     let total_executions: i64 = conn.query_row(
         "SELECT SUM(execution_count) FROM command_history",

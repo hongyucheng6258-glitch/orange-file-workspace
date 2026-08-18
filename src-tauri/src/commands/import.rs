@@ -94,7 +94,11 @@ pub fn list_task_items(
     limit: Option<i64>,
 ) -> CommandResult<Vec<TaskItem>> {
     let conn = state.conn.lock().expect("db lock");
-    Ok(tasks::list_task_items(&conn, &task_id, limit.unwrap_or(200))?)
+    Ok(tasks::list_task_items(
+        &conn,
+        &task_id,
+        limit.unwrap_or(200),
+    )?)
 }
 
 #[allow(dead_code)]

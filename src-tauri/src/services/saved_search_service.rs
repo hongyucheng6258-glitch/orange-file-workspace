@@ -53,7 +53,16 @@ pub fn create_saved_search(
             id, name, query, filters_json, color, icon,
             is_pinned, display_order, created_at, updated_at
          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, ?8, ?8)",
-        params![id, name, query, filters_json, color, icon, max_order + 1, now],
+        params![
+            id,
+            name,
+            query,
+            filters_json,
+            color,
+            icon,
+            max_order + 1,
+            now
+        ],
     )?;
 
     Ok(SavedSearch {
@@ -72,17 +81,15 @@ pub fn create_saved_search(
 }
 
 pub fn list_saved_searches(conn: &Connection) -> SqliteResult<Vec<SavedSearch>> {
-    let mut stmt = conn.prepare(
-        "SELECT * FROM saved_searches ORDER BY is_pinned DESC, display_order ASC",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM saved_searches ORDER BY is_pinned DESC, display_order ASC")?;
     let rows = stmt.query_map([], saved_search_from_row)?;
     rows.collect()
 }
 
 pub fn list_pinned(conn: &Connection) -> SqliteResult<Vec<SavedSearch>> {
-    let mut stmt = conn.prepare(
-        "SELECT * FROM saved_searches WHERE is_pinned = 1 ORDER BY display_order ASC",
-    )?;
+    let mut stmt = conn
+        .prepare("SELECT * FROM saved_searches WHERE is_pinned = 1 ORDER BY display_order ASC")?;
     let rows = stmt.query_map([], saved_search_from_row)?;
     rows.collect()
 }
@@ -131,8 +138,12 @@ pub fn update_saved_search(
         return Ok(None);
     }
 
-    conn.query_row("SELECT * FROM saved_searches WHERE id = ?1", [id], saved_search_from_row)
-        .optional()
+    conn.query_row(
+        "SELECT * FROM saved_searches WHERE id = ?1",
+        [id],
+        saved_search_from_row,
+    )
+    .optional()
 }
 
 pub fn delete_saved_search(conn: &Connection, id: &str) -> SqliteResult<()> {
@@ -140,7 +151,11 @@ pub fn delete_saved_search(conn: &Connection, id: &str) -> SqliteResult<()> {
     Ok(())
 }
 
-pub fn toggle_pinned(conn: &Connection, id: &str, pinned: bool) -> SqliteResult<Option<SavedSearch>> {
+pub fn toggle_pinned(
+    conn: &Connection,
+    id: &str,
+    pinned: bool,
+) -> SqliteResult<Option<SavedSearch>> {
     let now = now_unix();
     let affected = conn.execute(
         "UPDATE saved_searches SET is_pinned = ?2, updated_at = ?3 WHERE id = ?1",
@@ -151,8 +166,12 @@ pub fn toggle_pinned(conn: &Connection, id: &str, pinned: bool) -> SqliteResult<
         return Ok(None);
     }
 
-    conn.query_row("SELECT * FROM saved_searches WHERE id = ?1", [id], saved_search_from_row)
-        .optional()
+    conn.query_row(
+        "SELECT * FROM saved_searches WHERE id = ?1",
+        [id],
+        saved_search_from_row,
+    )
+    .optional()
 }
 
 pub fn reorder_pinned(conn: &Connection, ids: &[String]) -> SqliteResult<()> {
@@ -185,12 +204,15 @@ pub fn execute_saved_search(
     limit: i64,
 ) -> SqliteResult<Vec<SearchHit>> {
     let search = conn
-        .query_row("SELECT * FROM saved_searches WHERE id = ?1", [id], saved_search_from_row)
+        .query_row(
+            "SELECT * FROM saved_searches WHERE id = ?1",
+            [id],
+            saved_search_from_row,
+        )
         .optional()?
         .ok_or(rusqlite::Error::QueryReturnedNoRows)?;
 
-    let filters: SearchFilters = serde_json::from_str(&search.filters_json)
-        .unwrap_or_default();
+    let filters: SearchFilters = serde_json::from_str(&search.filters_json).unwrap_or_default();
 
     // 构建基础查询 — 复用 execute_search 的 LIKE 逻辑
     let query = search.query.as_deref().unwrap_or("");
@@ -242,9 +264,10 @@ pub fn execute_saved_search(
                 .ok()
                 .flatten();
             match &ext {
-                Some(e) => filters.extensions.iter().any(|f| {
-                    f.eq_ignore_ascii_case(e) || e.eq_ignore_ascii_case(f)
-                }),
+                Some(e) => filters
+                    .extensions
+                    .iter()
+                    .any(|f| f.eq_ignore_ascii_case(e) || e.eq_ignore_ascii_case(f)),
                 None => false,
             }
         });

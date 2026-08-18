@@ -251,6 +251,68 @@ export interface ToolCleanResult {
   skipped_files: number;
 }
 
+export type CleanupMode = "safe" | "deep";
+export type CleanupRisk = "low" | "medium" | "high";
+export type CleanupItemStatus = "ready" | "requires_admin" | "completed" | "failed" | "partial";
+
+export interface CleanupScanItem {
+  id: string;
+  name: string;
+  description: string;
+  risk: CleanupRisk;
+  default_selected: boolean;
+  requires_admin: boolean;
+  files: number;
+  bytes: number;
+  status: "ready" | "requires_admin" | "partial";
+  message: string | null;
+}
+
+export interface CleanupRunItem {
+  id: string;
+  name: string;
+  status: CleanupItemStatus;
+  deleted_files: number;
+  freed_bytes: number;
+  skipped_files: number;
+  message: string | null;
+}
+
+export interface CleanupRunResult {
+  status: "completed" | "completed_with_errors" | "partial";
+  deleted_files: number;
+  freed_bytes: number;
+  skipped_files: number;
+  items: CleanupRunItem[];
+}
+
+export interface AppUsageStat {
+  app_id: number;
+  display_name: string;
+  process_name: string;
+  canonical_path: string;
+  active_seconds: number;
+  last_active_at: number;
+  percentage: number;
+}
+
+export interface DailyTotal {
+  date_ymd: number;
+  active_seconds: number;
+}
+
+export interface AppUsageSummary {
+  range_label: string;
+  total_active_seconds: number;
+  apps: AppUsageStat[];
+  daily_totals: DailyTotal[];
+}
+
+export interface AppUsageStatus {
+  paused: boolean;
+  idle_threshold_secs: number;
+}
+
 export interface AppErrorPayload {
   code: string;
   message: string;

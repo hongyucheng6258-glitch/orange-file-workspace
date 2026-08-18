@@ -111,7 +111,12 @@ pub fn get_file_icon(state: State<AppState>, resource_id: String) -> CommandResu
     let dest = match thumbnail_service::extract_file_icon(&path, &cache_dir) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("get_file_icon: extract failed for {}: {} ({})", path.display(), e.message, e.code);
+            eprintln!(
+                "get_file_icon: extract failed for {}: {} ({})",
+                path.display(),
+                e.message,
+                e.code
+            );
             return Ok(None);
         }
     };
@@ -156,7 +161,10 @@ pub fn get_path_icon(
          WHERE display_name = ?1 COLLATE NOCASE",
     )?;
     let rows = stmt.query_map([display_name], |row| {
-        Ok((row.get::<_, Option<String>>(0)?, row.get::<_, Option<String>>(1)?))
+        Ok((
+            row.get::<_, Option<String>>(0)?,
+            row.get::<_, Option<String>>(1)?,
+        ))
     })?;
     for row in rows {
         let (launch_target, icon_source) = row?;
@@ -211,7 +219,10 @@ pub fn hash_resources(state: State<AppState>, ids: Vec<String>) -> CommandResult
 /// 获取资源的预览类型（preview_kind），用于前端选择渲染器。
 /// 如果数据库中未存储 preview_kind，则根据扩展名和 MIME 推断并回写。
 #[tauri::command]
-pub fn get_preview_kind(state: State<AppState>, resource_id: String) -> CommandResult<Option<String>> {
+pub fn get_preview_kind(
+    state: State<AppState>,
+    resource_id: String,
+) -> CommandResult<Option<String>> {
     let conn = lock_db(&state);
     // 从 file_metadata 读取 preview_kind + extension + mime_type
     let row: Option<(Option<String>, Option<String>, Option<String>)> = conn
@@ -241,7 +252,10 @@ pub fn get_preview_kind(state: State<AppState>, resource_id: String) -> CommandR
 
 /// 获取资源的物理文件路径，用于前端通过 asset 协议加载。
 #[tauri::command]
-pub fn get_resource_path(state: State<AppState>, resource_id: String) -> CommandResult<Option<String>> {
+pub fn get_resource_path(
+    state: State<AppState>,
+    resource_id: String,
+) -> CommandResult<Option<String>> {
     let conn = lock_db(&state);
     let locs = repo::list_locations(&conn, &resource_id)?;
     let Some(loc) = locs.first() else {
@@ -257,7 +271,10 @@ pub fn get_resource_path(state: State<AppState>, resource_id: String) -> Command
 
 /// 获取 CSV 预览数据。
 #[tauri::command]
-pub fn get_csv_preview(state: State<AppState>, resource_id: String) -> CommandResult<preview_service::CsvPreview> {
+pub fn get_csv_preview(
+    state: State<AppState>,
+    resource_id: String,
+) -> CommandResult<preview_service::CsvPreview> {
     let conn = lock_db(&state);
     let locs = repo::list_locations(&conn, &resource_id)?;
     let Some(loc) = locs.first() else {

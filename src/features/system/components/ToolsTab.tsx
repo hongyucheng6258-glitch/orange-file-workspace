@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { ToolCleanResult } from "../../../lib/types";
 import { call, formatSize } from "../../../lib/tauri";
+import { CDriveCleaner } from "./CDriveCleaner";
 
 type Risk = "low" | "medium" | "high";
 
@@ -228,6 +229,8 @@ export function ToolsTab() {
       </div>
 
       {error && <div className="system-error">{error}</div>}
+
+      <CDriveCleaner />
 
       <h3 className="tool-section-title">常规修复</h3>
       <div className="system-cards">

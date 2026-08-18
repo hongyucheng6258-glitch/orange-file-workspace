@@ -20,11 +20,7 @@ pub async fn get_recent_items(
     limit: Option<usize>,
 ) -> Result<Vec<RecentItem>, AppError> {
     let conn = state.conn.lock().expect("db lock poisoned");
-    recent_service::get_recent_items(
-        &conn,
-        resource_type_filter.as_deref(),
-        limit.unwrap_or(20),
-    )
+    recent_service::get_recent_items(&conn, resource_type_filter.as_deref(), limit.unwrap_or(20))
 }
 
 #[tauri::command]

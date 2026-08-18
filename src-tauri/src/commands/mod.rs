@@ -1,3 +1,4 @@
+pub mod app_usage;
 pub mod autostart;
 pub mod backups;
 pub mod batch_ops;

@@ -6,7 +6,6 @@
  *   2. 执行：逐个 fs::rename + db 更新，在事务中记录 before/after 快照
  *   3. 撤销：从 operation_history 读取 before_state，逆向重命名
  */
-
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -101,7 +100,11 @@ pub fn preview_batch_rename(
         }
 
         // 同批次内冲突
-        let batch_key = format!("{}|{}", old_path.parent().unwrap_or(Path::new("")).to_string_lossy(), new_name.to_lowercase());
+        let batch_key = format!(
+            "{}|{}",
+            old_path.parent().unwrap_or(Path::new("")).to_string_lossy(),
+            new_name.to_lowercase()
+        );
         if new_names_in_batch.contains(&batch_key) {
             item.status = "conflict".into();
             item.error = Some("同批次内有重名".into());
@@ -159,7 +162,10 @@ pub fn execute_batch_rename(
         // 文件系统重命名
         if old_path.exists() {
             fs::rename(&old_path, &new_path).map_err(|e| {
-                AppError::new("io_error", format!("重命名失败 {}: {}", old_path.display(), e))
+                AppError::new(
+                    "io_error",
+                    format!("重命名失败 {}: {}", old_path.display(), e),
+                )
             })?;
         }
 
@@ -191,14 +197,7 @@ pub fn execute_batch_rename(
         "INSERT INTO operation_history
          (id, operation_type, description, before_state, after_state, affected_count, created_at)
          VALUES (?1, 'batch_rename', ?2, ?3, ?4, ?5, ?6)",
-        rusqlite::params![
-            op_id,
-            description,
-            before_json,
-            after_json,
-            affected,
-            now
-        ],
+        rusqlite::params![op_id, description, before_json, after_json, affected, now],
     )?;
 
     tx.commit()?;
@@ -217,10 +216,7 @@ pub fn execute_batch_rename(
 }
 
 /// 撤销操作 — 从 before_state 恢复文件名和路径。
-pub fn undo_operation(
-    conn: &mut Connection,
-    op_id: &str,
-) -> Result<(), AppError> {
+pub fn undo_operation(conn: &mut Connection, op_id: &str) -> Result<(), AppError> {
     let tx = conn.transaction()?;
     let now = now_unix();
 
@@ -233,11 +229,14 @@ pub fn undo_operation(
         )
         .map_err(|e| AppError::from(e))?;
 
-    if tx.query_row::<i64, _, _>(
-        "SELECT 1 FROM operation_history WHERE id = ?1 AND undone_at IS NOT NULL",
-        [op_id],
-        |_| Ok(1),
-    ).is_ok() {
+    if tx
+        .query_row::<i64, _, _>(
+            "SELECT 1 FROM operation_history WHERE id = ?1 AND undone_at IS NOT NULL",
+            [op_id],
+            |_| Ok(1),
+        )
+        .is_ok()
+    {
         return Err(AppError::new("invalid_input", "该操作已被撤销"));
     }
 
@@ -269,9 +268,8 @@ pub fn undo_operation(
             if let Some(parent) = restore_path.parent() {
                 let _ = fs::create_dir_all(parent);
             }
-            fs::rename(&current_path, &restore_path).map_err(|e| {
-                AppError::new("io_error", format!("撤销重命名失败: {}", e))
-            })?;
+            fs::rename(&current_path, &restore_path)
+                .map_err(|e| AppError::new("io_error", format!("撤销重命名失败: {}", e)))?;
         }
 
         // 更新 location 路径

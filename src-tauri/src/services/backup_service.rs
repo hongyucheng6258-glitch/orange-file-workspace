@@ -489,7 +489,7 @@ mod tests {
             AppState {
                 data_dir: std::sync::Mutex::new(dir.clone()),
                 managed_dir: std::sync::Mutex::new(dir.join("managed-files")),
-                conn: std::sync::Mutex::new(conn),
+                conn: std::sync::Arc::new(std::sync::Mutex::new(conn)),
                 sampler: std::sync::Mutex::new(
                     crate::services::system_service::SystemSampler::new(),
                 ),
@@ -522,6 +522,9 @@ mod tests {
                             crate::services::web_preview_service::UnsupportedPortProbe,
                         ),
                     ),
+                ),
+                app_usage: std::sync::Arc::new(
+                    crate::services::app_usage_service::AppUsageTracker::new(),
                 ),
             },
             dir,

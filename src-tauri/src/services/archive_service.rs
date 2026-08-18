@@ -63,9 +63,16 @@ fn list_zip(path: &Path, max_entries: usize) -> Result<ArchiveInfo, AppError> {
         let name = entry.name().to_string();
         let size = entry.size();
         let is_dir = entry.is_dir();
-        let modified = entry
-            .last_modified()
-            .map(|d| format!("{}-{:02}-{:02} {:02}:{:02}", d.year(), d.month(), d.day(), d.hour(), d.minute()));
+        let modified = entry.last_modified().map(|d| {
+            format!(
+                "{}-{:02}-{:02} {:02}:{:02}",
+                d.year(),
+                d.month(),
+                d.day(),
+                d.hour(),
+                d.minute()
+            )
+        });
         total_uncompressed += size;
         entries.push(ArchiveEntry {
             path: name,

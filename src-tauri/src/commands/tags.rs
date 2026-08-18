@@ -20,10 +20,7 @@ pub async fn list_tags(state: State<'_, AppState>) -> Result<Vec<Tag>, AppError>
 }
 
 #[tauri::command]
-pub async fn get_tag(
-    state: State<'_, AppState>,
-    tag_id: String,
-) -> Result<Option<Tag>, AppError> {
+pub async fn get_tag(state: State<'_, AppState>, tag_id: String) -> Result<Option<Tag>, AppError> {
     let conn = state.conn.lock().expect("db lock poisoned");
     tag_service::get_tag(&conn, &tag_id)
 }

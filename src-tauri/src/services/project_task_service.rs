@@ -30,7 +30,15 @@ pub fn create_task(
             id, project_id, title, description, status, priority,
             sort_order, due_date, created_at, updated_at
          ) VALUES (?1, ?2, ?3, ?4, 'todo', ?5, ?6, NULL, ?7, ?7)",
-        params![id, project_id, title, description, priority, max_order + 1, now],
+        params![
+            id,
+            project_id,
+            title,
+            description,
+            priority,
+            max_order + 1,
+            now
+        ],
     )?;
 
     Ok(ProjectTask {
@@ -102,10 +110,7 @@ pub fn update_task(
         params_vec.push(Box::new(d));
     }
 
-    let sql = format!(
-        "UPDATE project_tasks SET {} WHERE id = ?",
-        sets.join(", ")
-    );
+    let sql = format!("UPDATE project_tasks SET {} WHERE id = ?", sets.join(", "));
     params_vec.push(Box::new(id.to_string()));
 
     let param_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
@@ -115,8 +120,12 @@ pub fn update_task(
         return Ok(None);
     }
 
-    conn.query_row("SELECT * FROM project_tasks WHERE id = ?1", [id], task_from_row)
-        .optional()
+    conn.query_row(
+        "SELECT * FROM project_tasks WHERE id = ?1",
+        [id],
+        task_from_row,
+    )
+    .optional()
 }
 
 /// 删除任务（级联删除关联）。
@@ -171,9 +180,8 @@ pub fn unlink_resource(conn: &Connection, task_id: &str, resource_id: &str) -> S
 
 /// 查询任务关联的资源 ID 列表。
 pub fn list_task_links(conn: &Connection, task_id: &str) -> SqliteResult<Vec<ProjectTaskLink>> {
-    let mut stmt = conn.prepare(
-        "SELECT * FROM project_task_links WHERE task_id = ?1 ORDER BY created_at ASC",
-    )?;
+    let mut stmt = conn
+        .prepare("SELECT * FROM project_task_links WHERE task_id = ?1 ORDER BY created_at ASC")?;
     let rows = stmt.query_map([task_id], link_from_row)?;
     rows.collect()
 }

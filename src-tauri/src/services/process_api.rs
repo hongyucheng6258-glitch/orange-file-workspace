@@ -9,7 +9,7 @@
 //! 分支都不允许恢复未受控进程。
 
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -169,8 +169,24 @@ pub fn quote_arg(arg: &str) -> String {
 /// 由程序和参数构造 CreateProcessW 命令行。
 pub fn build_command_line(executable: &str, args: &[String]) -> String {
     let mut parts = vec![quote_arg(executable)];
-    for a in args {
-        parts.push(quote_arg(a));
+    let is_cmd = Path::new(executable)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.eq_ignore_ascii_case("cmd.exe"))
+        .unwrap_or(false);
+    let command_index = is_cmd
+        .then(|| args.iter().position(|arg| arg.eq_ignore_ascii_case("/c")))
+        .flatten()
+        .and_then(|index| (index + 1 < args.len()).then_some(index + 1));
+
+    for (index, arg) in args.iter().enumerate() {
+        if Some(index) == command_index {
+            // /c 后的命令由 cmd.exe 自行解析；C 运行时转义会把内嵌引号
+            // 变成字面反斜杠，导致带引号的 .cmd 路径无法执行。
+            parts.push(format!("\"{arg}\""));
+        } else {
+            parts.push(quote_arg(arg));
+        }
     }
     parts.join(" ")
 }
@@ -789,6 +805,23 @@ mod tests {
             &["server.js".into(), "a b".into()],
         );
         assert_eq!(line, "\"C:\\Program Files\\node.exe\" server.js \"a b\"");
+    }
+
+    #[test]
+    fn build_command_line_preserves_cmd_c_command_quotes() {
+        let line = build_command_line(
+            r"C:\Windows\System32\cmd.exe",
+            &[
+                "/d".into(),
+                "/s".into(),
+                "/c".into(),
+                r#""C:\Users\User Name\tools\npm.CMD" run dev"#.into(),
+            ],
+        );
+        assert_eq!(
+            line,
+            r#""C:\Windows\System32\cmd.exe" /d /s /c ""C:\Users\User Name\tools\npm.CMD" run dev""#
+        );
     }
 
     #[test]

@@ -104,6 +104,5 @@ pub fn execute_saved_search(
     limit: Option<i64>,
 ) -> CommandResult<Vec<SearchHit>> {
     let conn = lock_db(&state);
-    saved_search_service::execute_saved_search(&conn, &id, limit.unwrap_or(200))
-        .map_err(Into::into)
+    saved_search_service::execute_saved_search(&conn, &id, limit.unwrap_or(200)).map_err(Into::into)
 }

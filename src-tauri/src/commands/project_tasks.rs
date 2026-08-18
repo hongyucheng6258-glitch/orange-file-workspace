@@ -57,10 +57,7 @@ pub async fn update_project_task(
 }
 
 #[tauri::command]
-pub async fn delete_project_task(
-    state: State<'_, AppState>,
-    id: String,
-) -> Result<(), AppError> {
+pub async fn delete_project_task(state: State<'_, AppState>, id: String) -> Result<(), AppError> {
     let conn = state.conn.lock().expect("db lock poisoned");
     project_task_service::delete_task(&conn, &id).map_err(AppError::from)
 }

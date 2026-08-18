@@ -4,7 +4,6 @@
  * 利用 resource_locations.content_hash (SHA-256) 分组查找重复文件。
  * 调用前应先通过 hash_resources 命令计算哈希。
  */
-
 use std::path::PathBuf;
 
 use rusqlite::{Connection, Result as SqliteResult};
@@ -25,7 +24,9 @@ pub fn ensure_all_hashed(conn: &mut Connection) -> SqliteResult<usize> {
                AND (content_hash IS NULL OR content_hash = '')",
         )?;
         let rows = stmt
-            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
             .filter_map(|r| r.ok())
             .collect();
         rows

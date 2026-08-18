@@ -17,6 +17,9 @@ bun.lock
 bun.lockb
 pnpm-lock.yaml
 
+# Rust build artifacts
+src-tauri/target
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

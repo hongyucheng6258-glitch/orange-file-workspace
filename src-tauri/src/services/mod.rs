@@ -1,8 +1,10 @@
 pub mod app_index;
+pub mod app_usage_service;
 pub mod archive_service;
 pub mod autostart;
 pub mod backup_service;
 pub mod batch_service;
+pub mod c_drive_cleaner;
 pub mod command_palette_service;
 pub mod drag_service;
 pub mod duplicate_service;

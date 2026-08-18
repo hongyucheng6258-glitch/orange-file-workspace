@@ -130,7 +130,11 @@ pub fn is_cancelled(conn: &Connection, id: &str) -> SqliteResult<bool> {
 }
 
 /// 查询任务的全部单项结果（含失败清单）。
-pub fn list_task_items(conn: &Connection, task_id: &str, limit: i64) -> SqliteResult<Vec<TaskItem>> {
+pub fn list_task_items(
+    conn: &Connection,
+    task_id: &str,
+    limit: i64,
+) -> SqliteResult<Vec<TaskItem>> {
     let mut stmt = conn.prepare(
         "SELECT id, task_id, resource_id, source_path, status, error_message, updated_at
          FROM task_items WHERE task_id = ?1

@@ -43,7 +43,7 @@ fn setup_state() -> (AppState, PathBuf) {
     let state = AppState {
         data_dir: Mutex::new(data_dir),
         managed_dir: Mutex::new(managed_dir),
-        conn: Mutex::new(conn),
+        conn: Arc::new(Mutex::new(conn)),
         sampler: Mutex::new(crate::services::system_service::SystemSampler::new()),
         search: SearchRuntime {
             active_queries: Mutex::new(std::collections::HashMap::new()),
@@ -54,6 +54,7 @@ fn setup_state() -> (AppState, PathBuf) {
         terminal: TerminalRuntime::default(),
         runtime,
         preview,
+        app_usage: std::sync::Arc::new(crate::services::app_usage_service::AppUsageTracker::new()),
     };
     (state, root)
 }
