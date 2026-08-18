@@ -44,6 +44,8 @@
 
   /* 尺寸 */
   --sidebar-w: 216px;
+  --sidebar-w-collapsed: 56px;
+  --sidebar-drawer-z: 100;
   --topbar-h: 52px;
   --detail-w: 320px;
   --spacing-xs: 4px;

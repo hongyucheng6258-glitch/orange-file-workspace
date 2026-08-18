@@ -7,12 +7,14 @@ import { ImportDropzone } from "../features/tasks/components/ImportDropzone";
 import { useTaskStore } from "../features/tasks/stores/taskStore";
 import { CommandPalette } from "../components/CommandPalette";
 import { useCommandPalette } from "../hooks";
+import { useSidebarLayout } from "../hooks/useSidebarLayout";
 import type { Command } from "../types/phase1";
 
 export function AppShell() {
   const startListening = useTaskStore((s) => s.startListening);
   const navigate = useNavigate();
   const palette = useCommandPalette();
+  const sidebarLayout = useSidebarLayout();
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -132,9 +134,20 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar
+        mode={sidebarLayout.mode}
+        isDrawerOpen={sidebarLayout.isDrawerOpen}
+        onCloseDrawer={sidebarLayout.closeDrawer}
+        onToggleCollapse={sidebarLayout.toggleCollapse}
+        collapsedGroups={sidebarLayout.collapsedGroups}
+        onToggleGroup={sidebarLayout.toggleGroup}
+        isGroupCollapsed={sidebarLayout.isGroupCollapsed}
+      />
       <div className="app-main">
-        <Topbar onCommandPaletteToggle={palette.toggle} />
+        <Topbar
+          onCommandPaletteToggle={palette.toggle}
+          onMenuToggle={sidebarLayout.mode === "drawer" ? sidebarLayout.openDrawer : undefined}
+        />
         <div className="app-content">
           <Outlet />
         </div>

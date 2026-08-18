@@ -37,9 +37,10 @@ function kindIcon(kind: ResourceKind, name: string) {
 
 interface TopbarProps {
   onCommandPaletteToggle?: () => void;
+  onMenuToggle?: () => void;
 }
 
-export function Topbar({ onCommandPaletteToggle }: TopbarProps) {
+export function Topbar({ onCommandPaletteToggle, onMenuToggle }: TopbarProps) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -95,6 +96,15 @@ export function Topbar({ onCommandPaletteToggle }: TopbarProps) {
 
   return (
     <header className="topbar">
+      {onMenuToggle && (
+        <button
+          className="btn btn-ghost sidebar-menu-btn"
+          onClick={onMenuToggle}
+          aria-label="打开导航菜单"
+        >
+          <span className="menu-icon">☰</span>
+        </button>
+      )}
       <form className="topbar-search" onSubmit={submit}>
         <Search size={15} className="search-icon" />
         <input
